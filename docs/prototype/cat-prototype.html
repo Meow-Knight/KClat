@@ -1,0 +1,119 @@
+<!doctype html><html><head><meta charset="utf-8"><style>:root{--surface-2:#fff;--text-primary:#222;--text-secondary:#666}body{font-family:sans-serif;width:680px;margin:20px auto}.sr-only{position:absolute;left:-9999px}</style></head><body>
+<style>
+#cw{position:relative;height:320px}
+#cv{width:100%;height:100%;display:block;cursor:pointer}
+#bub{position:absolute;left:2%;top:28px;max-width:300px;background:var(--surface-2);border:2px solid var(--text-primary);border-radius:18px;padding:10px 16px;font-size:18px;font-weight:500;color:var(--text-primary);transform:scale(0) rotate(-8deg);transform-origin:95% 90%;transition:transform .4s cubic-bezier(.3,1.8,.5,1);pointer-events:none}
+#bub.show{transform:scale(1) rotate(-2deg)}
+#bub.shake #btxt{display:inline-block;animation:sh .45s}
+.z{position:absolute;font-size:18px;font-weight:500;color:var(--text-secondary);opacity:0;pointer-events:none}
+#cw.sleep .z{animation:zz 3.2s linear infinite}
+@keyframes sh{0%,100%{transform:translate(0)}20%{transform:translate(-5px,2px) rotate(-3deg)}40%{transform:translate(5px,-2px) rotate(3deg)}60%{transform:translate(-3px,1px)}80%{transform:translate(2px,-1px)}}
+@keyframes zz{0%{transform:translate(0,0) scale(.6);opacity:0}20%{opacity:1}100%{transform:translate(26px,-50px) scale(1.1);opacity:0}}
+</style>
+<div id="cw" class="sleep">
+<canvas id="cv"></canvas>
+<div id="bub"><span id="btxt"></span></div>
+<span class="z" style="left:66%;top:120px">z</span><span class="z" style="left:68%;top:110px;animation-delay:1.05s;font-size:22px">Z</span><span class="z" style="left:65%;top:116px;animation-delay:2.1s;font-size:14px">z</span>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:8px">
+<button id="bWake">Claude xong → đánh thức</button>
+<button id="bSleep">Gửi prompt → cho ngủ</button>
+<button id="bNext">Câu khác</button>
+</div>
+<script>
+setTimeout(function(){if(window.__catReady)return;var m=document.createElement('div');m.style.cssText='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:16px;font-size:14px;color:#b33';m.innerHTML='Không tải được Three.js.<br>Hãy mở file qua HTTP server (không mở trực tiếp bằng file://):<br><code>cd docs/prototype &amp;&amp; python -m http.server 8766</code><br>rồi vào <code>http://127.0.0.1:8766/cat-prototype.html</code>';document.getElementById('cw').appendChild(m)},3000);
+</script>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+const PHRASES=["Wake up, B**CH!!!","Claude's done. Your turn, lazy a**!","HEY! The robot is waiting on YOU!","Get your butt back here, human!","I was dreaming about tuna, you sh*t!","Stop scrolling. Read the d*mn output!","Tick tock, meatbag!","Approve it or your coffee hits the floor.","Human.exe has stopped responding.","Earth to human! Claude's waiting!","The AI did the work. Go take the credit.","Y or N. It's not rocket science, d*mmit!","Did you die? Blink twice.","I'm a cat, not your f*cking alarm clock.","Back to work, you overpaid button-pusher!","Read. Approve. Let me sleep. In that order.","Last warning before I sit on your keyboard.","Holy sh*t, it's done. Go look!","You call this pair programming?!","Stop pretending you're in a meeting!","Hssss! Terminal! NOW!","Meow. Translation: get your a** over here.","Your terminal is lonely, jerk.","Ship it or I pee on your keyboard.","Who's the senior dev here? Not you. MOVE.","My tail is twitching. Bad news for you.","Claude finished. You haven't even started.","Feed me, then press Enter.","Dậy đi đồ lười!!!","Claude xong rồi kìa, còn ngồi đó à?!","Duyệt lẹ đi, tao còn ngủ tiếp!","Đang mơ cá ngừ thì bị gọi dậy. Cảm ơn nhé!","Lướt Facebook ít thôi, vào code đi!","Ê! Terminal đợi mày nãy giờ đó!","Bấm Enter giùm cái, mỏi mắt lắm rồi!","Không duyệt là tao gạt ly cà phê đấy!","Xong rồi đó, ra nhận công đi sếp!","Còn sống thì nhấp chuột một cái coi!","Mèo này không làm báo thức miễn phí đâu!","Sắp deadline rồi mà còn ngồi đó à?!"];
+let bag=[];
+function nextPhrase(){if(!bag.length){bag=PHRASES.slice(1).sort(()=>Math.random()-.5)}return bag.pop()}
+const wrap=document.getElementById('cw'),cv=document.getElementById('cv'),bub=document.getElementById('bub'),btxt=document.getElementById('btxt');
+const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));window.__catReady=true;
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(30,1,.1,100);camera.position.set(0,1.9,10);camera.lookAt(0,1.55,0);
+scene.add(new THREE.AmbientLight(0xffffff,.95));
+const dl=new THREE.DirectionalLight(0xffffff,2.3);dl.position.set(-3,5,6);scene.add(dl);
+const gt=new THREE.DataTexture(new Uint8Array([95,95,95,255,180,180,180,255,255,255,255,255]),3,1);gt.minFilter=gt.magFilter=THREE.NearestFilter;gt.needsUpdate=true;
+const FUR=0x9AA6BD,FUR2=0x6B7690,CREAM=0xF6F0E6,PINK=0xF29BB0,AMBER=0xF5B83D,INK=0x2B2D42;
+const OL=new THREE.MeshBasicMaterial({color:INK,side:THREE.BackSide});
+const INKM=new THREE.MeshBasicMaterial({color:INK}),WHITE=new THREE.MeshBasicMaterial({color:0xffffff});
+const SPH=new THREE.SphereGeometry(1,40,28);
+function mk(geo,color,parent,o={}){const m=new THREE.Mesh(geo,typeof color==='number'?new THREE.MeshToonMaterial({color,gradientMap:gt}):color);m.position.set(...(o.p||[0,0,0]));m.scale.set(...(o.s||[1,1,1]));m.rotation.set(...(o.r||[0,0,0]));if(o.ol!==0&&typeof color==='number'){const ol=new THREE.Mesh(geo,OL);ol.scale.setScalar(o.ol||1.06);m.add(ol)}parent.add(m);return m}
+const root=new THREE.Group();root.position.x=1.3;root.rotation.y=-.22;scene.add(root);
+const shadow=new THREE.Mesh(new THREE.CircleGeometry(1.4,40),new THREE.MeshBasicMaterial({color:0,transparent:true,opacity:.13}));shadow.rotation.x=-Math.PI/2;shadow.position.set(1.3,.01,0);scene.add(shadow);
+const bodyG=new THREE.Group();root.add(bodyG);
+const body=mk(SPH,FUR,bodyG,{p:[0,.95,0],s:[1.15,.95,1]});
+mk(SPH,CREAM,bodyG,{p:[0,.85,.6],s:[.68,.6,.5],ol:0});
+mk(SPH,FUR,bodyG,{p:[-.78,.42,.25],s:[.45,.4,.55]});mk(SPH,FUR,bodyG,{p:[.78,.42,.25],s:[.45,.4,.55]});
+const pawL=mk(SPH,CREAM,root,{p:[-.42,.17,.9],s:[.3,.2,.34]}),pawR=mk(SPH,CREAM,root,{p:[.42,.17,.9],s:[.3,.2,.34]});
+const headG=new THREE.Group();headG.position.set(0,2.05,.1);root.add(headG);
+mk(SPH,FUR,headG,{s:[1.3,1,1.05]});
+[[0,.78,.64,0],[-.26,.72,.68,.25],[.26,.72,.68,-.25]].forEach(a=>mk(SPH,FUR2,headG,{p:a.slice(0,3),s:[.06,.17,.05],r:[0,0,a[3]],ol:0}));
+[-1,1].forEach(s=>{mk(SPH,CREAM,headG,{p:[s*.22,-.32,.9],s:[.3,.22,.22],ol:1.08});mk(SPH,0xF7A9BC,headG,{p:[s*.78,-.18,.8],s:[.17,.08,.05],ol:0})});
+mk(SPH,PINK,headG,{p:[0,-.17,1.05],s:[.1,.07,.06],ol:1.18});
+const tor=new THREE.TorusGeometry(.07,.02,6,12,Math.PI);
+const mouthW=new THREE.Group();headG.add(mouthW);[-1,1].forEach(s=>{const t=new THREE.Mesh(tor,INKM);t.position.set(s*.07,-.33,1.1);t.rotation.z=Math.PI;mouthW.add(t)});
+const mouthO=mk(SPH,0x5A2A3A,headG,{p:[0,-.42,1.06],s:[.13,.12,.06],ol:0});
+const whG=new THREE.CylinderGeometry(.012,.012,.6);
+[-1,1].forEach(s=>[[-.26,.08],[-.38,-.06]].forEach(w=>{const m=new THREE.Mesh(whG,INKM);m.position.set(s*.66,w[0],.86);m.rotation.set(0,s*-.5,Math.PI/2+s*w[1]);headG.add(m)}));
+const eyes=[],ears=[];
+const arcG=new THREE.TorusGeometry(.19,.035,8,20,Math.PI),capG=new THREE.CapsuleGeometry(.035,.2,4,8);
+[-1,1].forEach(s=>{const eg=new THREE.Group();eg.position.set(s*.45,.08,.9);eg.rotation.y=s*.32;headG.add(eg);
+const ig=new THREE.Group();eg.add(ig);mk(SPH,AMBER,ig,{s:[.24,.27,.12],ol:1.12});
+const pg=new THREE.Group();ig.add(pg);mk(SPH,new THREE.MeshBasicMaterial({color:0x1B1B2F}),pg,{p:[0,0,.06],s:[.17,.21,.08]});mk(SPH,WHITE,pg,{p:[-.07,.09,.13],s:[.06,.06,.03]});mk(SPH,WHITE,pg,{p:[.06,-.08,.13],s:[.03,.03,.02]});
+const sa=new THREE.Mesh(arcG,INKM);sa.rotation.z=Math.PI;sa.position.z=.1;eg.add(sa);
+const ha=new THREE.Mesh(arcG,INKM);ha.position.set(0,-.08,.1);eg.add(ha);
+const br=new THREE.Mesh(capG,INKM);br.position.z=.06;eg.add(br);
+eyes.push({s,ig,pg,sa,ha,br});
+const erg=new THREE.Group();erg.position.set(s*.72,.68,0);headG.add(erg);
+mk(new THREE.ConeGeometry(.36,.72,32),FUR,erg,{p:[0,.3,0],s:[1,1,.55]});mk(new THREE.ConeGeometry(.2,.42,32),PINK,erg,{p:[0,.22,.13],s:[1,1,.3],ol:0});
+ears.push({s,erg})});
+const tailM=new THREE.MeshToonMaterial({color:FUR,gradientMap:gt});
+const tail=new THREE.Mesh(new THREE.BufferGeometry(),tailM),tailO=new THREE.Mesh(new THREE.BufferGeometry(),OL);root.add(tail,tailO);
+const tip=mk(SPH,FUR2,root,{s:[.165,.165,.165],ol:1.25});
+const A=[[.55,.45,-.75],[1.25,.55,-.7],[1.62,1.15,-.55],[1.45,1.8,-.45]],Z=[[.55,.35,-.7],[1.15,.27,-.1],[.9,.22,.7],[.25,.2,1.05]];
+const P={};
+function sp(n,v,k,d){P[n]={v,vel:0,t:v,k,d}}
+sp('sleepy',1,30,9);sp('eye',.02,420,26);sp('ear',.3,200,12);sp('earTw',0,220,10);sp('mouth',0,260,20);sp('puff',0,180,9);sp('squash',0,260,12);sp('lx',0,70,11);sp('ly',0,70,11);sp('yawn',0,60,10);sp('happy',0,140,14);sp('grumpy',.3,120,14);sp('tailUp',0,60,8);
+let state='sleep',jy=0,jv=0,tapping=false,purrUntil=0,eyeBase=.02,yellT=null,timers=[];
+const later=(ms,f)=>timers.push(setTimeout(f,ms));
+function clearT(){timers.forEach(clearTimeout);timers=[];clearInterval(yellT)}
+function yell(first){if(state!=='active')return;btxt.textContent=first?PHRASES[0]:nextPhrase();bub.classList.add('show');bub.classList.remove('shake');void bub.offsetWidth;bub.classList.add('shake');P.mouth.t=1;P.grumpy.t=0;P.eye.t=1.25;P.eye.vel+=6;P.ear.vel+=6;P.tailUp.t=1;if(!first){jv=2.6;P.squash.vel+=2}later(1100,()=>{if(state!=='active')return;P.mouth.t=0;P.grumpy.t=1;eyeBase=.62;P.eye.t=eyeBase;P.tailUp.t=.4})}
+function wake(){if(state==='active')return;clearT();state='active';wrap.className='active';P.sleepy.t=0;P.yawn.t=0;P.ear.t=1;P.ear.vel+=9;eyeBase=1.25;P.eye.t=1.25;P.eye.vel+=14;P.squash.t=.22;
+later(150,()=>{P.squash.t=0;P.squash.vel-=4;jv=4.4;P.puff.t=1;P.puff.vel+=7});later(240,()=>yell(true));later(750,()=>P.puff.t=0);later(1500,()=>tapping=true);yellT=setInterval(()=>yell(false),6500)}
+function sleep(){if(state==='sleep')return;clearT();state='sleep';tapping=false;bub.classList.remove('show');P.mouth.t=.85;P.yawn.t=1;eyeBase=.1;P.eye.t=.1;P.tailUp.t=0;
+later(1000,()=>{wrap.className='sleep';P.mouth.t=0;P.yawn.t=0;P.sleepy.t=1;P.ear.t=.3;eyeBase=.02;P.eye.t=.02;P.grumpy.t=.3})}
+document.getElementById('bWake').onclick=wake;document.getElementById('bSleep').onclick=sleep;
+document.getElementById('bNext').onclick=()=>{if(state==='active'){clearInterval(yellT);yell(false);yellT=setInterval(()=>yell(false),6500)}else wake()};
+const hv=new THREE.Vector3();
+cv.addEventListener('pointermove',e=>{const r=cv.getBoundingClientRect();headG.getWorldPosition(hv);hv.project(camera);const sx=(hv.x+1)/2*r.width,sy=(1-hv.y)/2*r.height,cl=v=>Math.max(-1,Math.min(1,v));P.lx.t=cl((e.clientX-r.left-sx)/260)*.75;P.ly.t=cl((e.clientY-r.top-sy)/200)*.45});
+cv.addEventListener('pointerleave',()=>{P.lx.t=-.35;P.ly.t=-.08});
+cv.addEventListener('click',()=>{if(state==='active'){P.happy.t=1;purrUntil=performance.now()+1300;later(1300,()=>P.happy.t=0)}else{P.eye.t=.4;P.earTw.vel+=9;later(900,()=>{if(state==='sleep')P.eye.t=.02})}});
+(function blink(){setTimeout(()=>{if(state==='active'&&P.happy.t<.5&&P.mouth.t<.5){P.eye.t=.03;setTimeout(()=>{if(state==='active')P.eye.t=eyeBase},110)}blink()},1600+Math.random()*3400)})();
+(function twitch(){setTimeout(()=>{P.earTw.vel+=(Math.random()<.5?-1:1)*7;twitch()},2000+Math.random()*4500)})();
+function resize(){const w=wrap.clientWidth,h=wrap.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}
+new ResizeObserver(resize).observe(wrap);resize();
+const lerp=(a,b,t)=>a+(b-a)*t;let last=performance.now();
+function frame(now){const dt=Math.min((now-last)/1000,1/30),t=now/1000;last=now;
+for(const k in P){const p=P[k];p.vel+=(p.k*(p.t-p.v)-p.d*p.vel)*dt;p.v+=p.vel*dt}
+jv-=18*dt;jy+=jv*dt;if(jy<=0){jy=0;if(jv<-1.2)P.squash.vel+=-jv*1.3;jv=0}
+const sl=P.sleepy.v,purr=now<purrUntil;
+root.position.y=jy;const sq=P.squash.v;root.scale.set(1+sq*.55,1-sq,1+sq*.55);
+bodyG.scale.setScalar(1+P.puff.v*.08);body.scale.y=.95*(1-sl*.1)+Math.sin(t*(sl>.5?1.4:2.4))*.014;
+headG.position.y=2.05-sl*.4+Math.sin(t*(sl>.5?1.4:2.4)-.6)*.012;headG.position.z=.1+sl*.18;
+headG.rotation.set(P.ly.v*(1-sl)+sl*.3-P.yawn.v*.38,P.lx.v*(1-sl),sl*.18+P.happy.v*.2+(purr?Math.sin(t*70)*.014:0));
+ears.forEach(e=>{e.erg.rotation.z=-e.s*(.3+(1-P.ear.v)*.5)+P.earTw.v*(e.s<0?1:.4)*.3;e.erg.scale.y=1+P.puff.v*.15});
+const ev=P.eye.v,happy=P.happy.v>.5,closed=ev<.18&&!happy;
+eyes.forEach(e=>{e.ig.visible=!happy&&!closed;e.sa.visible=closed;e.ha.visible=happy;e.ig.scale.set(1+Math.max(0,ev-1)*.6,Math.max(.04,Math.min(1.35,ev)),1);
+e.pg.position.set(P.lx.v*.08*(1-sl),-P.ly.v*.06*(1-sl),0);e.br.rotation.z=Math.PI/2+e.s*(P.grumpy.v*.45-.12);e.br.position.y=.36+Math.max(0,ev-1)*.35-P.grumpy.v*.05});
+mouthO.visible=P.mouth.v>.06;mouthW.visible=!mouthO.visible;mouthO.scale.y=.02+.16*P.mouth.v;
+pawR.position.y=.17+(tapping?Math.max(0,Math.sin(t*10))*.17:0)*(1-sl);
+const sw=Math.sin(t*(sl>.5?1.1:2.6+P.tailUp.v*2.5))*(sl>.5?.12:.5+P.tailUp.v*.35);
+const pts=A.map((a,i)=>{const z=Z[i];const f=i/3;return new THREE.Vector3(lerp(a[0]+sw*f*f*.9,z[0]+sw*f*.3,sl),lerp(a[1]+P.tailUp.v*f*.35,z[1],sl),lerp(a[2],z[2],sl))});
+const cur=new THREE.CatmullRomCurve3(pts);tail.geometry.dispose();tailO.geometry.dispose();tail.geometry=new THREE.TubeGeometry(cur,24,.155+P.puff.v*.06,10);tailO.geometry=new THREE.TubeGeometry(cur,24,.195+P.puff.v*.06,10);tip.position.copy(pts[3]);
+shadow.scale.setScalar(Math.max(.5,1-jy*.35));
+renderer.render(scene,camera);requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+</script></body></html>

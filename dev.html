@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Claude Cat Dev</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #2b2d42;
+        --muted: #6b7690;
+        --panel: #ffffff;
+        --page: #eef0f5;
+      }
+      body {
+        margin: 0;
+        padding: 20px;
+        background: var(--page);
+        color: var(--ink);
+        font: 14px/1.4 'Segoe UI', system-ui, sans-serif;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-size: 18px;
+      }
+      p.hint {
+        margin: 0 0 16px;
+        color: var(--muted);
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        align-items: flex-start;
+      }
+      figure {
+        margin: 0;
+      }
+      figcaption {
+        margin-bottom: 6px;
+        font-weight: 600;
+      }
+      /* The stage sits on a fake "desktop" so transparency problems show up. */
+      .desktop {
+        padding: 0;
+        background:
+          repeating-conic-gradient(#d9dce5 0 25%, #f4f5f8 0 50%) 0 0 / 24px 24px;
+        outline: 1px dashed var(--muted);
+      }
+      #stage {
+        width: 360px;
+        height: 280px;
+      }
+      .desktop.plain {
+        background: #1e1f24;
+      }
+      iframe {
+        width: 700px;
+        height: 450px;
+        border: 1px solid #c8ccd8;
+        background: #fff;
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin: 14px 0;
+        max-width: 360px;
+      }
+      button,
+      select,
+      input[type='number'] {
+        font: inherit;
+        padding: 5px 10px;
+        border: 1px solid #b9bfcc;
+        border-radius: 6px;
+        background: var(--panel);
+        color: var(--ink);
+      }
+      button {
+        cursor: pointer;
+      }
+      label {
+        display: inline-flex;
+        gap: 5px;
+        align-items: center;
+      }
+      input[type='number'] {
+        width: 80px;
+      }
+      .desktop {
+        position: relative;
+      }
+      .hitbox {
+        position: absolute;
+        border: 1px dashed #e0457b;
+        background: rgb(224 69 123 / 0.08);
+        pointer-events: none;
+      }
+      #log {
+        font: 12px/1.4 Consolas, monospace;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Claude Cat dev page</h1>
+    <p class="hint">
+      The mouse in this page stands in for the screen cursor. Click the cat to pet it; click the bubble to dismiss.
+    </p>
+    <div class="row">
+      <figure>
+        <figcaption>TypeScript port (360×280, same size as the overlay)</figcaption>
+        <div class="desktop" id="desktop"><div id="stage"></div></div>
+        <div class="controls">
+          <select id="reason" aria-label="Wake reason">
+            <option value="done">done</option>
+            <option value="permission">permission</option>
+            <option value="input">input</option>
+          </select>
+          <button id="wake">Wake</button>
+          <button id="sleep">Sleep</button>
+          <button id="next">Next phrase</button>
+          <button id="pet">Pet</button>
+          <label><input type="checkbox" id="sfw" /> SFW</label>
+          <label><input type="checkbox" id="reduce" /> Reduce motion</label>
+          <label><input type="checkbox" id="en" checked /> en</label>
+          <label><input type="checkbox" id="vi" checked /> vi</label>
+          <label>Yell every <input type="number" id="interval" min="1000" step="500" value="6500" /> ms</label>
+          <label>Max yells <input type="number" id="max" min="1" value="10" /></label>
+          <label><input type="checkbox" id="dark" /> Dark desktop</label>
+          <label><input type="checkbox" id="showHit" /> Show hitboxes</label>
+        </div>
+        <div id="log"></div>
+      </figure>
+      <figure>
+        <figcaption>Prototype (reference)</figcaption>
+        <iframe src="/docs/prototype/cat-prototype.html" title="Prototype"></iframe>
+      </figure>
+    </div>
+    <script type="module" src="/src/overlay/dev.ts"></script>
+  </body>
+</html>

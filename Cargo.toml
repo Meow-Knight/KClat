@@ -1,0 +1,8 @@
+[workspace]
+resolver = "2"
+members = ["src-tauri", "crates/claude-cat-hook"]
+
+[profile.release]
+# The hook adapter runs on every Claude Code hook: keep it small and quick to start.
+lto = true
+codegen-units = 1

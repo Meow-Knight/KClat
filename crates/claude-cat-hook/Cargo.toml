@@ -1,0 +1,12 @@
+[package]
+name = "claude-cat-hook"
+version = "0.1.0"
+description = "Claude Code hook adapter: forwards hook events to the Claude Cat app over loopback"
+edition = "2021"
+publish = false
+
+[dependencies]
+serde_json = "1.0.151"
+
+[dev-dependencies]
+tempfile = "3.27.0"
