@@ -1,0 +1,14 @@
+node_modules/
+dist/
+src-tauri/target/
+/target/
+src-tauri/gen/
+*.log
+.DS_Store
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
+*.gate.lock*
