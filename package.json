@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:hook": "cargo build -p claude-cat-hook --release && node scripts/stage-sidecar.mjs",
+    "release": "tauri build --config src-tauri/tauri.release.conf.json",
     "preview": "vite preview",
     "tauri": "tauri",
     "lint": "eslint .",

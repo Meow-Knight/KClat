@@ -101,7 +101,12 @@ fn serve(stream: TcpStream, token: &str, on_event: &dyn Fn(HookEvent)) -> io::Re
             on_event(ev);
             204
         }
-        Err(status) => status,
+        Err(status) => {
+            crate::log::warn(format!(
+                "rejected a request to the event endpoint: HTTP {status}"
+            ));
+            status
+        }
     };
     let mut out = stream;
     write!(

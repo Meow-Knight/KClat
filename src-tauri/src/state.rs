@@ -4,6 +4,7 @@
 //! "Wake test". Hook events arrive through the event server and are applied here.
 
 use crate::cursor::Rect;
+use crate::log;
 use crate::session_store::{HookEvent, Outcome, SessionStore};
 pub use crate::session_store::{SessionView, WakeReason};
 use crate::settings::{self, Settings};
@@ -54,6 +55,11 @@ pub struct AppState {
     pub awake: AtomicBool,
 }
 
+/// `%APPDATA%\ClaudeCat` (settings, runtime.json, log).
+pub fn data_dir() -> PathBuf {
+    settings::default_dir().unwrap_or_else(|| std::env::temp_dir().join("ClaudeCat"))
+}
+
 pub fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -63,14 +69,13 @@ pub fn now_ms() -> u64 {
 
 impl AppState {
     pub fn load() -> Self {
-        let dir = settings::default_dir().unwrap_or_else(|| std::env::temp_dir().join("ClaudeCat"));
-        let settings_path = dir.join("settings.json");
+        let settings_path = data_dir().join("settings.json");
         let (settings, outcome) = settings::load(&settings_path);
         if let settings::LoadOutcome::RecoveredCorrupt(moved) = &outcome {
-            eprintln!(
-                "claude-cat: settings were corrupt; moved to {} and reset to defaults",
+            log::warn(format!(
+                "settings were corrupt; moved to {} and reset to defaults",
                 moved.display()
-            );
+            ));
         }
         Self {
             settings: Mutex::new(settings),
@@ -148,6 +153,22 @@ pub fn apply_hook_event(app: &AppHandle, ev: &HookEvent) {
         }
         outcome
     };
+    // Only names and outcomes: the adapter never forwards prompts, commands or tool input.
+    let session: String = ev.session_id.chars().take(8).collect();
+    log::info(format!(
+        "hook {}{} session {session} project {:?} -> {}",
+        ev.hook_event_name,
+        ev.notification_type
+            .as_deref()
+            .map(|t| format!("({t})"))
+            .unwrap_or_default(),
+        ev.project_name.as_deref().unwrap_or(""),
+        match &outcome {
+            Outcome::Unchanged => "ignored".to_owned(),
+            Outcome::Changed => "cleared".to_owned(),
+            Outcome::Attention { reason, .. } => format!("attention {reason:?}"),
+        }
+    ));
     if outcome != Outcome::Unchanged {
         publish_state(app);
     }
@@ -194,7 +215,7 @@ pub fn update_settings(app: &AppHandle, change: impl FnOnce(&mut Settings)) {
         s.clone()
     };
     if let Err(e) = settings::save(&state.settings_path, &next) {
-        eprintln!("claude-cat: could not save settings: {e}");
+        log::warn(format!("could not save settings: {e}"));
     }
     let _ = app.emit(EVENT_SETTINGS, next);
     // Pausing or resuming notifications changes whether the cat is awake.

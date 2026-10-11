@@ -1,105 +1,163 @@
 # Claude Cat
 
-Desktop companion for Claude Code on Windows: a grumpy toon cat sleeps in the corner of the screen and yells at you when Claude finishes a turn or is waiting on you. The full design is in [`CLAUDE_CAT_SPEC.md`](CLAUDE_CAT_SPEC.md).
+A desktop companion for Claude Code on Windows. A grumpy toon cat sleeps in the corner of your screen. When Claude finishes a turn or is waiting on you (a permission prompt, a question), it jumps up and yells "Wake up, B\*\*CH!!!" until you go back to the terminal. It follows your cursor, and you can pet it.
 
-> **Status:** Phase 5 is done: tray → **Hooks → Install** hooks the cat into Claude Code (user-level settings), and the cat wakes when a real Claude Code turn ends. Phase 6 (hardening, release build, measurements) is next.
+Everything runs locally: no telemetry, no cloud. The hooks only report to the app over `127.0.0.1` and never approve or deny anything for you. The full design is in [`CLAUDE_CAT_SPEC.md`](CLAUDE_CAT_SPEC.md).
 
-## Requirements
+> **Status:** MVP complete (spec phases 0–6).
 
-- Windows 10/11 with the WebView2 runtime (ships with Windows 11)
-- Node.js ≥ 20.19, pnpm 8+
-- Rust stable (MSVC toolchain) and Visual Studio C++ Build Tools
+## Install
 
-## Scripts
+1. Run `Claude Cat_<version>_x64-setup.exe`. It is a per-user install into `%LOCALAPPDATA%\Claude Cat`, so no admin rights are needed. The installer contains `claude-cat.exe` and the hook program `claude-cat-hook.exe`.
+2. Start **Claude Cat**. A sleeping cat appears in the bottom-right corner, and a cat icon appears in the tray (it may be under the **^** hidden-icons arrow).
+3. Tray → **Hooks → Install**. This adds Claude Cat's hooks to `%USERPROFILE%\.claude\settings.json`, after saving a backup. Your other hooks and settings stay as they are.
+4. Restart any open Claude Code sessions. From now on the cat wakes when Claude needs you.
+
+You need Windows 10/11 with the WebView2 runtime, which comes with Windows 11 and recent Windows 10.
+
+## Using it
+
+| When | The cat |
+|---|---|
+| Claude finishes a turn, asks for permission, or waits for input | Jumps up and yells, then glares and taps its paw; it yells again every 30s (10 times at most) |
+| More than one session needs you | Yells again for each new one and names the project under the phrase |
+| You send a prompt, approve the permission, or the session ends | Yawns and goes back to sleep |
+| You click the bubble | Goes back to sleep. This marks those sessions as seen and sends nothing to Claude Code |
+| You click the cat | Asleep: peeks one eye open. Awake: purrs (^ ^) |
+| You move the mouse while it is awake | Follows the cursor anywhere on the main screen |
+
+The overlay never takes focus, and clicks on its empty area go through to the window below.
+
+**Tray menu:**
+
+| Item | What it does |
+|---|---|
+| Wake test | Wakes the cat without Claude Code |
+| Sleep / Dismiss all | Puts the cat to sleep and marks waiting sessions as seen |
+| SFW mode | No swearing (the first line becomes "Wake up, human!!!") |
+| Pause notifications | The cat stays asleep. Sessions are still tracked, and unpausing wakes it if something is still waiting |
+| Hide cat while sleeping | The cat shows only while it is awake |
+| Start at login | Off by default. Adds or removes Claude Cat in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` |
+| Hooks → Install / Repair / Uninstall | Manage the entries in `settings.json` (see [Hooks](#hooks)). The submenu title shows the current status |
+| Quit | Quits the app |
+
+The tray tooltip shows how many sessions are waiting.
+
+**Settings** are in `%APPDATA%\ClaudeCat\settings.json`. Tray toggles write the file immediately. Hand edits are read at start-up. A missing or invalid field falls back to its default. A file that is not JSON at all is renamed to `settings.json.corrupt.<time>` and replaced with defaults.
+
+| Field | Default | |
+|---|---|---|
+| `notificationsEnabled` | `true` | `false` = paused |
+| `hideWhileSleeping` | `false` | |
+| `sfwMode` | `false` | |
+| `languages` | `["en","vi"]` | Phrase languages; the first wake line is always English |
+| `yellIntervalMs` | `30000` | ≥ 1000 |
+| `maxYellsPerWake` | `10` | Includes the first yell |
+| `staleAfterMs` | `1800000` | A session waiting longer than this stops counting (≥ 60000) |
+| `reduceMotion` | `false` | No jumps, squash, puff, text shake, purr shake or Zzz; springs are critically damped |
+| `startAtLogin` | `false` | Use the tray item; it keeps the registry in sync |
+| `corner` | `"bottom-right"` | The only corner supported so far |
+
+## Hooks
+
+**Hooks → Install** adds one entry per event (`Stop`, `StopFailure`, `PermissionRequest`, `Notification`, `UserPromptSubmit`, `PostToolUse`, `PostToolUseFailure`, `PermissionDenied`, `SessionEnd`) to `%USERPROFILE%\.claude\settings.json`. Each entry looks like this:
+
+```json
+{ "type": "command", "command": "C:\\Users\\you\\AppData\\Local\\Claude Cat\\claude-cat-hook.exe", "args": ["Stop"], "timeout": 1 }
+```
+
+- It runs the program directly (exec form), with no shell involved, so paths with spaces are fine.
+- Before any change, the file is saved as `settings.json.bak.<unix-seconds>`.
+- If `settings.json` is not valid JSON, nothing is written and a message box says so.
+- Installing again changes nothing. **Repair** re-points the entries after you move or reinstall the app, or switch between a dev build and the installed one.
+- **Uninstall** removes only entries whose command contains `claude-cat-hook.exe`, and keeps everything else, including key order.
+- The app never installs or changes hooks on its own; only these tray items do.
+
+The hook reads the event from stdin and forwards five fields: event name, session id, project folder name, tool name and notification type. It sends them to `127.0.0.1`, prints nothing, and always exits 0. Its budget is 300ms. When the app is not running, it exits in a few milliseconds.
+
+## Uninstall
+
+1. Tray → **Hooks → Uninstall**, then **Quit**.
+2. Windows Settings → Apps → **Claude Cat** → Uninstall.
+3. Optional: delete `%APPDATA%\ClaudeCat` (settings and log) and any `%USERPROFILE%\.claude\settings.json.bak.*` backups you no longer need.
+
+If you uninstall the app first, the hook entries stay in `settings.json`. They are harmless (the program is gone, so the hook just fails quietly), but you can delete them by hand: they are the entries whose `command` contains `claude-cat-hook.exe`.
+
+## Privacy
+
+- **Nothing leaves your machine.** The app listens only on `127.0.0.1`, on a random port, with a fresh 256-bit token on each run. `%APPDATA%\ClaudeCat\runtime.json` holds the port and token while the app runs and is deleted when you quit.
+- The server rejects anything without the token, any request with an `Origin` header (web pages), bodies over 64 KB, and unknown event names.
+- The hook never sends prompts, commands, tool input or output, messages, transcript paths or full folder paths. It sends only the five fields listed under [Hooks](#hooks).
+- The local log (`%APPDATA%\ClaudeCat\claude-cat.log`, capped at 512 KB plus one `.old` file) records start-up, hook event names with the first 8 characters of the session id and the project folder name, rejected requests, and installer and autostart actions.
+- The hook never makes permission decisions.
+
+## Troubleshooting
+
+| Problem | Try |
+|---|---|
+| The cat doesn't wake when Claude finishes | Check the tray: does it say **Hooks (installed)**? If not, run Install or Repair. Then restart the Claude Code session. See [docs/hooks-troubleshooting.md](docs/hooks-troubleshooting.md) for step-by-step checks and how to read the log |
+| "Hooks (needs repair)" | The entries point at another copy of `claude-cat-hook.exe` (moved or reinstalled app, dev vs installed): run **Repair** |
+| Install says settings.json is invalid | Fix the JSON, or restore a `settings.json.bak.*` backup; nothing was changed |
+| The cat stays awake | Send a prompt or click the bubble. A session waiting longer than 30 minutes is dropped automatically |
+| Opening the app again shows "already running" | Only one cat runs at a time. Look in the tray |
+| Black or white box instead of a transparent window | Update the WebView2 runtime and your GPU driver |
+
+## Known limitations
+
+- Windows only. The cat lives in the bottom-right corner of the **primary** monitor's work area. With the cursor on another monitor, the cat looks at its bubble instead of following.
+- Tested at 100% and 125% display scaling. 150% and multi-monitor setups are covered only by unit tests so far.
+- **Memory:** ~185 MB private (release build, 7 processes; about 90 MB of it is the WebView2 GPU process). That is over the spec's ~150 MB goal; WebView2 flags saved only ~10 MB (see [Performance](#performance)).
+- A `PermissionDenied` hook exists only in auto mode. If you deny a permission by hand, the cat stays awake until your next prompt.
+- `claude -p` (print mode) ends its session at once, so the cat wakes and falls asleep again within milliseconds.
+- Right after you use the tray menu, clicking the bubble can give focus to the overlay (Windows hands focus over from the closing tray window). With your terminal focused, it never takes focus.
+- The hitbox is a generous box around the cat rather than its exact outline, so clicks just next to the cat can land on it.
+- The Windows uninstaller does not remove the hooks from `settings.json`; use **Hooks → Uninstall** first.
+
+## Performance
+
+Release build, Windows 11, 2560×1440 at 100%, 165Hz display, 20 logical cores (2026-10-11):
+
+| | CPU | Memory |
+|---|---|---|
+| Asleep (20fps) | ~0.35% of total CPU (~7% of one core: WebView2 GPU ~3.4% + renderer ~3.3%; the app itself ~0%) | 185 MB private / ~360 MB working set |
+| Awake (60fps) | ~0.55% of total CPU (~11% of one core) | 189 MB private |
+| Hidden ("Hide cat while sleeping") | ≈ 0 | same |
+
+Asleep, the page wakes 20 times a second (it does not wake on every vsync), with ~48 draw calls per frame. The cursor poller costs ~0.3% of one core while awake. The installer is 2.1 MB; the app exe is 9.2 MB and the hook 247 KB.
+
+Memory by process (private): WebView2 GPU 89 MB, renderer 36, browser 34, utility 18, crashpad 3, `claude-cat.exe` 6. WebView2 flags tried: `--in-process-gpu` saved ~10 MB at the cost of coupling GPU crashes to the browser process; `--renderer-process-limit=1` and disabling the GPU shader cache saved nothing. The defaults were kept.
+
+## Development
+
+Requirements: Node.js ≥ 20.19, pnpm 8+, Rust stable (MSVC) with the Visual Studio C++ Build Tools.
 
 | Command | What it does |
 |---|---|
 | `pnpm install` | Install JS dependencies |
-| `pnpm tauri dev` | Run the desktop app (Vite dev server and Tauri) |
-| `pnpm tauri build` | Build the release app and NSIS installer |
-| `pnpm dev` | Run only Vite; the dev page is at http://localhost:1420/dev.html |
+| `pnpm tauri dev` | Run the app (Vite dev server and Tauri, hot reload) |
+| `pnpm release` | Build the hook (release), stage it as a sidecar, build the app and the NSIS installer → `target/release/bundle/nsis/` |
+| `pnpm dev` | Vite only; the dev page is at http://localhost:1420/dev.html |
 | `pnpm build` | Typecheck and build the frontend into `dist/` |
-| `pnpm lint` | ESLint |
-| `pnpm typecheck` | `tsc --noEmit` |
-| `pnpm test` | Vitest |
-| `pnpm lint:rust` | `cargo fmt --check` and `cargo clippy -D warnings` (whole workspace) |
-| `pnpm test:rust` | `cargo test --workspace` |
-| `cargo build -p claude-cat-hook` | Build the hook adapter (`target/debug/claude-cat-hook.exe`) |
-| `.\scripts\send-test-event.ps1 <Hook> [sessionId]` | Simulate a Claude Code hook through the real adapter (see below) |
+| `pnpm build:hook` | Build `claude-cat-hook` (release) and copy it to `src-tauri/binaries/` |
+| `pnpm lint` / `pnpm typecheck` / `pnpm test` | ESLint / `tsc --noEmit` / Vitest |
+| `pnpm lint:rust` / `pnpm test:rust` | `cargo fmt --check` + `clippy -D warnings` / `cargo test --workspace` |
+| `cargo build -p claude-cat-hook` | Debug build of the hook (`target/debug/claude-cat-hook.exe`, next to the dev app) |
+| `.\scripts\send-test-event.ps1 <Hook> [sessionId]` | Simulate a Claude Code hook through the real adapter |
 
-## Dev page (no Tauri needed)
+`pnpm tauri build` without the release config builds the app without the bundled hook. Use `pnpm release`, which adds `src-tauri/tauri.release.conf.json` (sidecar plus `build:hook`).
+
+### Dev page (no Tauri needed)
 
 Run `pnpm dev` and open http://localhost:1420/dev.html.
 
-- The page shows the port on the left at the overlay's size (360×280) on a checkerboard, so any transparency problem is visible.
-- The prototype runs on the right for side-by-side comparison. It loads three.js from a CDN, so it needs network access.
-- The mouse anywhere on the page stands in for the screen cursor.
-- **Wake / Sleep / Next phrase / Pet** buttons drive the cat. The dropdown sets the wake reason (`done`, `permission` or `input`), which decides the phrase pool.
-- Toggles for SFW, reduce motion, languages, yell interval (6.5s here, as in the prototype; the app default is 30s), max yells, and a dark desktop.
-- **Show hitboxes** outlines what the overlay reports as clickable; everything else is click-through.
-- Click the cat to pet it; click the bubble to dismiss.
-- `window.stage` is exposed in the console, e.g. `stage.bubble.show('text', 'project')`.
+- The port runs on the left at the overlay's size (360×280) on a checkerboard; the prototype runs on the right for comparison (it needs network access for three.js).
+- The mouse stands in for the screen cursor.
+- **Wake / Sleep / Next phrase / Pet** buttons drive the cat, plus toggles for SFW, reduce motion, languages, yell interval (6.5s here), max yells, a dark desktop, and **Show hitboxes**.
+- `window.stage` is exposed in the console.
 
-## Source layout
+### Simulating Claude Code events
 
-| Path | Role |
-|---|---|
-| `src/cat/springs.ts` | `Spring`, `SpringSet`, `Ballistic` (jump) |
-| `src/cat/CatController.ts` | State machine: wake/yell/sleep sequences, blink and ear-twitch schedulers, pet, look. Pure logic. |
-| `src/cat/CatRig.ts` | Meshes and `applyPose()`, ported 1:1 from the prototype |
-| `src/cat/tail.ts` | Tail tube, preallocated and rewritten in place |
-| `src/cat/RenderLoop.ts` | rAF loop with FPS cap that sleeps on a timer between frames; stops while the page is hidden |
-| `src/cat/CatStage.ts` | Composes renderer, rig, controller, bubble and loop; reports hitboxes; shared by the overlay and the dev page |
-| `src/bridge/tauriBridge.ts` | Typed `cat://state` / `cat://settings` events and commands |
-| `src/bubble/Bubble.ts` | Speech bubble (pop, shake, click = dismiss) |
-| `src/phrases/` | Phrase data and `PhrasePicker` (shuffle bag, filters) |
-| `src/overlay/main.ts`, `dev.ts` | Overlay entry and dev page entry |
-| `src-tauri/src/overlay.rs` | Creates the overlay window (transparent, topmost, no taskbar, never activates) |
-| `src-tauri/src/tray.rs` | Tray menu |
-| `src-tauri/src/cursor.rs` | Cursor poller: click-through off only over the hitboxes; `cat://cursor` for head tracking |
-| `src-tauri/src/state.rs` | Shared state: test wake, session store, `cat://state` and `cat://settings` events |
-| `src-tauri/src/session_store.rs` | Hook event → attention mapping, per-session pending/dismissed, dedupe, stale. Pure logic. |
-| `src-tauri/src/event_server.rs` | Loopback HTTP endpoint, token, `runtime.json` |
-| `src-tauri/src/hooks_installer.rs` | Install / repair / uninstall our entries in `~/.claude/settings.json` |
-| `crates/claude-cat-hook/` | Hook adapter binary: stdin JSON → POST, always silent, always exit 0 |
-| `scripts/send-test-event.ps1` | Fakes Claude Code hook input for manual testing |
-| `src-tauri/src/settings.rs` | Settings load/save with field-level fallback and corrupt-file recovery |
-| `src-tauri/src/commands.rs` | Commands the overlay invokes |
-
-## Overlay: how to check it yourself
-
-1. Run `pnpm tauri dev`. The cat sleeps in the bottom-right corner, 16px inside the taskbar, with Zzz floating up.
-2. Click on empty parts of the 360×280 area. The click goes through to the window underneath; only the cat and the bubble are clickable.
-3. Click the sleeping cat. It peeks one eye open, and your terminal keeps focus.
-4. Tray icon (it may sit under the ^ hidden-icons arrow) → **Wake test**. The cat jumps up and yells "Wake up, B**CH!!!", then sits grumpy and keeps yelling every 30s.
-5. While it is awake, move the mouse anywhere on the screen: the head and pupils follow it. Right after waking the cat looks at its bubble until the mouse moves.
-6. Click the bubble, or use tray → **Sleep** / **Dismiss all**. The cat yawns and goes back to sleep.
-7. Tray toggles:
-   - **SFW mode**: the wake line becomes "Wake up, human!!!".
-   - **Hide cat while sleeping**: the cat disappears once asleep and reappears on wake.
-   - **Pause notifications**: only saved for now; it starts mattering when hook events arrive in Phase 4.
-8. Settings live in `%APPDATA%\ClaudeCat\settings.json`. Tray toggles write it immediately. Hand edits are read at startup.
-9. To quit, use tray → **Quit**.
-
-## Hooking into Claude Code
-
-Tray → **Hooks** (the submenu title shows the current status):
-
-- **Install** / **Repair** adds or refreshes one entry per hook event in `%USERPROFILE%\.claude\settings.json`. Before writing, it saves the file as `settings.json.bak.<unix-seconds>`. Your other hooks and settings keep their content and order.
-- **Uninstall** removes only Claude Cat's entries (anything whose command contains `claude-cat-hook.exe`).
-- A message box reports the result. If `settings.json` is not valid JSON, nothing is written and the box says why.
-
-Each entry uses exec form, which runs the program directly without a shell:
-
-```json
-{ "type": "command", "command": "C:\\…\\claude-cat-hook.exe", "args": ["Stop"], "timeout": 1 }
-```
-
-The command points at the `claude-cat-hook.exe` next to the running app. In development that is `target\debug\claude-cat-hook.exe`, so run **Repair** after moving or reinstalling the app. When the app is not running, the hook exits in a few ms and Claude Code is unaffected.
-
-## Simulating Claude Code events (no Claude Code needed)
-
-With the app running (`pnpm tauri dev`) and the adapter built (`cargo build -p claude-cat-hook`):
+With the app running and the hook built:
 
 ```powershell
 .\scripts\send-test-event.ps1 Stop                          # Claude finished a turn -> the cat wakes up
@@ -107,10 +165,35 @@ With the app running (`pnpm tauri dev`) and the adapter built (`cargo build -p c
 .\scripts\send-test-event.ps1 PermissionRequest -ToolName Bash
 .\scripts\send-test-event.ps1 PostToolUse -ToolName Bash    # approved, the tool ran -> sleep
 .\scripts\send-test-event.ps1 Notification -NotificationType idle_prompt
-.\scripts\send-test-event.ps1 Stop s2 -Cwd C:\code\other   # a second session: the cat yells again and names the project
+.\scripts\send-test-event.ps1 Stop s2 -Cwd C:\code\other   # a second session: yells again and names the project
 ```
 
-The script feeds Claude Code-style JSON into the real `claude-cat-hook.exe`, so it exercises the whole path.
+### Source layout
+
+| Path | Role |
+|---|---|
+| `src/cat/springs.ts` | `Spring`, `SpringSet`, `Ballistic` (jump) |
+| `src/cat/CatController.ts` | State machine: wake/yell/sleep sequences, blink and ear-twitch schedulers, pet, look. Pure logic |
+| `src/cat/CatRig.ts` | Meshes, Zzz sprites and `applyPose()`, ported from the prototype |
+| `src/cat/tail.ts` | Tail tube, preallocated and rewritten in place |
+| `src/cat/RenderLoop.ts` | FPS-capped rAF loop that sleeps on a timer between frames and stops while hidden |
+| `src/cat/CatStage.ts` | Composes renderer, rig, controller, bubble and loop; reports hitboxes |
+| `src/bubble/Bubble.ts` | Speech bubble |
+| `src/phrases/` | Phrase data and `PhrasePicker` |
+| `src/bridge/tauriBridge.ts` | Typed events and commands |
+| `src/overlay/main.ts`, `dev.ts` | Overlay entry, dev page entry |
+| `src-tauri/src/overlay.rs` | Overlay window (transparent, topmost, no taskbar, never activates; DPI-correct placement) |
+| `src-tauri/src/tray.rs` | Tray menu, autostart, hook installer UI |
+| `src-tauri/src/cursor.rs` | Cursor poller: click-through and `cat://cursor` |
+| `src-tauri/src/state.rs` | Shared state, `cat://state` / `cat://settings` |
+| `src-tauri/src/session_store.rs` | Hook event mapping and per-session state. Pure logic |
+| `src-tauri/src/event_server.rs` | Loopback HTTP endpoint, token, `runtime.json` |
+| `src-tauri/src/hooks_installer.rs` | Install / repair / uninstall in `~/.claude/settings.json` |
+| `src-tauri/src/settings.rs` | Settings load/save |
+| `src-tauri/src/log.rs` | Capped local log |
+| `crates/claude-cat-hook/` | Hook adapter |
+| `scripts/` | `send-test-event.ps1`, `stage-sidecar.mjs` |
+| `docs/` | Prototype, [hooks troubleshooting](docs/hooks-troubleshooting.md), [verification log](docs/verification.md) |
 
 ## Decisions log
 
@@ -194,76 +277,11 @@ Small decisions made during implementation, as the spec asks (§11).
   - Results are shown with `tauri-plugin-dialog` message boxes (the official plugin).
   - A `claude -p` run ends its session right away, so the cat wakes on `Stop` and sleeps on `SessionEnd` ~30ms later. Interactive sessions stay open, so the cat stays awake until the next prompt.
 
-## Phase 5 verification (2026-10-11)
-
-- Unit tests (14) cover the installer:
-  - It keeps existing hooks and key order.
-  - Installing twice changes nothing.
-  - Repair fixes paths and removes duplicates and stale events.
-  - Uninstall removes only ours, including when our entry shares a group with theirs, and restores the original.
-  - Broken JSON writes nothing and makes no backup.
-  - A missing exe is refused before anything is touched.
-  - A missing settings file is handled; backups are made; the newline style is kept.
-- Dry run on a copy of the real `%USERPROFILE%\.claude\settings.json` (with the user's `rtk` PreToolUse hook): install, then uninstall, came back byte-identical.
-- Real install, approved by the user, through tray → Hooks → Install. The message box confirmed it, one backup was written, the `rtk` hook is untouched, and 9 exec-form entries were added.
-- Real Claude Code 2.1.296: `claude -p "Reply with exactly: OK"` in a folder `cat-e2e` → the overlay received `wake(done)` (Stop), then `sleep()` 30ms later (SessionEnd).
-- Still to confirm interactively: a reply finishing in an open session wakes the cat; a permission prompt wakes it right away; the next prompt puts it to sleep.
-
-## Phase 4 verification (2026-10-10)
-
-- Tests: 43 app tests (session store mapping, dedupe, isolation between sessions, dismiss, pause, stale; HTTP parsing and every rejection; real-socket round trip; token; runtime file) and 14 hook tests (field extraction, no leaks, truncated input, basename, timeouts; 5 that run the real binary).
-- End to end with the real app and `send-test-event.ps1` → `claude-cat-hook.exe` → server:
-  - Stop wakes the cat with "Wake up, B**CH!!!". A duplicate within 2s is ignored.
-  - A second session's Stop makes the cat yell again with the project name. Each session's UserPromptSubmit clears only that session.
-  - PermissionRequest(Bash) wakes the cat. A later `permission_prompt` is ignored. PostToolUse(Edit) does not clear the wait; PostToolUse(Bash) does.
-  - `idle_prompt` wakes the cat; dismiss puts it to sleep; PreToolUse and SubagentStop change nothing.
-- Live server probing with curl: valid 204; wrong or missing token 401; 70 KB body 413; unknown hook 422; broken JSON 400; `Origin` 403; GET 405; other path 404. It listens on 127.0.0.1 only.
-- Hook timing with the app not running: 3–4 ms with no `runtime.json` (Tray → Quit deletes it), and ~160 ms with a stale `runtime.json` pointing at a closed port. Windows takes up to ~1s to refuse a loopback connection; the 150ms connect cap cuts that short.
-
-## Phase 3 verification (2026-10-10)
-
-- Head tracking (100%, screenshots): the head and pupils turn towards the cursor at top-left, top-right, just left of the cat, screen centre and below the cat.
-- Events: ~29/s while the mouse moves, 0/s while it is still. The overlay point (100, 50) arrives as `100,50`.
-- Cost: the 30Hz poller uses ~0.3% of one core in `claude-cat.exe`. Total app CPU while awake is unchanged at ~6%.
-- DPI: 100% passes the automated checks. The user switched to 125% with the app running, saw the cat correctly placed and sized, and switched back. After the round trip the window was pinned exactly in the corner again (16px gaps), which exercises the re-pin. The placement maths for 125% and 150%, and the cursor conversion at both, are unit-tested.
-- Not tested on real hardware: 150% (only unit tests) and a second monitor (this machine has one).
-
-## Phase 2 verification (2026-10-10, debug build under `pnpm tauri dev`, 2560×1440 at 100%, 165Hz, 20 logical cores)
-
-| Check | Result |
-|---|---|
-| Window | 360×280 at the work-area corner; `WS_EX_TOPMOST` and `WS_EX_NOACTIVATE` are set |
-| Click-through | Over empty overlay area the window under the cursor is the editor (`WS_EX_TRANSPARENT` on). Over the cat or the bubble it is the overlay (off). It switches back after dismiss. |
-| Focus | With the editor focused, clicking the cat and clicking the bubble both leave the editor in the foreground |
-| Tray | Wake test → wakes and yells; bubble click / Sleep → yawns and sleeps; SFW → "Wake up, human!!!"; Hide cat while sleeping → vanishes after the yawn and returns on wake; `settings.json` updates |
-| FPS cap | Render 20fps asleep and 60fps awake (counted with WebView2 remote debugging) |
-| CPU | Asleep 3.4% of one core (0.17% of total CPU); awake 7.4% of one core; hidden ≈ 0. Before the two loop fixes, asleep was 11.4%. |
-| Memory | 204 MB private (app 5 MB, WebView2 GPU 90, renderer 55, browser 31, others 22); 397 MB working set. This is a dev build with Vite HMR, so the real measurement is in Phase 6. **It may exceed the 150 MB target**, because WebView2's processes alone take most of it. |
-
-Known limitation: right after you use the tray, the foreground is a short-lived shell window. Clicking the bubble in that moment can make Windows hand focus to the overlay. With the terminal focused (the normal case), focus stays where it is.
-
-Not checked yet: DPI scaling at 125/150% and multiple monitors (Phase 3). The hit-test maths is unit-tested at 150%.
-
-## Phase 1 verification (2026-10-10)
-
-- `pnpm typecheck`, `pnpm lint` and `pnpm test` (62 tests) pass.
-- Side-by-side screenshots of the dev page against the prototype (headless Edge) for sleep, wake/yell, active, pet, look, yawn and asleep-again. Shape, colours and poses match.
-- Allocation profiling with the heap sampling profiler, 5s while ACTIVE and following a moving cursor:
-  - Prototype: ~10.5 MB/s, mostly from rebuilding `TubeGeometry` every frame.
-  - Port: ~0.47 MB/s. All of the top allocators are inside `THREE.WebGLRenderer.render` (`updateMatrixWorld`, render-list sort), which V8 needs to box floats for. None of them are in `src/`.
-  - A bare rAF loop allocates 0 B/frame on the same browser.
-- Reduce motion: during wake, max |jumpY| and |squash| are ≈0, and the bubble has no shake class.
-- The overlay window shows the sleeping cat, transparent over other windows, with Zzz floating.
-
-## Phase 0 verification (2026-10-10, Windows 11 Pro 22621, WebView2 154, 2560×1440 at 100%)
-
-| Check | Result | How |
-|---|---|---|
-| Transparent background | ✅ | Screenshot: pixels in the window but outside the sphere match the window behind it, and `alpha: true` + `setClearColor(0, 0)` works without any workaround |
-| No border, title bar or shadow | ✅ | Screenshot |
-| Not on the taskbar | ✅ | Taskbar screenshot shows no button |
-| Always on top | ✅ | `WS_EX_TOPMOST` is set |
-| Position | ✅ | Window rect (2184,1096)-(2544,1376): 360×280, 16px inside the work area (2560×1392) |
-| Does not steal focus | ✅* | The foreground window stayed on the editor after launch. *Only checked at 100% DPI and on one launch. Phase 2 re-checks this together with click-through. |
-
-Not checked yet: DPI scaling at 125/150% and multiple monitors (Phase 3).
+- **Phase 6**
+  - **Single instance** uses `tauri-plugin-single-instance`, registered first. A second launch exits before creating any window, and the running app shows "already running". Two instances used to fight over `runtime.json` and the WebView2 profile, and the second one crashed.
+  - **Start at login** uses `tauri-plugin-autostart`, which writes the `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` value `Claude Cat`. It is off unless you tick it. At start-up the Run key is treated as the truth (you may have disabled it in Task Manager) and `startAtLogin` is synced to it.
+  - **Log:** `%APPDATA%\ClaudeCat\claude-cat.log`, rotated to `.old` at 512 KB, one line per entry, each line at most 300 characters. It records names and outcomes only: 8 characters of the session id, the project folder name, event names, HTTP status of rejected requests, installer and autostart results. In debug builds lines also go to stderr.
+  - **Bundling:** `claude-cat-hook` ships as a Tauri sidecar (`bundle.externalBin`), which the installer places next to `claude-cat.exe` as `claude-cat-hook.exe`. That is exactly where the hooks installer points. The sidecar config lives in `src-tauri/tauri.release.conf.json` (used by `pnpm release`), because tauri-build would otherwise require the staged binary for every dev build. In dev the workspace build puts the hook in `target/debug` next to the app.
+  - The NSIS installer is per-user (`%LOCALAPPDATA%\Claude Cat`) and needs no admin rights. Uninstalling does not touch `settings.json` hooks or `%APPDATA%\ClaudeCat`.
+  - Memory (release, 185 MB private) is over the ~150 MB goal. `--in-process-gpu` saved ~10 MB but ties GPU crashes to the browser process, so WebView2 keeps its defaults. The numbers are recorded under Performance.
+  - The README is reorganised for users first (install, use, hooks, uninstall, privacy, troubleshooting, limitations, performance), then development. Per-phase verification moved to [docs/verification.md](docs/verification.md).

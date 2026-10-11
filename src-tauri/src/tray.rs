@@ -1,12 +1,14 @@
 //! Tray menu (spec §2.3).
 
 use crate::hooks_installer::{self as hooks, Action, Report, Status};
+use crate::log;
 use crate::state::{self, AppState};
 use std::path::PathBuf;
 use std::thread;
 use tauri::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager, Wry};
+use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 const WAKE_TEST: &str = "wake-test";
@@ -15,6 +17,7 @@ const DISMISS_ALL: &str = "dismiss-all";
 const SFW: &str = "sfw";
 const PAUSE: &str = "pause";
 const HIDE: &str = "hide-while-sleeping";
+const AUTOSTART: &str = "start-at-login";
 const HOOKS_INSTALL: &str = "hooks-install";
 const HOOKS_REPAIR: &str = "hooks-repair";
 const HOOKS_UNINSTALL: &str = "hooks-uninstall";
@@ -25,11 +28,17 @@ struct Items {
     sfw: CheckMenuItem<Wry>,
     pause: CheckMenuItem<Wry>,
     hide: CheckMenuItem<Wry>,
+    autostart: CheckMenuItem<Wry>,
     hooks: Submenu<Wry>,
 }
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let s = app.state::<AppState>().settings();
+    // The Run key is the truth (the user may have removed it in Task Manager); keep the setting in step.
+    let autostart_on = app.autolaunch().is_enabled().unwrap_or(false);
+    if autostart_on != s.start_at_login {
+        state::update_settings(app, |s| s.start_at_login = autostart_on);
+    }
 
     let items = Items {
         sfw: CheckMenuItem::with_id(app, SFW, "SFW mode", true, s.sfw_mode, None::<&str>)?,
@@ -47,6 +56,14 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
             "Hide cat while sleeping",
             true,
             s.hide_while_sleeping,
+            None::<&str>,
+        )?,
+        autostart: CheckMenuItem::with_id(
+            app,
+            AUTOSTART,
+            "Start at login",
+            true,
+            autostart_on,
             None::<&str>,
         )?,
         hooks: Submenu::with_items(
@@ -70,6 +87,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
             &items.sfw,
             &items.pause,
             &items.hide,
+            &items.autostart,
             &PredefinedMenuItem::separator(app)?,
             &items.hooks,
             &PredefinedMenuItem::separator(app)?,
@@ -118,11 +136,53 @@ fn on_menu(app: &AppHandle, event: &MenuEvent, items: &Items) {
             let on = checked(&items.hide);
             state::update_settings(app, |s| s.hide_while_sleeping = on);
         }
+        AUTOSTART => set_autostart(app, checked(&items.autostart), &items.autostart),
         HOOKS_INSTALL | HOOKS_REPAIR => run_installer(app, Action::Install, items.hooks.clone()),
         HOOKS_UNINSTALL => run_installer(app, Action::Uninstall, items.hooks.clone()),
         QUIT => app.exit(0),
         _ => {}
     }
+}
+
+/// Opt-in only (spec §10 `startAtLogin`): adds or removes the HKCU Run entry for this executable.
+fn set_autostart(app: &AppHandle, on: bool, item: &CheckMenuItem<Wry>) {
+    let launcher = app.autolaunch();
+    let result = if on {
+        launcher.enable()
+    } else {
+        launcher.disable()
+    };
+    match result {
+        Ok(()) => {
+            log::info(format!(
+                "start at login {}",
+                if on { "enabled" } else { "disabled" }
+            ));
+            state::update_settings(app, |s| s.start_at_login = on);
+        }
+        Err(e) => {
+            log::warn(format!("could not change start at login: {e}"));
+            let _ = item.set_checked(!on);
+            notify_error(app, format!("Could not change \"Start at login\": {e}"));
+        }
+    }
+}
+
+/// A plain message box from the tray app.
+pub fn notify(app: &AppHandle, text: impl Into<String>) {
+    app.dialog()
+        .message(text)
+        .title("Claude Cat")
+        .kind(MessageDialogKind::Info)
+        .show(|_| {});
+}
+
+fn notify_error(app: &AppHandle, text: impl Into<String>) {
+    app.dialog()
+        .message(text)
+        .title("Claude Cat")
+        .kind(MessageDialogKind::Error)
+        .show(|_| {});
 }
 
 fn paths() -> Option<(PathBuf, PathBuf)> {
@@ -157,11 +217,20 @@ fn run_installer(app: &AppHandle, action: Action, submenu: Submenu<Wry>) {
                     .to_owned(),
             ),
             Some((settings, exe)) => match hooks::apply(&settings, &exe, action) {
-                Ok(report) => (
-                    MessageDialogKind::Info,
-                    success_text(action, &report, &settings),
-                ),
-                Err(e) => (MessageDialogKind::Error, e.to_string()),
+                Ok(report) => {
+                    log::info(format!(
+                        "hooks {action:?}: {report:?} (exe {})",
+                        exe.display()
+                    ));
+                    (
+                        MessageDialogKind::Info,
+                        success_text(action, &report, &settings),
+                    )
+                }
+                Err(e) => {
+                    log::warn(format!("hooks {action:?} failed: {e}"));
+                    (MessageDialogKind::Error, e.to_string())
+                }
             },
         };
         let _ = submenu.set_text(hooks_title(current_status()));

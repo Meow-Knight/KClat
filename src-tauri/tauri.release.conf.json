@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "build": {
+    "beforeBuildCommand": "pnpm build:hook && pnpm build"
+  },
+  "bundle": {
+    "externalBin": ["binaries/claude-cat-hook"]
+  }
+}
