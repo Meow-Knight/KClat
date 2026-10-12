@@ -1,6 +1,6 @@
-//! claude-cat-hook: Claude Code hook adapter (spec §8.3–8.4).
+//! klat-hook: Claude Code hook adapter (spec §8.3–8.4).
 //!
-//! Reads the hook JSON from stdin, keeps only the fields the cat needs, and POSTs them to the Claude Cat
+//! Reads the hook JSON from stdin, keeps only the fields the cat needs, and POSTs them to the Klat
 //! app over loopback. Whatever happens it prints nothing and exits 0, so Claude Code can never read its
 //! output as a decision, and an app that is not running costs at most ~300ms.
 
@@ -99,7 +99,7 @@ fn runtime_path() -> PathBuf {
     std::env::var_os("APPDATA")
         .map(PathBuf::from)
         .unwrap_or_else(std::env::temp_dir)
-        .join("ClaudeCat")
+        .join("Klat")
         .join("runtime.json")
 }
 

@@ -1,7 +1,7 @@
 //! Loopback HTTP endpoint for the hook adapter (spec §8.3–8.4).
 //!
 //! - Binds 127.0.0.1 on a random port; a fresh 256-bit bearer token per app run.
-//! - `{port, token}` goes to `%APPDATA%\ClaudeCat\runtime.json`, deleted when the app quits.
+//! - `{port, token}` goes to `%APPDATA%\Klat\runtime.json`, deleted when the app quits.
 //! - Accepts only `POST /event` with the right token, no `Origin` header (no browser pages), a body of at
 //!   most 64 KB, valid JSON, and an allowlisted `hookEventName`. Everything else gets a 4xx and is dropped.
 
@@ -29,12 +29,12 @@ pub struct RuntimeInfo {
     pub pid: u32,
 }
 
-/// `%APPDATA%\ClaudeCat\runtime.json` (the hook adapter derives the same path).
+/// `%APPDATA%\Klat\runtime.json` (the hook adapter derives the same path).
 pub fn runtime_path() -> PathBuf {
     std::env::var_os("APPDATA")
         .map(PathBuf::from)
         .unwrap_or_else(std::env::temp_dir)
-        .join("ClaudeCat")
+        .join("Klat")
         .join("runtime.json")
 }
 
@@ -400,7 +400,7 @@ mod tests {
     #[test]
     fn runtime_file_round_trips_and_is_removed() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("ClaudeCat").join("runtime.json");
+        let path = dir.path().join("Klat").join("runtime.json");
         let info = RuntimeInfo {
             port: 4242,
             token: "t".into(),

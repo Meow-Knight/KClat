@@ -96,7 +96,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     )?;
 
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
-        .tooltip("Claude Cat")
+        .tooltip("Klat")
         .menu(&menu)
         .on_menu_event(move |app, event| on_menu(app, &event, &items));
     if let Some(icon) = app.default_window_icon() {
@@ -106,12 +106,12 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Tooltip shows how many sessions are waiting, e.g. "Claude Cat · 2 sessions waiting".
+/// Tooltip shows how many sessions are waiting, e.g. "Klat · 2 sessions waiting".
 pub fn set_waiting(app: &AppHandle, count: usize) {
     let tip = match count {
-        0 => "Claude Cat".to_owned(),
-        1 => "Claude Cat · 1 session waiting".to_owned(),
-        n => format!("Claude Cat · {n} sessions waiting"),
+        0 => "Klat".to_owned(),
+        1 => "Klat · 1 session waiting".to_owned(),
+        n => format!("Klat · {n} sessions waiting"),
     };
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
         let _ = tray.set_tooltip(Some(tip));
@@ -172,7 +172,7 @@ fn set_autostart(app: &AppHandle, on: bool, item: &CheckMenuItem<Wry>) {
 pub fn notify(app: &AppHandle, text: impl Into<String>) {
     app.dialog()
         .message(text)
-        .title("Claude Cat")
+        .title("Klat")
         .kind(MessageDialogKind::Info)
         .show(|_| {});
 }
@@ -180,7 +180,7 @@ pub fn notify(app: &AppHandle, text: impl Into<String>) {
 fn notify_error(app: &AppHandle, text: impl Into<String>) {
     app.dialog()
         .message(text)
-        .title("Claude Cat")
+        .title("Klat")
         .kind(MessageDialogKind::Error)
         .show(|_| {});
 }
@@ -236,7 +236,7 @@ fn run_installer(app: &AppHandle, action: Action, submenu: Submenu<Wry>) {
         let _ = submenu.set_text(hooks_title(current_status()));
         app.dialog()
             .message(text)
-            .title("Claude Cat")
+            .title("Klat")
             .kind(kind)
             .show(|_| {});
     });
@@ -244,8 +244,8 @@ fn run_installer(app: &AppHandle, action: Action, submenu: Submenu<Wry>) {
 
 fn success_text(action: Action, report: &Report, settings: &std::path::Path) -> String {
     let what = match action {
-        Action::Install => "Claude Cat hooks are installed",
-        Action::Uninstall => "Claude Cat hooks are removed",
+        Action::Install => "Klat hooks are installed",
+        Action::Uninstall => "Klat hooks are removed",
     };
     match report {
         Report::NoChange => format!("{what}. Nothing needed to change in {}.", settings.display()),

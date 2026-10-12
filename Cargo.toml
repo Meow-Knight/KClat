@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["src-tauri", "crates/claude-cat-hook"]
+members = ["src-tauri", "crates/klat-hook"]
 
 [profile.release]
 # The hook adapter runs on every Claude Code hook: keep it small and quick to start.

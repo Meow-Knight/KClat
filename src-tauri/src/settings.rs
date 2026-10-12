@@ -1,4 +1,4 @@
-//! Settings file `%APPDATA%\ClaudeCat\settings.json` (spec §10).
+//! Settings file `%APPDATA%\Klat\settings.json` (spec §10).
 //!
 //! Loading never fails: a missing or invalid field falls back to its default, and a file that is not a
 //! JSON object is renamed to `settings.json.corrupt.<unix-seconds>` and replaced with defaults.
@@ -95,9 +95,24 @@ pub enum LoadOutcome {
     RecoveredCorrupt(PathBuf),
 }
 
-/// `%APPDATA%\ClaudeCat`, or None when APPDATA is not set.
+/// `%APPDATA%\Klat`, or None when APPDATA is not set.
 pub fn default_dir() -> Option<PathBuf> {
-    std::env::var_os("APPDATA").map(|p| PathBuf::from(p).join("ClaudeCat"))
+    std::env::var_os("APPDATA").map(|p| PathBuf::from(p).join("Klat"))
+}
+
+/// Moves `%APPDATA%\ClaudeCat` (the folder from before the rename to Klat) to `%APPDATA%\Klat` once,
+/// so settings carry over. Best effort: if it fails, the app starts with defaults.
+pub fn migrate_legacy_dir() {
+    if let Some(appdata) = std::env::var_os("APPDATA") {
+        migrate_legacy_dir_in(Path::new(&appdata));
+    }
+}
+
+fn migrate_legacy_dir_in(appdata: &Path) {
+    let (old, new) = (appdata.join("ClaudeCat"), appdata.join("Klat"));
+    if old.is_dir() && !new.exists() {
+        let _ = fs::rename(old, new);
+    }
 }
 
 pub fn load(path: &Path) -> (Settings, LoadOutcome) {
@@ -150,8 +165,23 @@ mod tests {
 
     fn temp() -> (tempfile::TempDir, PathBuf) {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("ClaudeCat").join("settings.json");
+        let path = dir.path().join("Klat").join("settings.json");
         (dir, path)
+    }
+
+    #[test]
+    fn legacy_dir_moves_once_and_never_overwrites() {
+        let dir = tempfile::tempdir().unwrap();
+        let old = dir.path().join("ClaudeCat");
+        fs::create_dir(&old).unwrap();
+        fs::write(old.join("settings.json"), "{}").unwrap();
+        migrate_legacy_dir_in(dir.path());
+        assert!(!old.exists());
+        assert!(dir.path().join("Klat").join("settings.json").exists());
+
+        fs::create_dir(&old).unwrap();
+        migrate_legacy_dir_in(dir.path());
+        assert!(old.exists()); // Klat already exists: leave both alone
     }
 
     #[test]

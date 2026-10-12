@@ -18,7 +18,7 @@ struct Run {
 
 fn run_hook(appdata: &Path, stdin: &str, arg: &str) -> Run {
     let started = Instant::now();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_claude-cat-hook"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_klat-hook"))
         .arg(arg)
         .env("APPDATA", appdata)
         .stdin(Stdio::piped())
@@ -42,7 +42,7 @@ fn run_hook(appdata: &Path, stdin: &str, arg: &str) -> Run {
 }
 
 fn write_runtime(appdata: &Path, port: u16) {
-    let dir = appdata.join("ClaudeCat");
+    let dir = appdata.join("Klat");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
         dir.join("runtime.json"),

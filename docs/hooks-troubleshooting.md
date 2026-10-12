@@ -1,10 +1,10 @@
 # Hooks troubleshooting
 
-Claude Cat learns about Claude Code through hooks in `%USERPROFILE%\.claude\settings.json`. Each hook runs `claude-cat-hook.exe`, which forwards a few fields to the app over `127.0.0.1` and exits. When something does not work, go through the steps below in order.
+Klat learns about Claude Code through hooks in `%USERPROFILE%\.claude\settings.json`. Each hook runs `klat-hook.exe`, which forwards a few fields to the app over `127.0.0.1` and exits. When something does not work, go through the steps below in order.
 
 ## 1. Is the app running?
 
-Look for the cat in the tray (it may be under the **^** hidden-icons arrow). Then check for `%APPDATA%\ClaudeCat\runtime.json`:
+Look for the cat in the tray (it may be under the **^** hidden-icons arrow). Then check for `%APPDATA%\Klat\runtime.json`:
 
 - The app writes this file when it starts and deletes it when you quit.
 - If the app crashed or was killed, a stale copy can stay behind. It is harmless: the next start overwrites it, and the hook gives up on a dead port in ~150ms.
@@ -15,14 +15,14 @@ The tray's **Hooks** submenu title shows the status:
 
 | Title | Meaning | What to do |
 |---|---|---|
-| Hooks (installed) | All entries are present and point at this app's `claude-cat-hook.exe` | Nothing |
+| Hooks (installed) | All entries are present and point at this app's `klat-hook.exe` | Nothing |
 | Hooks (needs repair) | Some entries are missing, duplicated, or point at another path (for example, you moved or reinstalled the app, or switched between a dev build and the installed one) | **Hooks → Repair** |
-| Hooks (not installed) | No Claude Cat entries | **Hooks → Install** |
+| Hooks (not installed) | No Klat entries | **Hooks → Install** |
 
 To check by hand, open `%USERPROFILE%\.claude\settings.json` and look under `"hooks"` for entries like this:
 
 ```json
-{ "type": "command", "command": "C:\\Users\\you\\AppData\\Local\\Claude Cat\\claude-cat-hook.exe", "args": ["Stop"], "timeout": 1 }
+{ "type": "command", "command": "C:\\Users\\you\\AppData\\Local\\Klat\\klat-hook.exe", "args": ["Stop"], "timeout": 1 }
 ```
 
 There should be one for each of `Stop`, `StopFailure`, `PermissionRequest`, `Notification`, `UserPromptSubmit`, `PostToolUse`, `PostToolUseFailure`, `PermissionDenied` and `SessionEnd`.
@@ -44,7 +44,7 @@ With the app running, the cat should wake up. From a clone of this repo, `.\scri
 
 ## 5. Read the log
 
-`%APPDATA%\ClaudeCat\claude-cat.log` (capped at 512 KB, plus one `.old` file) records start-up, every hook event the app received (event name, the first 8 characters of the session id, the project folder name, and what it did), rejected requests, and installer actions.
+`%APPDATA%\Klat\klat.log` (capped at 512 KB, plus one `.old` file) records start-up, every hook event the app received (event name, the first 8 characters of the session id, the project folder name, and what it did), rejected requests, and installer actions.
 
 | Log line | Meaning |
 |---|---|
@@ -59,7 +59,7 @@ If `settings.json` is not valid JSON, **Install / Repair / Uninstall refuse to w
 
 ## 7. Uninstalling
 
-Run **Hooks → Uninstall** before removing the app. It removes only Claude Cat's entries and keeps everything else in `settings.json`, including other hooks and the order of keys. If the app is already gone, delete the entries whose `command` contains `claude-cat-hook.exe` by hand. While the app is not running, leftover entries only cost a few milliseconds per hook.
+Run **Hooks → Uninstall** before removing the app. It removes only Klat's entries and keeps everything else in `settings.json`, including other hooks and the order of keys. If the app is already gone, delete the entries whose `command` contains `klat-hook.exe` by hand. While the app is not running, leftover entries only cost a few milliseconds per hook.
 
 ## What the hook never does
 

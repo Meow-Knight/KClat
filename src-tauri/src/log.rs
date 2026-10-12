@@ -1,6 +1,6 @@
-//! Small local log (spec §8.4): `%APPDATA%\ClaudeCat\claude-cat.log`, capped in size.
+//! Small local log (spec §8.4): `%APPDATA%\Klat\klat.log`, capped in size.
 //!
-//! When the file passes MAX_BYTES it becomes `claude-cat.log.old` (replacing the previous one), so the
+//! When the file passes MAX_BYTES it becomes `klat.log.old` (replacing the previous one), so the
 //! log never takes more than ~2 × MAX_BYTES. Callers log event names, session ids, project folder names
 //! and outcomes only: never prompts, commands, tool input or transcripts (the app never receives them).
 
@@ -19,11 +19,11 @@ struct Sink {
 
 static SINK: Mutex<Option<Sink>> = Mutex::new(None);
 
-/// Starts logging to `dir\claude-cat.log`. Logging is best effort: failures are ignored.
+/// Starts logging to `dir\klat.log`. Logging is best effort: failures are ignored.
 pub fn init(dir: &Path) {
     let _ = fs::create_dir_all(dir);
     *SINK.lock().unwrap() = Some(Sink {
-        path: dir.join("claude-cat.log"),
+        path: dir.join("klat.log"),
         file: None,
     });
 }
@@ -39,7 +39,7 @@ pub fn warn(msg: impl AsRef<str>) {
 fn write(level: &str, msg: &str) {
     let line = format!("{} {level} {}\n", timestamp(now_secs()), one_line(msg));
     if cfg!(debug_assertions) {
-        eprint!("claude-cat: {line}");
+        eprint!("klat: {line}");
     }
     let Ok(mut guard) = SINK.lock() else { return };
     let Some(sink) = guard.as_mut() else { return };
@@ -126,7 +126,7 @@ mod tests {
     fn rotates_past_the_cap_and_never_grows_beyond_two_files() {
         let dir = tempfile::tempdir().unwrap();
         let mut sink = Sink {
-            path: dir.path().join("claude-cat.log"),
+            path: dir.path().join("klat.log"),
             file: None,
         };
         let line = format!("{}\n", "y".repeat(1023));
@@ -134,9 +134,7 @@ mod tests {
             append(&mut sink, &line).unwrap();
         }
         let main = fs::metadata(&sink.path).unwrap().len();
-        let old = fs::metadata(dir.path().join("claude-cat.log.old"))
-            .unwrap()
-            .len();
+        let old = fs::metadata(dir.path().join("klat.log.old")).unwrap().len();
         assert!(main <= MAX_BYTES && old <= MAX_BYTES, "{main} {old}");
         assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 2);
     }

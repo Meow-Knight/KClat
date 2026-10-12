@@ -4,6 +4,6 @@
     "beforeBuildCommand": "pnpm build:hook && pnpm build"
   },
   "bundle": {
-    "externalBin": ["binaries/claude-cat-hook"]
+    "externalBin": ["binaries/klat-hook"]
   }
 }

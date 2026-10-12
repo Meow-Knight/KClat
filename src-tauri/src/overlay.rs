@@ -14,7 +14,7 @@ const MARGIN: f64 = 16.0;
 
 pub fn create(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     let mut builder = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::default())
-        .title("Claude Cat")
+        .title("Klat")
         .inner_size(WIDTH, HEIGHT)
         .resizable(false)
         .transparent(true)

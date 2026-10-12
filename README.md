@@ -1,16 +1,16 @@
-# Claude Cat
+# Klat
 
 A desktop companion for Claude Code on Windows. A grumpy toon cat sleeps in the corner of your screen. When Claude finishes a turn or is waiting on you (a permission prompt, a question), it jumps up and yells "Wake up, B\*\*CH!!!" until you go back to the terminal. It follows your cursor, and you can pet it.
 
-Everything runs locally: no telemetry, no cloud. The hooks only report to the app over `127.0.0.1` and never approve or deny anything for you. The full design is in [`CLAUDE_CAT_SPEC.md`](CLAUDE_CAT_SPEC.md).
+Everything runs locally: no telemetry, no cloud. The hooks only report to the app over `127.0.0.1` and never approve or deny anything for you. The full design is in [`KLAT_SPEC.md`](KLAT_SPEC.md).
 
 > **Status:** MVP complete (spec phases 0–6).
 
 ## Install
 
-1. Run `Claude Cat_<version>_x64-setup.exe`. It is a per-user install into `%LOCALAPPDATA%\Claude Cat`, so no admin rights are needed. The installer contains `claude-cat.exe` and the hook program `claude-cat-hook.exe`.
-2. Start **Claude Cat**. A sleeping cat appears in the bottom-right corner, and a cat icon appears in the tray (it may be under the **^** hidden-icons arrow).
-3. Tray → **Hooks → Install**. This adds Claude Cat's hooks to `%USERPROFILE%\.claude\settings.json`, after saving a backup. Your other hooks and settings stay as they are.
+1. Run `Klat_<version>_x64-setup.exe`. It is a per-user install into `%LOCALAPPDATA%\Klat`, so no admin rights are needed. The installer contains `klat.exe` and the hook program `klat-hook.exe`.
+2. Start **Klat**. A sleeping cat appears in the bottom-right corner, and a cat icon appears in the tray (it may be under the **^** hidden-icons arrow).
+3. Tray → **Hooks → Install**. This adds Klat's hooks to `%USERPROFILE%\.claude\settings.json`, after saving a backup. Your other hooks and settings stay as they are.
 4. Restart any open Claude Code sessions. From now on the cat wakes when Claude needs you.
 
 You need Windows 10/11 with the WebView2 runtime, which comes with Windows 11 and recent Windows 10.
@@ -37,13 +37,13 @@ The overlay never takes focus, and clicks on its empty area go through to the wi
 | SFW mode | No swearing (the first line becomes "Wake up, human!!!") |
 | Pause notifications | The cat stays asleep. Sessions are still tracked, and unpausing wakes it if something is still waiting |
 | Hide cat while sleeping | The cat shows only while it is awake |
-| Start at login | Off by default. Adds or removes Claude Cat in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` |
+| Start at login | Off by default. Adds or removes Klat in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` |
 | Hooks → Install / Repair / Uninstall | Manage the entries in `settings.json` (see [Hooks](#hooks)). The submenu title shows the current status |
 | Quit | Quits the app |
 
 The tray tooltip shows how many sessions are waiting.
 
-**Settings** are in `%APPDATA%\ClaudeCat\settings.json`. Tray toggles write the file immediately. Hand edits are read at start-up. A missing or invalid field falls back to its default. A file that is not JSON at all is renamed to `settings.json.corrupt.<time>` and replaced with defaults.
+**Settings** are in `%APPDATA%\Klat\settings.json`. Tray toggles write the file immediately. Hand edits are read at start-up. A missing or invalid field falls back to its default. A file that is not JSON at all is renamed to `settings.json.corrupt.<time>` and replaced with defaults.
 
 | Field | Default | |
 |---|---|---|
@@ -63,14 +63,14 @@ The tray tooltip shows how many sessions are waiting.
 **Hooks → Install** adds one entry per event (`Stop`, `StopFailure`, `PermissionRequest`, `Notification`, `UserPromptSubmit`, `PostToolUse`, `PostToolUseFailure`, `PermissionDenied`, `SessionEnd`) to `%USERPROFILE%\.claude\settings.json`. Each entry looks like this:
 
 ```json
-{ "type": "command", "command": "C:\\Users\\you\\AppData\\Local\\Claude Cat\\claude-cat-hook.exe", "args": ["Stop"], "timeout": 1 }
+{ "type": "command", "command": "C:\\Users\\you\\AppData\\Local\\Klat\\klat-hook.exe", "args": ["Stop"], "timeout": 1 }
 ```
 
 - It runs the program directly (exec form), with no shell involved, so paths with spaces are fine.
 - Before any change, the file is saved as `settings.json.bak.<unix-seconds>`.
 - If `settings.json` is not valid JSON, nothing is written and a message box says so.
 - Installing again changes nothing. **Repair** re-points the entries after you move or reinstall the app, or switch between a dev build and the installed one.
-- **Uninstall** removes only entries whose command contains `claude-cat-hook.exe`, and keeps everything else, including key order.
+- **Uninstall** removes only entries whose command contains `klat-hook.exe`, and keeps everything else, including key order.
 - The app never installs or changes hooks on its own; only these tray items do.
 
 The hook reads the event from stdin and forwards five fields: event name, session id, project folder name, tool name and notification type. It sends them to `127.0.0.1`, prints nothing, and always exits 0. Its budget is 300ms. When the app is not running, it exits in a few milliseconds.
@@ -78,17 +78,17 @@ The hook reads the event from stdin and forwards five fields: event name, sessio
 ## Uninstall
 
 1. Tray → **Hooks → Uninstall**, then **Quit**.
-2. Windows Settings → Apps → **Claude Cat** → Uninstall.
-3. Optional: delete `%APPDATA%\ClaudeCat` (settings and log) and any `%USERPROFILE%\.claude\settings.json.bak.*` backups you no longer need.
+2. Windows Settings → Apps → **Klat** → Uninstall.
+3. Optional: delete `%APPDATA%\Klat` (settings and log) and any `%USERPROFILE%\.claude\settings.json.bak.*` backups you no longer need.
 
-If you uninstall the app first, the hook entries stay in `settings.json`. They are harmless (the program is gone, so the hook just fails quietly), but you can delete them by hand: they are the entries whose `command` contains `claude-cat-hook.exe`.
+If you uninstall the app first, the hook entries stay in `settings.json`. They are harmless (the program is gone, so the hook just fails quietly), but you can delete them by hand: they are the entries whose `command` contains `klat-hook.exe`.
 
 ## Privacy
 
-- **Nothing leaves your machine.** The app listens only on `127.0.0.1`, on a random port, with a fresh 256-bit token on each run. `%APPDATA%\ClaudeCat\runtime.json` holds the port and token while the app runs and is deleted when you quit.
+- **Nothing leaves your machine.** The app listens only on `127.0.0.1`, on a random port, with a fresh 256-bit token on each run. `%APPDATA%\Klat\runtime.json` holds the port and token while the app runs and is deleted when you quit.
 - The server rejects anything without the token, any request with an `Origin` header (web pages), bodies over 64 KB, and unknown event names.
 - The hook never sends prompts, commands, tool input or output, messages, transcript paths or full folder paths. It sends only the five fields listed under [Hooks](#hooks).
-- The local log (`%APPDATA%\ClaudeCat\claude-cat.log`, capped at 512 KB plus one `.old` file) records start-up, hook event names with the first 8 characters of the session id and the project folder name, rejected requests, and installer and autostart actions.
+- The local log (`%APPDATA%\Klat\klat.log`, capped at 512 KB plus one `.old` file) records start-up, hook event names with the first 8 characters of the session id and the project folder name, rejected requests, and installer and autostart actions.
 - The hook never makes permission decisions.
 
 ## Troubleshooting
@@ -96,7 +96,7 @@ If you uninstall the app first, the hook entries stay in `settings.json`. They a
 | Problem | Try |
 |---|---|
 | The cat doesn't wake when Claude finishes | Check the tray: does it say **Hooks (installed)**? If not, run Install or Repair. Then restart the Claude Code session. See [docs/hooks-troubleshooting.md](docs/hooks-troubleshooting.md) for step-by-step checks and how to read the log |
-| "Hooks (needs repair)" | The entries point at another copy of `claude-cat-hook.exe` (moved or reinstalled app, dev vs installed): run **Repair** |
+| "Hooks (needs repair)" | The entries point at another copy of `klat-hook.exe` (moved or reinstalled app, dev vs installed): run **Repair** |
 | Install says settings.json is invalid | Fix the JSON, or restore a `settings.json.bak.*` backup; nothing was changed |
 | The cat stays awake | Send a prompt or click the bubble. A session waiting longer than 30 minutes is dropped automatically |
 | Opening the app again shows "already running" | Only one cat runs at a time. Look in the tray |
@@ -125,7 +125,7 @@ Release build, Windows 11, 2560×1440 at 100%, 165Hz display, 20 logical cores (
 
 Asleep, the page wakes 20 times a second (it does not wake on every vsync), with ~48 draw calls per frame. The cursor poller costs ~0.3% of one core while awake. The installer is 2.1 MB; the app exe is 9.2 MB and the hook 247 KB.
 
-Memory by process (private): WebView2 GPU 89 MB, renderer 36, browser 34, utility 18, crashpad 3, `claude-cat.exe` 6. WebView2 flags tried: `--in-process-gpu` saved ~10 MB at the cost of coupling GPU crashes to the browser process; `--renderer-process-limit=1` and disabling the GPU shader cache saved nothing. The defaults were kept.
+Memory by process (private): WebView2 GPU 89 MB, renderer 36, browser 34, utility 18, crashpad 3, `klat.exe` 6. WebView2 flags tried: `--in-process-gpu` saved ~10 MB at the cost of coupling GPU crashes to the browser process; `--renderer-process-limit=1` and disabling the GPU shader cache saved nothing. The defaults were kept.
 
 ## Development
 
@@ -138,10 +138,10 @@ Requirements: Node.js ≥ 20.19, pnpm 8+, Rust stable (MSVC) with the Visual Stu
 | `pnpm release` | Build the hook (release), stage it as a sidecar, build the app and the NSIS installer → `target/release/bundle/nsis/` |
 | `pnpm dev` | Vite only; the dev page is at http://localhost:1420/dev.html |
 | `pnpm build` | Typecheck and build the frontend into `dist/` |
-| `pnpm build:hook` | Build `claude-cat-hook` (release) and copy it to `src-tauri/binaries/` |
+| `pnpm build:hook` | Build `klat-hook` (release) and copy it to `src-tauri/binaries/` |
 | `pnpm lint` / `pnpm typecheck` / `pnpm test` | ESLint / `tsc --noEmit` / Vitest |
 | `pnpm lint:rust` / `pnpm test:rust` | `cargo fmt --check` + `clippy -D warnings` / `cargo test --workspace` |
-| `cargo build -p claude-cat-hook` | Debug build of the hook (`target/debug/claude-cat-hook.exe`, next to the dev app) |
+| `cargo build -p klat-hook` | Debug build of the hook (`target/debug/klat-hook.exe`, next to the dev app) |
 | `.\scripts\send-test-event.ps1 <Hook> [sessionId]` | Simulate a Claude Code hook through the real adapter |
 
 `pnpm tauri build` without the release config builds the app without the bundled hook. Use `pnpm release`, which adds `src-tauri/tauri.release.conf.json` (sidecar plus `build:hook`).
@@ -191,7 +191,7 @@ With the app running and the hook built:
 | `src-tauri/src/hooks_installer.rs` | Install / repair / uninstall in `~/.claude/settings.json` |
 | `src-tauri/src/settings.rs` | Settings load/save |
 | `src-tauri/src/log.rs` | Capped local log |
-| `crates/claude-cat-hook/` | Hook adapter |
+| `crates/klat-hook/` | Hook adapter |
 | `scripts/` | `send-test-event.ps1`, `stage-sidecar.mjs` |
 | `docs/` | Prototype, [hooks troubleshooting](docs/hooks-troubleshooting.md), [verification log](docs/verification.md) |
 
@@ -206,7 +206,7 @@ Small decisions made during implementation, as the spec asks (§11).
   - The overlay window is created in Rust (`src-tauri/src/overlay.rs`) rather than declared in `tauri.conf.json`. This way it is placed at the work-area corner and created with `focused(false)`, so it never needs a `show()` call that could steal focus.
   - A minimal tray with only **Quit** is already included, because the overlay has no taskbar button and no decorations. The full tray menu (§2.3) comes in Phase 2.
   - The app icon is a generated placeholder cat head (`src-tauri/icons/`).
-  - The bundle identifier is `vn.ema.claudecat`.
+  - The bundle identifier is `vn.ema.klat`.
   - The spike uses `THREE.Timer` instead of `THREE.Clock`, which is deprecated in three r186.
 
 - **Phase 1**
@@ -243,7 +243,7 @@ Small decisions made during implementation, as the spec asks (§11).
   - The overlay is positioned in physical px from its real outer size and the work area (margin = 16 × scale). Creation uses a logical estimate, and `place()` corrects it. On `ScaleFactorChanged` it is re-pinned 150ms later, after Windows has applied the new size.
 
 - **Phase 4**
-  - Rust is now a Cargo workspace (`src-tauri`, `crates/claude-cat-hook`) with one `Cargo.lock` and one `target/` at the root.
+  - Rust is now a Cargo workspace (`src-tauri`, `crates/klat-hook`) with one `Cargo.lock` and one `target/` at the root.
   - The event mapping was checked against the official hooks docs (2026-10). It differs from the §8.1 sketch in these ways:
     - `Notification` is a fallback only. It is ignored when the session is already waiting. `permission_prompt` fires ~6s after `PermissionRequest`, and `idle_prompt` ~60s after `Stop`, so neither re-wakes a cat you already dismissed.
     - Besides `idle_prompt`, `agent_needs_input`, `elicitation_dialog` and `elicitation_url_dialog` also mean "needs input".
@@ -279,9 +279,9 @@ Small decisions made during implementation, as the spec asks (§11).
 
 - **Phase 6**
   - **Single instance** uses `tauri-plugin-single-instance`, registered first. A second launch exits before creating any window, and the running app shows "already running". Two instances used to fight over `runtime.json` and the WebView2 profile, and the second one crashed.
-  - **Start at login** uses `tauri-plugin-autostart`, which writes the `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` value `Claude Cat`. It is off unless you tick it. At start-up the Run key is treated as the truth (you may have disabled it in Task Manager) and `startAtLogin` is synced to it.
-  - **Log:** `%APPDATA%\ClaudeCat\claude-cat.log`, rotated to `.old` at 512 KB, one line per entry, each line at most 300 characters. It records names and outcomes only: 8 characters of the session id, the project folder name, event names, HTTP status of rejected requests, installer and autostart results. In debug builds lines also go to stderr.
-  - **Bundling:** `claude-cat-hook` ships as a Tauri sidecar (`bundle.externalBin`), which the installer places next to `claude-cat.exe` as `claude-cat-hook.exe`. That is exactly where the hooks installer points. The sidecar config lives in `src-tauri/tauri.release.conf.json` (used by `pnpm release`), because tauri-build would otherwise require the staged binary for every dev build. In dev the workspace build puts the hook in `target/debug` next to the app.
-  - The NSIS installer is per-user (`%LOCALAPPDATA%\Claude Cat`) and needs no admin rights. Uninstalling does not touch `settings.json` hooks or `%APPDATA%\ClaudeCat`.
+  - **Start at login** uses `tauri-plugin-autostart`, which writes the `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` value `Klat`. It is off unless you tick it. At start-up the Run key is treated as the truth (you may have disabled it in Task Manager) and `startAtLogin` is synced to it.
+  - **Log:** `%APPDATA%\Klat\klat.log`, rotated to `.old` at 512 KB, one line per entry, each line at most 300 characters. It records names and outcomes only: 8 characters of the session id, the project folder name, event names, HTTP status of rejected requests, installer and autostart results. In debug builds lines also go to stderr.
+  - **Bundling:** `klat-hook` ships as a Tauri sidecar (`bundle.externalBin`), which the installer places next to `klat.exe` as `klat-hook.exe`. That is exactly where the hooks installer points. The sidecar config lives in `src-tauri/tauri.release.conf.json` (used by `pnpm release`), because tauri-build would otherwise require the staged binary for every dev build. In dev the workspace build puts the hook in `target/debug` next to the app.
+  - The NSIS installer is per-user (`%LOCALAPPDATA%\Klat`) and needs no admin rights. Uninstalling does not touch `settings.json` hooks or `%APPDATA%\Klat`.
   - Memory (release, 185 MB private) is over the ~150 MB goal. `--in-process-gpu` saved ~10 MB but ties GPU crashes to the browser process, so WebView2 keeps its defaults. The numbers are recorded under Performance.
   - The README is reorganised for users first (install, use, hooks, uninstall, privacy, troubleshooting, limitations, performance), then development. Per-phase verification moved to [docs/verification.md](docs/verification.md).

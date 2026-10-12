@@ -1,7 +1,7 @@
 [package]
-name = "claude-cat-hook"
+name = "klat-hook"
 version = "0.1.0"
-description = "Claude Code hook adapter: forwards hook events to the Claude Cat app over loopback"
+description = "Claude Code hook adapter: forwards hook events to the Klat app over loopback"
 edition = "2021"
 publish = false
 

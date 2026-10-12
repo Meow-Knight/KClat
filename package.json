@@ -1,5 +1,5 @@
 {
-  "name": "claude-cat",
+  "name": "klat",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "build:hook": "cargo build -p claude-cat-hook --release && node scripts/stage-sidecar.mjs",
+    "build:hook": "cargo build -p klat-hook --release && node scripts/stage-sidecar.mjs",
     "release": "tauri build --config src-tauri/tauri.release.conf.json",
     "preview": "vite preview",
     "tauri": "tauri",

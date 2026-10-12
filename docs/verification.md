@@ -4,11 +4,11 @@ What was checked at the end of each phase, how, and on what machine. Newest firs
 
 ## Phase 6 verification (2026-10-11, release build)
 
-- `pnpm release` builds the hook (release), stages the sidecar, then builds the app and `Claude Cat_0.1.0_x64-setup.exe` (2.13 MB). The NSIS script installs `claude-cat-hook.exe` into `$INSTDIR` next to `claude-cat.exe`.
-- Silent install (`/S /D=<temp>`) exits 0. It creates `claude-cat.exe`, `claude-cat-hook.exe` and `uninstall.exe`, plus an HKCU uninstall entry.
-- **Single instance:** launching the installed app a second time leaves one process, shows "Claude Cat is already running…", and logs `second launch ignored`.
-- **Start at login:** ticking it in the tray creates `HKCU\…\Run\Claude Cat = <install dir>\claude-cat.exe` and sets `startAtLogin: true`. Unticking removes the value and sets `false`.
-- **Installed sidecar:** piping a Stop JSON into the installed `claude-cat-hook.exe` exits 0, and the app logs `hook Stop … -> attention Done`. A UserPromptSubmit carrying a prompt is logged as `-> cleared`, and the prompt text appears nowhere in the log files.
+- `pnpm release` builds the hook (release), stages the sidecar, then builds the app and `Klat_0.1.0_x64-setup.exe` (2.13 MB). The NSIS script installs `klat-hook.exe` into `$INSTDIR` next to `klat.exe`.
+- Silent install (`/S /D=<temp>`) exits 0. It creates `klat.exe`, `klat-hook.exe` and `uninstall.exe`, plus an HKCU uninstall entry.
+- **Single instance:** launching the installed app a second time leaves one process, shows "Klat is already running…", and logs `second launch ignored`.
+- **Start at login:** ticking it in the tray creates `HKCU\…\Run\Klat = <install dir>\klat.exe` and sets `startAtLogin: true`. Unticking removes the value and sets `false`.
+- **Installed sidecar:** piping a Stop JSON into the installed `klat-hook.exe` exits 0, and the app logs `hook Stop … -> attention Done`. A UserPromptSubmit carrying a prompt is logged as `-> cleared`, and the prompt text appears nowhere in the log files.
 - Tray → Quit logs `exiting` and deletes `runtime.json`. The silent uninstall exits 0 and removes the install folder and the uninstall entry.
 - **CPU/RAM (release):** asleep ~0.35% of total CPU (WebView2 GPU 3.4% + renderer 3.3% of one core); awake ~0.55%; 185–189 MB private. Asleep there are 20 rAF/s and ~48 draw calls per frame. WebView2 flag experiments are under the README's Performance section.
 - Tests: 69 TS, 75 Rust (60 app incl. 3 log tests and 14 installer tests, 9 hook unit, 5 hook binary, plus 1 ignored dry run).
@@ -31,7 +31,7 @@ What was checked at the end of each phase, how, and on what machine. Newest firs
 ## Phase 4 verification (2026-10-10)
 
 - Tests: 43 app tests (session store mapping, dedupe, isolation between sessions, dismiss, pause, stale; HTTP parsing and every rejection; real-socket round trip; token; runtime file) and 14 hook tests (field extraction, no leaks, truncated input, basename, timeouts; 5 that run the real binary).
-- End to end with the real app and `send-test-event.ps1` → `claude-cat-hook.exe` → server:
+- End to end with the real app and `send-test-event.ps1` → `klat-hook.exe` → server:
   - Stop wakes the cat with "Wake up, B**CH!!!". A duplicate within 2s is ignored.
   - A second session's Stop makes the cat yell again with the project name. Each session's UserPromptSubmit clears only that session.
   - PermissionRequest(Bash) wakes the cat. A later `permission_prompt` is ignored. PostToolUse(Edit) does not clear the wait; PostToolUse(Bash) does.
@@ -43,7 +43,7 @@ What was checked at the end of each phase, how, and on what machine. Newest firs
 
 - Head tracking (100%, screenshots): the head and pupils turn towards the cursor at top-left, top-right, just left of the cat, screen centre and below the cat.
 - Events: ~29/s while the mouse moves, 0/s while it is still. The overlay point (100, 50) arrives as `100,50`.
-- Cost: the 30Hz poller uses ~0.3% of one core in `claude-cat.exe`. Total app CPU while awake is unchanged at ~6%.
+- Cost: the 30Hz poller uses ~0.3% of one core in `klat.exe`. Total app CPU while awake is unchanged at ~6%.
 - DPI: 100% passes the automated checks. The user switched to 125% with the app running, saw the cat correctly placed and sized, and switched back. After the round trip the window was pinned exactly in the corner again (16px gaps), which exercises the re-pin. The placement maths for 125% and 150%, and the cursor conversion at both, are unit-tested.
 - Not tested on real hardware: 150% (only unit tests) and a second monitor (this machine has one).
 

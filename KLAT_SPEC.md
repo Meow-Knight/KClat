@@ -1,4 +1,4 @@
-# Claude Cat — Spec triển khai
+# Klat — Spec triển khai
 
 > **Mục tiêu:** Một desktop companion cho Claude Code trên Windows. Một chú mèo 3D toon cau có nằm ngủ ở góc màn hình. Khi Claude xong lượt hoặc đang chờ bạn, mèo bật dậy và chửi bạn ("Wake up, B**CH!!!") cho tới khi bạn quay lại terminal.
 >
@@ -81,7 +81,7 @@ Tất cả đều miễn phí. Khi triển khai, pin đúng phiên bản stable 
 | Desktop shell | **Tauri 2** (Rust) | Tray, cửa sổ overlay, HTTP server loopback, cursor polling, hook installer |
 | Overlay frontend | **Vite + TypeScript (vanilla) + Three.js** | Không dùng React cho overlay, để giữ nhẹ |
 | Settings UI | Tray menu + file JSON (MVP) | Cửa sổ settings riêng để sau MVP |
-| Hook adapter | **Rust sidecar** `claude-cat-hook.exe` | Đọc stdin JSON, POST lên loopback, luôn exit 0, nhanh |
+| Hook adapter | **Rust sidecar** `klat-hook.exe` | Đọc stdin JSON, POST lên loopback, luôn exit 0, nhanh |
 | Event transport | HTTP chỉ trên `127.0.0.1`, cổng ngẫu nhiên, bearer token random 256-bit | Ghi runtime file `{port, token}` vào app data |
 | Test | Vitest (TS), `cargo test` (Rust) | |
 | Package manager | pnpm | |
@@ -93,7 +93,7 @@ Tất cả đều miễn phí. Khi triển khai, pin đúng phiên bản stable 
 ## 4. Kiến trúc
 
 ```text
-Claude Code ──hooks(JSON stdin)──► claude-cat-hook.exe ──POST 127.0.0.1──► Rust event_server
+Claude Code ──hooks(JSON stdin)──► klat-hook.exe ──POST 127.0.0.1──► Rust event_server
                                                                              │ validate + normalize
                                                                              ▼
                                                                   session_store (Rust, in-memory)
@@ -116,7 +116,7 @@ Nguyên tắc ranh giới:
 
 ```text
 ClauCat/
-  CLAUDE_CAT_SPEC.md
+  KLAT_SPEC.md
   README.md
   package.json / pnpm-lock.yaml / vite.config.ts / tsconfig.json
   docs/
@@ -154,7 +154,7 @@ ClauCat/
       settings.rs                     # đọc/ghi settings JSON
       hooks_installer.rs              # install/repair/uninstall hooks
   crates/
-    claude-cat-hook/src/main.rs
+    klat-hook/src/main.rs
   tests/                              # vitest
 ```
 
@@ -408,7 +408,7 @@ interface HookEvent {
 
 ### 8.4 Bảo mật và an toàn
 
-- Server chỉ bind `127.0.0.1`, cổng ngẫu nhiên, token 256-bit tạo lại mỗi lần app chạy. Runtime file `%APPDATA%\ClaudeCat\runtime.json` bị xoá khi app quit.
+- Server chỉ bind `127.0.0.1`, cổng ngẫu nhiên, token 256-bit tạo lại mỗi lần app chạy. Runtime file `%APPDATA%\Klat\runtime.json` bị xoá khi app quit.
 - Server từ chối khi: token sai, body lớn hơn 64 KB, `hookEventName` không có trong allowlist, hoặc JSON hỏng.
 - Hook adapter:
   - Đọc stdin tối đa 256 KB và chỉ trích các field ở §8.3.
@@ -422,7 +422,7 @@ interface HookEvent {
 1. Target duy nhất: `%USERPROFILE%\.claude\settings.json` (cấp user). Không sửa settings cấp project.
 2. Trước khi sửa: parse JSON. Nếu hỏng thì **dừng**, báo lỗi, không ghi gì.
 3. Backup sang `settings.json.bak.<timestamp>`.
-4. Merge: thêm entry cho từng event ở §8.1 với command `"<path>\claude-cat-hook.exe" <event>` và `timeout: 1`. Nhận diện entry của mình bằng việc command chứa `claude-cat-hook.exe`, để cài lại không bị trùng.
+4. Merge: thêm entry cho từng event ở §8.1 với command `"<path>\klat-hook.exe" <event>` và `timeout: 1`. Nhận diện entry của mình bằng việc command chứa `klat-hook.exe`, để cài lại không bị trùng.
 5. Uninstall chỉ xoá entry của mình, giữ nguyên mọi thứ khác (kể cả thứ tự).
 6. Path có dấu cách phải được quote và escape JSON đúng. Kiểm tra file exe tồn tại trước khi ghi.
 7. Chỉ chạy khi user bấm Install/Repair/Uninstall trên tray. Không tự cài lúc khởi động.
@@ -451,7 +451,7 @@ interface HookEvent {
 
 ---
 
-## 10. Settings (`%APPDATA%\ClaudeCat\settings.json`)
+## 10. Settings (`%APPDATA%\Klat\settings.json`)
 
 ```json
 {
@@ -509,7 +509,7 @@ Validate khi load: field nào thiếu thì dùng default. File hỏng thì đổ
 
 ### Phase 4: Event bridge
 1. `event_server.rs` (loopback + token + allowlist + giới hạn kích thước) và `session_store.rs` (§8.2) kèm unit test.
-2. Crate `claude-cat-hook`: đọc stdin, POST, luôn exit 0, không in stdout.
+2. Crate `klat-hook`: đọc stdin, POST, luôn exit 0, không in stdout.
 3. Script giả lập: `scripts/send-test-event.ps1 <HookName> [sessionId]` để test mà không cần chạy Claude Code.
 4. Test:
    - Token sai, body quá lớn, event lạ, JSON hỏng đều bị từ chối.

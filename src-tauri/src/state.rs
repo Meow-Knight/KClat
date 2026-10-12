@@ -55,9 +55,9 @@ pub struct AppState {
     pub awake: AtomicBool,
 }
 
-/// `%APPDATA%\ClaudeCat` (settings, runtime.json, log).
+/// `%APPDATA%\Klat` (settings, runtime.json, log).
 pub fn data_dir() -> PathBuf {
-    settings::default_dir().unwrap_or_else(|| std::env::temp_dir().join("ClaudeCat"))
+    settings::default_dir().unwrap_or_else(|| std::env::temp_dir().join("Klat"))
 }
 
 pub fn now_ms() -> u64 {

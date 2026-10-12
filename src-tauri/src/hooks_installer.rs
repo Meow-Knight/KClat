@@ -1,11 +1,12 @@
-//! Installs the Claude Cat hooks into `%USERPROFILE%\.claude\settings.json` (spec §8.5).
+//! Installs the Klat hooks into `%USERPROFILE%\.claude\settings.json` (spec §8.5).
 //!
 //! - User-level settings only; project settings are never touched.
 //! - Broken JSON (or a non-object) aborts before anything is written.
 //! - Before any write: a copy to `settings.json.bak.<unix-seconds>`. Writes are atomic, and refused if the
 //!   file changed on disk while we were working (Claude Code edits it too).
-//! - Our entries are recognised by a command containing `claude-cat-hook.exe`, so reinstalling never
-//!   duplicates them and uninstalling removes only them. Everything else keeps its content and order.
+//! - Our entries are recognised by a command containing `klat-hook.exe` (or `claude-cat-hook.exe`, the
+//!   name before the rename to Klat), so reinstalling never duplicates them, repairing moves old entries
+//!   to the new program, and uninstalling removes only them. Everything else keeps its content and order.
 //! - Exec form (`command` + `args`): no shell is involved on Windows (Git Bash or PowerShell), so a path
 //!   with spaces needs no quoting at all.
 //! - Runs only from the tray menu, never at start-up.
@@ -28,7 +29,9 @@ pub const HOOK_EVENTS: [&str; 9] = [
     "PermissionDenied",
     "SessionEnd",
 ];
-pub const MARKER: &str = "claude-cat-hook.exe";
+pub const MARKER: &str = "klat-hook.exe";
+/// The adapter's name when the app was called Claude Cat; such entries are ours too.
+const LEGACY_MARKER: &str = "claude-cat-hook.exe";
 /// Seconds. The adapter gives up after 300ms on its own; this is Claude Code's hard stop.
 pub const TIMEOUT_SECS: u64 = 1;
 
@@ -108,7 +111,8 @@ fn our_entry(exe: &str, event: &str) -> Value {
 fn is_ours(hook: &Value) -> bool {
     hook.get("command")
         .and_then(Value::as_str)
-        .is_some_and(|c| c.to_ascii_lowercase().contains(MARKER))
+        .map(str::to_ascii_lowercase)
+        .is_some_and(|c| c.contains(MARKER) || c.contains(LEGACY_MARKER))
 }
 
 fn hooks_map(settings: &Value) -> Result<Option<&Map<String, Value>>, InstallError> {
@@ -326,7 +330,7 @@ pub fn apply(path: &Path, exe: &Path, action: Action) -> Result<Report, InstallE
     };
 
     let mut tmp = path.as_os_str().to_owned();
-    tmp.push(".claude-cat.tmp");
+    tmp.push(".klat.tmp");
     let tmp = PathBuf::from(tmp);
     fs::write(&tmp, &text)?;
     // Optimistic check: if the file moved under us, keep theirs.
@@ -351,7 +355,7 @@ pub fn status_on_disk(path: &Path, exe: &Path) -> Status {
 mod tests {
     use super::*;
 
-    const EXE: &str = r"C:\Program Files\Claude Cat\claude-cat-hook.exe";
+    const EXE: &str = r"C:\Program Files\Klat\klat-hook.exe";
 
     /// A realistic settings file with someone else's hooks and other keys, in a deliberate order.
     fn existing() -> Value {
@@ -417,13 +421,14 @@ mod tests {
     #[test]
     fn repair_updates_paths_in_place_and_drops_duplicates() {
         let mut v = existing();
+        // Entries from before the rename to Klat count as ours and get moved to the new program.
         install_into(&mut v, r"D:\old\target\debug\claude-cat-hook.exe").unwrap();
         assert_eq!(status(&v, EXE), Status::NeedsRepair);
         // A hand-made duplicate and an old shell-form entry under an event we no longer use.
         v["hooks"]["Stop"][1]["hooks"]
             .as_array_mut()
             .unwrap()
-            .push(json!({"type":"command","command":"\"D:\\x\\claude-cat-hook.exe\" Stop"}));
+            .push(json!({"type":"command","command":"\"D:\\x\\klat-hook.exe\" Stop"}));
         v["hooks"]["SubagentStop"] = json!([{ "hooks": [{"type":"command","command":"\"C:\\a\\Claude-Cat-Hook.EXE\" SubagentStop"}] }]);
         install_into(&mut v, EXE).unwrap();
         assert_eq!(status(&v, EXE), Status::Installed);
@@ -446,7 +451,7 @@ mod tests {
     #[test]
     fn uninstall_keeps_their_hooks_sharing_a_group_with_ours() {
         let mut v: Value = serde_json::from_str(
-            r#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"a"},{"type":"command","command":"C:\\x\\claude-cat-hook.exe","args":["Stop"]},{"type":"command","command":"b"}]}]}}"#,
+            r#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"a"},{"type":"command","command":"C:\\x\\klat-hook.exe","args":["Stop"]},{"type":"command","command":"b"}]}]}}"#,
         )
         .unwrap();
         uninstall_from(&mut v).unwrap();
@@ -503,7 +508,7 @@ mod tests {
             fs::create_dir_all(settings.parent().unwrap()).unwrap();
             fs::write(&settings, text).unwrap();
         }
-        let exe = dir.path().join("Claude Cat").join(MARKER);
+        let exe = dir.path().join("Klat").join(MARKER);
         fs::create_dir_all(exe.parent().unwrap()).unwrap();
         fs::write(&exe, b"").unwrap();
         Env {
@@ -561,7 +566,7 @@ mod tests {
         ));
         assert_eq!(fs::read_to_string(&e.settings).unwrap(), original);
         assert_eq!(backups(&e).len(), 2);
-        assert!(!e.settings.with_extension("json.claude-cat.tmp").exists());
+        assert!(!e.settings.with_extension("json.klat.tmp").exists());
     }
 
     #[test]
@@ -599,7 +604,7 @@ mod tests {
     }
 }
 
-/// Dry run against a copy of a real settings file: `CLAUDE_CAT_DRYRUN=<copy> cargo test -- --ignored dry_run`.
+/// Dry run against a copy of a real settings file: `KLAT_DRYRUN=<copy> cargo test -- --ignored dry_run`.
 #[cfg(test)]
 mod dry_run {
     use super::*;
@@ -607,7 +612,7 @@ mod dry_run {
     #[test]
     #[ignore]
     fn dry_run_round_trip_on_a_copy() {
-        let src = PathBuf::from(std::env::var("CLAUDE_CAT_DRYRUN").expect("set CLAUDE_CAT_DRYRUN"));
+        let src = PathBuf::from(std::env::var("KLAT_DRYRUN").expect("set KLAT_DRYRUN"));
         let original = fs::read_to_string(&src).unwrap();
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("settings.json");
