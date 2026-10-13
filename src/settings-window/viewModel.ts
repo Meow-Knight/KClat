@@ -1,0 +1,99 @@
+// Pure logic of the Settings window: units, ranges, and what the Hooks section offers. No DOM, so it is tested
+// directly (tests/settingsViewModel.test.ts).
+import type { HooksStatus } from '../bridge/tauriBridge';
+import type { UiKey } from '../i18n';
+import type { AppSettings } from '../settings';
+
+export type SectionId = 'general' | 'language' | 'hooks' | 'advanced';
+export const SECTIONS: readonly SectionId[] = ['general', 'language', 'hooks', 'advanced'];
+
+/** A number setting shown in a friendlier unit. Ranges match src-tauri/src/settings.rs. */
+export interface NumberField {
+  key: 'yellIntervalMs' | 'maxYellsPerWake' | 'staleAfterMs';
+  /** Settings value per displayed unit. */
+  scale: number;
+  min: number;
+  max: number;
+  step: number;
+  unit: UiKey;
+}
+
+export const NUMBER_FIELDS: Readonly<Record<NumberField['key'], NumberField>> = {
+  yellIntervalMs: { key: 'yellIntervalMs', scale: 1000, min: 5, max: 600, step: 5, unit: 'settings.unit.seconds' },
+  maxYellsPerWake: { key: 'maxYellsPerWake', scale: 1, min: 1, max: 50, step: 1, unit: 'settings.unit.times' },
+  staleAfterMs: { key: 'staleAfterMs', scale: 60_000, min: 5, max: 240, step: 5, unit: 'settings.unit.minutes' },
+};
+
+/** The value to display for a setting, in the field's unit. */
+export function toDisplay(field: NumberField, settings: Pick<AppSettings, NumberField['key']>): number {
+  return Math.round(settings[field.key] / field.scale);
+}
+
+/**
+ * What to store for a typed or stepped display value: clamped into range and rounded to a whole unit.
+ * Returns null for input that is not a number, so the field can snap back to the current value.
+ */
+export function fromDisplay(field: NumberField, input: string | number): number | null {
+  const n = typeof input === 'number' ? input : Number(String(input).trim().replace(',', '.'));
+  if (String(input).trim() === '' || !Number.isFinite(n)) return null;
+  const clamped = Math.min(field.max, Math.max(field.min, Math.round(n)));
+  return clamped * field.scale;
+}
+
+/** One step up or down from the displayed value, kept in range. */
+export function stepped(field: NumberField, display: number, direction: 1 | -1): number {
+  const next = display + direction * field.step;
+  // Off-grid values (hand-edited files) snap to the grid on the first step.
+  const snapped = direction > 0 ? Math.floor(next / field.step) * field.step : Math.ceil(next / field.step) * field.step;
+  return Math.min(field.max, Math.max(field.min, snapped));
+}
+
+export interface HooksView {
+  label: UiKey;
+  description: UiKey;
+  tone: 'ok' | 'warn' | 'muted';
+  /** The main button (install or repair); null when everything is installed. */
+  primary: { action: 'install'; label: UiKey } | null;
+  canUninstall: boolean;
+}
+
+export function hooksView(status: HooksStatus): HooksView {
+  switch (status) {
+    case 'installed':
+      return {
+        label: 'settings.hooks.installed',
+        description: 'settings.hooks.installed.desc',
+        tone: 'ok',
+        primary: null,
+        canUninstall: true,
+      };
+    case 'needs-repair':
+      return {
+        label: 'settings.hooks.needsRepair',
+        description: 'settings.hooks.needsRepair.desc',
+        tone: 'warn',
+        primary: { action: 'install', label: 'settings.hooks.repair' },
+        canUninstall: true,
+      };
+    case 'not-installed':
+      return {
+        label: 'settings.hooks.notInstalled',
+        description: 'settings.hooks.notInstalled.desc',
+        tone: 'muted',
+        primary: { action: 'install', label: 'settings.hooks.install' },
+        canUninstall: false,
+      };
+  }
+}
+
+/** The section after (or before) `current`, wrapping around: arrow keys in the sidebar. */
+export function nextSection(current: SectionId, direction: 1 | -1): SectionId {
+  const i = SECTIONS.indexOf(current);
+  return SECTIONS[(i + direction + SECTIONS.length) % SECTIONS.length];
+}
+
+/** `#hooks` in the URL opens that section; anything else opens General. */
+export function sectionFromHash(hash: string): SectionId {
+  const id = hash.replace(/^#/, '');
+  return (SECTIONS as readonly string[]).includes(id) ? (id as SectionId) : 'general';
+}

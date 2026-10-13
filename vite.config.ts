@@ -14,6 +14,10 @@ export default defineConfig({
   envPrefix: ['VITE_', 'TAURI_ENV_*'],
   build: {
     target: 'chrome105',
+    // The overlay (index.html) and the Settings window; dev.html is served by `pnpm dev` only.
+    rolldownOptions: {
+      input: { overlay: 'index.html', settings: 'settings.html' },
+    },
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
   },
   test: {
