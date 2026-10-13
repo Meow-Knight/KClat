@@ -52,7 +52,8 @@ export function stepped(field: NumberField, display: number, direction: 1 | -1):
 export interface HooksView {
   label: UiKey;
   description: UiKey;
-  tone: 'ok' | 'warn' | 'muted';
+  /** Not installed is a warning too: without hooks the cat never wakes. */
+  tone: 'ok' | 'warn';
   /** The main button (install or repair); null when everything is installed. */
   primary: { action: 'install'; label: UiKey } | null;
   canUninstall: boolean;
@@ -80,7 +81,7 @@ export function hooksView(status: HooksStatus): HooksView {
       return {
         label: 'settings.hooks.notInstalled',
         description: 'settings.hooks.notInstalled.desc',
-        tone: 'muted',
+        tone: 'warn',
         primary: { action: 'install', label: 'settings.hooks.install' },
         canUninstall: false,
       };

@@ -205,7 +205,7 @@ input {
 }
 
 .nav-dot-not-installed {
-  background: var(--track);
+  background: var(--warn);
 }
 
 /* Content */
@@ -629,11 +629,6 @@ h1:focus {
 .pill-warn {
   background: var(--warn-soft);
   color: var(--warn);
-}
-
-.pill-muted {
-  background: var(--seg-bg);
-  color: var(--muted);
 }
 
 .hooks-file {

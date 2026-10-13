@@ -50,8 +50,9 @@ describe('settings window view model', () => {
   it('offers install, repair or nothing depending on the hooks status', () => {
     expect(hooksView('installed')).toMatchObject({ tone: 'ok', primary: null, canUninstall: true });
     expect(hooksView('needs-repair').primary).toEqual({ action: 'install', label: 'settings.hooks.repair' });
+    expect(hooksView('needs-repair').tone).toBe('warn');
     expect(hooksView('not-installed')).toMatchObject({
-      tone: 'muted',
+      tone: 'warn',
       primary: { action: 'install', label: 'settings.hooks.install' },
       canUninstall: false,
     });
