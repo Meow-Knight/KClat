@@ -9,8 +9,9 @@
 //!   to the new program, and uninstalling removes only them. Everything else keeps its content and order.
 //! - Exec form (`command` + `args`): no shell is involved on Windows (Git Bash or PowerShell), so a path
 //!   with spaces needs no quoting at all.
-//! - Runs only from the tray menu, never at start-up.
+//! - Runs only on request (the Settings window or the tray), never at start-up.
 
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::fs;
 use std::io;
@@ -74,7 +75,8 @@ impl From<io::Error> for InstallError {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Status {
     NotInstalled,
     /// Some of our entries are missing, or point at another exe path.
@@ -262,7 +264,8 @@ fn remove_ours(hooks: &mut Map<String, Value>, event: &str) -> bool {
     changed
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Action {
     Install,
     Uninstall,
@@ -356,6 +359,31 @@ mod tests {
     use super::*;
 
     const EXE: &str = r"C:\Program Files\Klat\klat-hook.exe";
+
+    #[test]
+    fn status_and_action_use_the_names_the_settings_window_sends() {
+        let names: Vec<Value> = [Status::Installed, Status::NeedsRepair, Status::NotInstalled]
+            .iter()
+            .map(|s| serde_json::to_value(s).unwrap())
+            .collect();
+        assert_eq!(
+            names,
+            vec![
+                json!("installed"),
+                json!("needs-repair"),
+                json!("not-installed")
+            ]
+        );
+        assert_eq!(
+            serde_json::from_value::<Action>(json!("install")).unwrap(),
+            Action::Install
+        );
+        assert_eq!(
+            serde_json::from_value::<Action>(json!("uninstall")).unwrap(),
+            Action::Uninstall
+        );
+        assert!(serde_json::from_value::<Action>(json!("repair")).is_err());
+    }
 
     /// A realistic settings file with someone else's hooks and other keys, in a deliberate order.
     fn existing() -> Value {

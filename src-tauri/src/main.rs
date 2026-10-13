@@ -1,11 +1,13 @@
 // Release builds run without a console window.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod autostart;
 mod commands;
 mod cursor;
 mod drag;
 mod event_server;
 mod hooks_installer;
+mod hooks_ui;
 mod log;
 mod overlay;
 mod session_store;
@@ -42,6 +44,12 @@ fn main() {
             commands::dismiss,
             commands::set_hitboxes,
             commands::set_ready,
+            commands::set_settings,
+            commands::set_start_at_login,
+            commands::wake_test,
+            commands::sleep,
+            commands::hooks_status,
+            commands::hooks_apply,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::ScaleFactorChanged { .. } = event {

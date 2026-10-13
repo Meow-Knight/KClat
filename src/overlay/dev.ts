@@ -1,8 +1,7 @@
 // Browser dev page (pnpm dev → /dev.html): drive the cat with buttons, no Tauri needed.
 import { CatStage } from '../cat/CatStage';
-import type { PhraseLang } from '../phrases/phrases';
 import type { WakeReason } from '../phrases/PhrasePicker';
-import { DEFAULT_SETTINGS, type CatSettings } from '../settings';
+import { DEFAULT_SETTINGS, type CatSettings, type KlatLanguage } from '../settings';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -11,14 +10,14 @@ const log = $<HTMLDivElement>('log');
 const reason = (): WakeReason => $<HTMLSelectElement>('reason').value as WakeReason;
 
 function readSettings(): CatSettings {
-  const languages: PhraseLang[] = [];
-  if ($<HTMLInputElement>('en').checked) languages.push('en');
-  if ($<HTMLInputElement>('vi').checked) languages.push('vi');
+  const en = $<HTMLInputElement>('en').checked;
+  const vi = $<HTMLInputElement>('vi').checked;
+  const klatLanguage: KlatLanguage = en === vi ? 'auto' : en ? 'en' : 'vi';
   return {
     ...DEFAULT_SETTINGS,
     sfwMode: $<HTMLInputElement>('sfw').checked,
     reduceMotion: $<HTMLInputElement>('reduce').checked,
-    languages,
+    klatLanguage,
     yellIntervalMs: Math.max(1000, Number($<HTMLInputElement>('interval').value) || DEFAULT_SETTINGS.yellIntervalMs),
     maxYellsPerWake: Math.max(1, Number($<HTMLInputElement>('max').value) || DEFAULT_SETTINGS.maxYellsPerWake),
   };

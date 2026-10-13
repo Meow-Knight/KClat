@@ -58,10 +58,11 @@ The tray tooltip shows how many sessions are waiting.
 | `notificationsEnabled` | `true` | `false` = paused |
 | `hideWhileSleeping` | `false` | |
 | `sfwMode` | `false` | |
-| `languages` | `["en","vi"]` | Phrase languages; the first wake line is always English |
-| `yellIntervalMs` | `30000` | ≥ 1000 |
-| `maxYellsPerWake` | `10` | Includes the first yell |
-| `staleAfterMs` | `1800000` | A session waiting longer than this stops counting (≥ 60000) |
+| `uiLanguage` | `"en"` | Platform Language for the tray, dialogs and the Settings window: `en` or `vi` |
+| `klatLanguage` | `"auto"` | What the cat says: `en`, `vi`, or `auto` (both). Older files with `languages` are converted on load |
+| `yellIntervalMs` | `30000` | 5000 to 600000 |
+| `maxYellsPerWake` | `10` | Includes the first yell; 1 to 50 |
+| `staleAfterMs` | `1800000` | A session waiting longer than this stops counting; 300000 to 14400000 |
 | `reduceMotion` | `false` | No jumps, squash, puff, text shake, purr shake or Zzz; the aura glows steadily without flickering or flaring; springs are critically damped |
 | `startAtLogin` | `false` | Use the tray item; it keeps the registry in sync |
 | `corner` | `"bottom-right"` | The only corner supported so far |
@@ -241,7 +242,7 @@ Small decisions made during implementation, as the spec asks (§11).
   - The cursor poller is a plain thread: 30Hz while awake, 5Hz while asleep. It flips `set_ignore_cursor_events` only when the inside/outside state changes.
   - **Sleep** and **Dismiss all** do the same thing for now (clear the Wake test). Phase 4 makes Dismiss mark sessions as dismissed.
   - **Wake test** works even while notifications are paused, because it is an explicit manual action.
-  - Settings use field-level fallback: a mistyped or out-of-range field falls back to its own default and the others are kept. Only a file that is not a JSON object counts as corrupt. Unknown fields are dropped on the next save. Limits: `yellIntervalMs` ≥ 1000, `maxYellsPerWake` ≥ 1, `staleAfterMs` ≥ 60000, languages must be from `en`/`vi` (an empty list means the default), and the only supported corner is `bottom-right`.
+  - Settings use field-level fallback: a mistyped or out-of-range field falls back to its own default and the others are kept. Only a file that is not a JSON object counts as corrupt. Unknown fields are dropped on the next save. Numbers outside their range are clamped into it: `yellIntervalMs` 5000 to 600000, `maxYellsPerWake` 1 to 50, `staleAfterMs` 300000 to 14400000. `uiLanguage` is `en`/`vi` and `klatLanguage` is `en`/`vi`/`auto`; a file from before these existed has its `languages` list converted (only `en` → `en`, only `vi` → `vi`, anything else → `auto`). The only supported corner is `bottom-right`.
   - Settings are saved atomically (temp file, then rename).
   - The overlay page exposes `window.stage` in dev builds only, for WebView2 remote debugging.
   - **Render loop:** between frames it now sleeps on a timer and only then requests a frame, instead of skipping vsyncs. On the 165Hz test display this cut rAF wake-ups from 165/s to 20/s asleep and 80/s awake.

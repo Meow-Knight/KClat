@@ -4,8 +4,8 @@ import * as THREE from 'three';
 import { Bubble } from '../bubble/Bubble';
 import { ReadyButton } from '../bubble/ReadyButton';
 import { PHRASES } from '../phrases/phrases';
-import { PhrasePicker, type WakeReason } from '../phrases/PhrasePicker';
-import type { CatSettings } from '../settings';
+import { PhrasePicker, type PickerOptions, type WakeReason } from '../phrases/PhrasePicker';
+import { phraseLanguages, type CatSettings } from '../settings';
 import { CatController, type CatPhase } from './CatController';
 import { CatRig, HIT_BOUNDS } from './CatRig';
 import { RenderLoop } from './RenderLoop';
@@ -97,7 +97,7 @@ export class CatStage {
 
 
     this.bubble = new Bubble(container, () => callbacks.onDismiss(), settings.reduceMotion);
-    this.picker = new PhrasePicker(PHRASES, settings);
+    this.picker = new PhrasePicker(PHRASES, pickerOptions(settings));
     this.readyButton = new ReadyButton(container, (next) => {
       if (next) this.replyReady();
       callbacks.onReadyToggle?.(next);
@@ -231,7 +231,7 @@ export class CatStage {
   setSettings(settings: CatSettings): void {
     this.settings = { ...settings };
     this.controller.setOptions(settings);
-    this.picker.setOptions(settings);
+    this.picker.setOptions(pickerOptions(settings));
     this.bubble.setReduceMotion(settings.reduceMotion);
     this.setReduceMotionClass();
   }
@@ -317,4 +317,8 @@ export class CatStage {
   private setReduceMotionClass(): void {
     this.container.classList.toggle('reduce-motion', this.settings.reduceMotion);
   }
+}
+
+function pickerOptions(s: CatSettings): PickerOptions {
+  return { sfwMode: s.sfwMode, languages: phraseLanguages(s.klatLanguage) };
 }

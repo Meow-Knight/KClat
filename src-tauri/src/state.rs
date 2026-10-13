@@ -244,8 +244,9 @@ pub fn publish_state(app: &AppHandle) {
     let _ = app.emit(EVENT_STATE, snapshot);
 }
 
-/// Applies a change, saves the file, and pushes the new settings to the overlay.
-pub fn update_settings(app: &AppHandle, change: impl FnOnce(&mut Settings)) {
+/// Applies a change, saves the file, and pushes the new settings to the overlay, the Settings window and the
+/// tray ticks. Returns the settings now in effect.
+pub fn update_settings(app: &AppHandle, change: impl FnOnce(&mut Settings)) -> Settings {
     let state = app.state::<AppState>();
     let next = {
         let mut s = state.settings.lock().unwrap();
@@ -255,7 +256,9 @@ pub fn update_settings(app: &AppHandle, change: impl FnOnce(&mut Settings)) {
     if let Err(e) = settings::save(&state.settings_path, &next) {
         log::warn(format!("could not save settings: {e}"));
     }
-    let _ = app.emit(EVENT_SETTINGS, next);
+    crate::tray::sync_settings(&next);
+    let _ = app.emit(EVENT_SETTINGS, next.clone());
     // Pausing or resuming notifications changes whether the cat is awake.
     publish_state(app);
+    next
 }
