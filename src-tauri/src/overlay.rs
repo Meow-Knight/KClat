@@ -1,5 +1,8 @@
-//! Transparent, always-on-top overlay window pinned to the bottom-right of the primary work area.
+//! Transparent, always-on-top overlay window: at the spot you dragged the cat to, or pinned to the bottom-right
+//! of the primary work area.
 
+use crate::drag::{self, WindowPos};
+use crate::state::AppState;
 use std::thread;
 use std::time::Duration;
 use tauri::{
@@ -9,7 +12,8 @@ use tauri::{
 
 pub const LABEL: &str = "overlay";
 const WIDTH: f64 = 360.0;
-const HEIGHT: f64 = 280.0;
+// 330 = the cat's 280px framing plus 50px of headroom above it for the aura spikes.
+const HEIGHT: f64 = 330.0;
 const MARGIN: f64 = 16.0;
 
 pub fn create(app: &AppHandle) -> tauri::Result<WebviewWindow> {
@@ -32,7 +36,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         builder = builder.position(pos.x, pos.y);
     }
     let win = builder.build()?;
-    place(&win)?;
+    place(&win, app.state::<AppState>().settings().position)?;
     // Click-through by default; the cursor poller turns it off over the cat and the bubble.
     win.set_ignore_cursor_events(true)?;
     Ok(win)
@@ -42,8 +46,28 @@ pub fn get(app: &AppHandle) -> Option<WebviewWindow> {
     app.get_webview_window(LABEL)
 }
 
-/// Pin the window MARGIN logical px inside the bottom-right of the primary monitor's work area.
-pub fn place(win: &WebviewWindow) -> tauri::Result<()> {
+/// Put the window at the saved spot if it is still on a monitor, otherwise MARGIN logical px inside the
+/// bottom-right of the primary monitor's work area.
+pub fn place(win: &WebviewWindow, saved: Option<WindowPos>) -> tauri::Result<()> {
+    if let Some(pos) = saved {
+        let size = win.outer_size()?;
+        let areas: Vec<drag::PxRect> = win
+            .available_monitors()?
+            .iter()
+            .map(|m| {
+                let a = m.work_area();
+                (
+                    a.position.x,
+                    a.position.y,
+                    a.size.width as i32,
+                    a.size.height as i32,
+                )
+            })
+            .collect();
+        if drag::is_on_screen(pos, (size.width, size.height), &areas) {
+            return win.set_position(PhysicalPosition::new(pos.x, pos.y));
+        }
+    }
     let Some(monitor) = win.primary_monitor()? else {
         return Ok(());
     };
@@ -57,13 +81,18 @@ pub fn place(win: &WebviewWindow) -> tauri::Result<()> {
     win.set_position(pos)
 }
 
-/// When the DPI changes Windows resizes the window, which knocks it off the corner. Re-pin it once the
-/// resize has landed (the event fires before the new size is applied).
+/// When the DPI changes Windows resizes the window, which knocks it off its spot. Re-place it once the
+/// resize has landed (the event fires before the new size is applied). Not while you are dragging it across
+/// monitors: the drag keeps it under the cursor.
 pub fn on_scale_changed(win: &WebviewWindow) {
+    if drag::dragging() {
+        return;
+    }
     let win = win.clone();
     thread::spawn(move || {
         thread::sleep(Duration::from_millis(150));
-        let _ = place(&win);
+        let saved = win.app_handle().state::<AppState>().settings().position;
+        let _ = place(&win, saved);
     });
 }
 

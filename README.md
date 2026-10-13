@@ -1,6 +1,9 @@
 # Klat
 
-A desktop companion for Claude Code on Windows. A grumpy toon cat sleeps in the corner of your screen. When Claude finishes a turn or is waiting on you (a permission prompt, a question), it jumps up and yells "Wake up, B\*\*CH!!!" until you go back to the terminal. It follows your cursor, and you can pet it.
+A desktop companion for Claude Code on Windows. A grumpy toon cat sleeps in the corner of your screen. When Claude needs you, it jumps up in a blaze of golden Super Saiyan aura and yells "Wake up, B\*\*CH!!!" until you go back to the terminal. It follows your cursor, and you can pet it.
+
+- **Claude asks for permission or waits for your input:** the cat always wakes you.
+- **Claude finishes a turn:** the cat wakes you only if you put it on **Ready** first, using the little bell button to its right. Use Ready when you hand Claude a long task and look away. While you are watching Claude anyway, the cat leaves you alone.
 
 Everything runs locally: no telemetry, no cloud. The hooks only report to the app over `127.0.0.1` and never approve or deny anything for you. The full design is in [`KLAT_SPEC.md`](KLAT_SPEC.md).
 
@@ -11,7 +14,7 @@ Everything runs locally: no telemetry, no cloud. The hooks only report to the ap
 1. Run `Klat_<version>_x64-setup.exe`. It is a per-user install into `%LOCALAPPDATA%\Klat`, so no admin rights are needed. The installer contains `klat.exe` and the hook program `klat-hook.exe`.
 2. Start **Klat**. A sleeping cat appears in the bottom-right corner, and a cat icon appears in the tray (it may be under the **^** hidden-icons arrow).
 3. Tray → **Hooks → Install**. This adds Klat's hooks to `%USERPROFILE%\.claude\settings.json`, after saving a backup. Your other hooks and settings stay as they are.
-4. Restart any open Claude Code sessions. From now on the cat wakes when Claude needs you.
+4. Restart any open Claude Code sessions. From now on the cat wakes when Claude asks for permission or input. Before you look away from a long task, click the **bell button** to the right of the cat (Ready) to be woken when Claude finishes.
 
 You need Windows 10/11 with the WebView2 runtime, which comes with Windows 11 and recent Windows 10.
 
@@ -19,12 +22,15 @@ You need Windows 10/11 with the WebView2 runtime, which comes with Windows 11 an
 
 | When | The cat |
 |---|---|
-| Claude finishes a turn, asks for permission, or waits for input | Jumps up and yells, then glares and taps its paw; it yells again every 30s (10 times at most) |
+| Claude asks for permission or waits for input | Jumps up with a gold aura and yells, then glares and taps its paw; it yells again every 30s (10 times at most) |
+| Claude finishes a turn | Keeps sleeping, unless Ready is on: then it wakes you as above |
+| You click the bell button (Ready) | Peeks, perks one ear and says "Ok, Claude xong tao gọi" (or similar), then sleeps on. The bell turns gold and stays on, for every turn that finishes, until you click it again |
 | More than one session needs you | Yells again for each new one and names the project under the phrase |
-| You send a prompt, approve the permission, or the session ends | Yawns and goes back to sleep |
-| You click the bubble | Goes back to sleep. This marks those sessions as seen and sends nothing to Claude Code |
-| You click the cat | Asleep: peeks one eye open. Awake: purrs (^ ^) |
+| You send a prompt, approve the permission, or the session ends | Yawns and goes back to sleep. Ready stays on |
+| You click the bubble, or double-click the awake cat | Goes back to sleep ("not now"). This marks those sessions as seen and sends nothing to Claude Code |
+| You click the cat | Asleep: keeps its eyes shut, frowns, an angry mark pops up on the top-right corner of its head and its tail swishes, then it calms down. Awake: purrs (^ ^) |
 | You move the mouse while it is awake | Follows the cursor anywhere on the main screen |
+| You hold **Space**, click the cat and drag | The cat follows the mouse (the cursor turns into a hand). Release Space to drop it there; the spot is remembered after a restart |
 
 The overlay never takes focus, and clicks on its empty area go through to the window below.
 
@@ -32,8 +38,10 @@ The overlay never takes focus, and clicks on its empty area go through to the wi
 
 | Item | What it does |
 |---|---|
+| Ready: wake me when Claude is done | Same as the bell button; the two stay in sync |
 | Wake test | Wakes the cat without Claude Code |
 | Sleep / Dismiss all | Puts the cat to sleep and marks waiting sessions as seen |
+| Move the cat back to the corner | Forgets the spot you dragged it to |
 | SFW mode | No swearing (the first line becomes "Wake up, human!!!") |
 | Pause notifications | The cat stays asleep. Sessions are still tracked, and unpausing wakes it if something is still waiting |
 | Hide cat while sleeping | The cat shows only while it is awake |
@@ -54,7 +62,7 @@ The tray tooltip shows how many sessions are waiting.
 | `yellIntervalMs` | `30000` | ≥ 1000 |
 | `maxYellsPerWake` | `10` | Includes the first yell |
 | `staleAfterMs` | `1800000` | A session waiting longer than this stops counting (≥ 60000) |
-| `reduceMotion` | `false` | No jumps, squash, puff, text shake, purr shake or Zzz; springs are critically damped |
+| `reduceMotion` | `false` | No jumps, squash, puff, text shake, purr shake or Zzz; the aura glows steadily without flickering or flaring; springs are critically damped |
 | `startAtLogin` | `false` | Use the tray item; it keeps the registry in sync |
 | `corner` | `"bottom-right"` | The only corner supported so far |
 
@@ -95,7 +103,7 @@ If you uninstall the app first, the hook entries stay in `settings.json`. They a
 
 | Problem | Try |
 |---|---|
-| The cat doesn't wake when Claude finishes | Check the tray: does it say **Hooks (installed)**? If not, run Install or Repair. Then restart the Claude Code session. See [docs/hooks-troubleshooting.md](docs/hooks-troubleshooting.md) for step-by-step checks and how to read the log |
+| The cat doesn't wake when Claude finishes | That is the default. Click the bell button (Ready) before you look away. If it still doesn't wake, check the tray: does it say **Hooks (installed)**? If not, run Install or Repair. Then restart the Claude Code session. See [docs/hooks-troubleshooting.md](docs/hooks-troubleshooting.md) for step-by-step checks and how to read the log |
 | "Hooks (needs repair)" | The entries point at another copy of `klat-hook.exe` (moved or reinstalled app, dev vs installed): run **Repair** |
 | Install says settings.json is invalid | Fix the JSON, or restore a `settings.json.bak.*` backup; nothing was changed |
 | The cat stays awake | Send a prompt or click the bubble. A session waiting longer than 30 minutes is dropped automatically |
@@ -104,6 +112,7 @@ If you uninstall the app first, the hook entries stay in `settings.json`. They a
 
 ## Known limitations
 
+- Space only starts a drag while the pointer is over the cat, and only without Shift/Ctrl/Alt/Win. A plain tap of Space there is given back to the app you are typing in, but holding Space there (auto-repeat) types a single space.
 - Windows only. The cat lives in the bottom-right corner of the **primary** monitor's work area. With the cursor on another monitor, the cat looks at its bubble instead of following.
 - Tested at 100% and 125% display scaling. 150% and multi-monitor setups are covered only by unit tests so far.
 - **Memory:** ~185 MB private (release build, 7 processes; about 90 MB of it is the WebView2 GPU process). That is over the spec's ~150 MB goal; WebView2 flags saved only ~10 MB (see [Performance](#performance)).
@@ -111,6 +120,7 @@ If you uninstall the app first, the hook entries stay in `settings.json`. They a
 - `claude -p` (print mode) ends its session at once, so the cat wakes and falls asleep again within milliseconds.
 - Right after you use the tray menu, clicking the bubble can give focus to the overlay (Windows hands focus over from the closing tray window). With your terminal focused, it never takes focus.
 - The hitbox is a generous box around the cat rather than its exact outline, so clicks just next to the cat can land on it.
+- Ready is one global switch, not per session. Any session that finishes after you arm it wakes the cat. Ready is not saved across restarts.
 - The Windows uninstaller does not remove the hooks from `settings.json`; use **Hooks → Uninstall** first.
 
 ## Performance
@@ -150,7 +160,7 @@ Requirements: Node.js ≥ 20.19, pnpm 8+, Rust stable (MSVC) with the Visual Stu
 
 Run `pnpm dev` and open http://localhost:1420/dev.html.
 
-- The port runs on the left at the overlay's size (360×280) on a checkerboard; the prototype runs on the right for comparison (it needs network access for three.js).
+- The port runs on the left at the overlay's size (360×330) on a checkerboard; the prototype runs on the right for comparison (it needs network access for three.js).
 - The mouse stands in for the screen cursor.
 - **Wake / Sleep / Next phrase / Pet** buttons drive the cat, plus toggles for SFW, reduce motion, languages, yell interval (6.5s here), max yells, a dark desktop, and **Show hitboxes**.
 - `window.stage` is exposed in the console.
@@ -179,6 +189,7 @@ With the app running and the hook built:
 | `src/cat/RenderLoop.ts` | FPS-capped rAF loop that sleeps on a timer between frames and stops while hidden |
 | `src/cat/CatStage.ts` | Composes renderer, rig, controller, bubble and loop; reports hitboxes |
 | `src/bubble/Bubble.ts` | Speech bubble |
+| `src/bubble/ReadyButton.ts` | The Ready button (a cat's collar bell) |
 | `src/phrases/` | Phrase data and `PhrasePicker` |
 | `src/bridge/tauriBridge.ts` | Typed events and commands |
 | `src/overlay/main.ts`, `dev.ts` | Overlay entry, dev page entry |
@@ -285,3 +296,34 @@ Small decisions made during implementation, as the spec asks (§11).
   - The NSIS installer is per-user (`%LOCALAPPDATA%\Klat`) and needs no admin rights. Uninstalling does not touch `settings.json` hooks or `%APPDATA%\Klat`.
   - Memory (release, 185 MB private) is over the ~150 MB goal. `--in-process-gpu` saved ~10 MB but ties GPU crashes to the browser process, so WebView2 keeps its defaults. The numbers are recorded under Performance.
   - The README is reorganised for users first (install, use, hooks, uninstall, privacy, troubleshooting, limitations, performance), then development. Per-phase verification moved to [docs/verification.md](docs/verification.md).
+- **After the MVP: Ready and the aura** (user request, 2026-10-11)
+  - **Ready.** A finished turn (`Stop`/`StopFailure`) no longer wakes the cat by default. The user explained the two situations: when they watch Claude, waking on every reply only distracts; when they hand Claude a long task and look away, they want the old behaviour.
+    - Ready is armed with a small button next to the sleeping cat, or from the tray.
+    - It counts only finished turns that arrive **after** arming. A turn that ended before you clicked does not fire it.
+    - It stays armed until you turn it off (bell button or tray). The first version was one-shot (it switched off once the cat had woken you), but the user wanted it to stay on.
+    - Permission and input waits always wake the cat, as the user chose. Pause still silences everything.
+    - Ready lives in Rust (`state.rs`, the time it was armed), and `session_store::Gate` decides which waits may wake the cat. It is sent to the overlay as `cat://state.ready`.
+    - A finished turn that arrives without Ready is still tracked, but it neither wakes the cat nor makes an awake cat yell again.
+  - **Ready feedback.** Arming makes the cat peek, perk one ear (kept up while it listens) and say a short line (`ready` phrases, en/vi, SFW-safe) for 2.2s. The button uses only static CSS: an endless CSS animation would repaint the transparent window at the display rate, as the old Zzz did.
+  - The button shows only while the cat is asleep and shown. With "Hide cat while sleeping" on, use the tray item instead.
+  - **Aura.** Gold Super Saiyan energy, drawn as one shader quad behind the cat (premultiplied colour with custom blending, for the transparent window).
+    - Sharp spikes shoot up from an egg-shaped outline around the cat: longest above the head, shorter down the shoulders.
+    - Two walls: a tall pale outer one and a bright inner one with a white-hot core.
+    - Vertical streaks rush upwards, with a soft halo around the spikes.
+    - Up to two white zigzag lightning arcs crackle around the body, re-rolled 9 times a second.
+    - Spike heights jump at ~14 steps a second, like hand-drawn anime frames.
+    - The first version (soft flames) was rejected as not sharp enough; the reference was a Super Saiyan Goku artwork.
+    - Its intensity is a spring: 1 when awake, 0 asleep (the quad is hidden then), flaring past 1 on each yell and on wake.
+    - Under reduceMotion it glows steadily, with no flicker and no flares.
+    - It sits outside the click hitbox and costs one extra draw call while awake.
+  - **Overlay 360×330.** The window grew by 50px of headroom above the cat, so the spikes can rise. The camera keeps the scale of the 280px framing (the fov grows with the height and the camera lifts), so the cat stays the same size in the same place. The bubble is anchored to the bottom (`top: calc(100% - 266px)`). The empty area is click-through, so the larger window costs nothing.
+  - **Ready button** moved to the right of the sleeping cat. Its icon is a cat's collar bell (pink collar, jingle bell; gold with a shine when armed), replacing the alarm clock: "ring the bell, the cat rings you back".
+  - **Double-click the awake cat** to send it back to sleep without typing ("not now"). It takes the same dismiss path as clicking the bubble. A single click still pets.
+  - **Ready stays on** (2026-10-12): it no longer switches itself off after waking you. Every finished turn wakes the cat until you click the bell again.
+  - **Poking the sleeping cat** (2026-10-12): instead of peeking one eye open, it keeps its eyes shut, knits its brows, an anime angry mark (red, white rim, a canvas-drawn sprite on the head) pops up on the head's top-right corner, between the ear and the brow, and throbs, and the tail swishes on top of the sleepy sway for 1.4s. Poking again restarts it; waking clears it. Under reduceMotion the mark shows without the pop, throb or swish. A first version floated beside the head on the left; the user wanted it on the head itself.
+- **Drag and drop** (2026-10-12): hold Space, click the cat and drag; releasing Space drops it.
+  - The overlay never takes focus, so it cannot see the keyboard. A low-level keyboard hook (`drag.rs`) looks at Space only, and only takes it from the focused app while the pointer is over the cat (or its bubble or Ready button) with no modifier held. Anywhere else Space passes through untouched. A tap with no click is replayed to the focused app with `SendInput`, so typing with the pointer resting on the cat is not lost.
+  - Grab plus the primary mouse button starts the drag. The window follows the cursor at ~120Hz until Space is released. The grip is kept in logical px, so crossing to a monitor with another DPI keeps the cat in hand, and the DPI re-place is skipped while dragging.
+  - The cat (not the whole window, which is mostly transparent) is kept inside the work area of the monitor under the cursor, so it can sit flush against any edge.
+  - The spot is saved as `position` in settings.json (window top-left, physical px). At start it is used only if the window's centre is still on a monitor; otherwise the cat goes back to the corner. Tray: "Move the cat back to the corner".
+  - The press that moves the cat is swallowed in the capture phase (`cat://grab`), so it never pets, dismisses or toggles Ready. Click-through is never turned on under a cat that is being dragged.

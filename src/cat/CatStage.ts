@@ -2,6 +2,7 @@
 // Shared by the overlay window and the browser dev page.
 import * as THREE from 'three';
 import { Bubble } from '../bubble/Bubble';
+import { ReadyButton } from '../bubble/ReadyButton';
 import { PHRASES } from '../phrases/phrases';
 import { PhrasePicker, type WakeReason } from '../phrases/PhrasePicker';
 import type { CatSettings } from '../settings';
@@ -13,9 +14,21 @@ import './stage.css';
 const AWAKE_FPS = 60;
 const ASLEEP_FPS = 20;
 
-/** Framing for a ~360×280 stage: cat on the right, room for the bubble on the left. */
+/**
+ * Framing for the bottom 280px of the stage: cat on the right, room for the bubble on the left. A taller
+ * stage keeps the same scale and adds headroom above (for the aura's spikes) instead of zooming in.
+ */
 const CAMERA_POS = new THREE.Vector3(0.5, 2.3, 11.5);
 const CAMERA_TARGET = new THREE.Vector3(0.5, 2.0, 0);
+const BASE_HEIGHT = 280;
+const BASE_FOV = 30;
+const TAN_HALF_FOV = Math.tan(THREE.MathUtils.degToRad(BASE_FOV / 2));
+/** World units per CSS px at the cat, for the base framing. */
+const WORLD_PER_PX = (2 * CAMERA_POS.distanceTo(CAMERA_TARGET) * TAN_HALF_FOV) / BASE_HEIGHT;
+/** Where the Ready button sits: on the ground to the right of the sleeping cat (world space). */
+const READY_ANCHOR = new THREE.Vector3(3.2, 0.35, 0.9);
+/** How long the cat's "fine, I'll wake you" reply stays up. */
+const READY_REPLY_MS = 2200;
 
 /** Logical px relative to the stage's top-left corner. */
 export interface StageRect {
@@ -31,11 +44,14 @@ export interface StageCallbacks {
   onPhase?(phase: CatPhase): void;
   /** hitboxes() changed: the bubble appeared or went away, the pose changed, or the stage resized. */
   onLayoutChange?(): void;
+  /** The Ready button was clicked; `next` is the state asked for. The owner applies it with setReady(). */
+  onReadyToggle?(next: boolean): void;
 }
 
 export class CatStage {
   readonly controller: CatController;
   readonly bubble: Bubble;
+  readonly readyButton: ReadyButton;
 
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
@@ -46,12 +62,17 @@ export class CatStage {
   private readonly resizeObserver: ResizeObserver;
   private readonly head = { x: 0, y: 0 };
   private readonly probe = new THREE.Vector3();
+  private readonly lookTarget = new THREE.Vector3();
   private width = 1;
   private height = 1;
   private subtitle: string | undefined;
   private settings: CatSettings;
   private phase: CatPhase = 'asleep';
   private hidden = false;
+  private readyReplyTimer: ReturnType<typeof setTimeout> | undefined;
+  private grab: 'idle' | 'armed' | 'dragging' = 'idle';
+  /** The mouse went down while Space was held: that press moves the cat, so its click must not pet or dismiss. */
+  private pressInGrab = false;
 
   constructor(
     private readonly container: HTMLElement,
@@ -77,10 +98,15 @@ export class CatStage {
 
     this.bubble = new Bubble(container, () => callbacks.onDismiss(), settings.reduceMotion);
     this.picker = new PhrasePicker(PHRASES, settings);
+    this.readyButton = new ReadyButton(container, (next) => {
+      if (next) this.replyReady();
+      callbacks.onReadyToggle?.(next);
+    });
 
     this.controller = new CatController(
       {
         say: (req) => {
+          clearTimeout(this.readyReplyTimer);
           const wasVisible = this.bubble.visible;
           this.bubble.show(this.picker.pick(req).text, this.subtitle);
           if (!wasVisible) callbacks.onLayoutChange?.();
@@ -94,13 +120,33 @@ export class CatStage {
       (phase) => {
         this.phase = phase;
         container.classList.toggle('asleep', phase === 'asleep');
+        this.syncReadyButton();
         this.loop.setMaxFps(phase === 'asleep' ? ASLEEP_FPS : AWAKE_FPS);
         callbacks.onPhase?.(phase);
         callbacks.onLayoutChange?.();
       },
     );
 
+    // Capture phase, so a press that moved the cat never reaches the canvas, the bubble or the Ready button.
+    container.addEventListener('pointerdown', () => (this.pressInGrab = this.grab !== 'idle'), true);
+    for (const type of ['click', 'dblclick']) {
+      container.addEventListener(
+        type,
+        (e) => {
+          if (!this.pressInGrab) return;
+          e.stopPropagation();
+          e.preventDefault();
+          if (type === 'click') this.pressInGrab = this.grab !== 'idle';
+        },
+        true,
+      );
+    }
+
     canvas.addEventListener('click', () => this.controller.pet());
+    // Double-click the awake cat: "not now" - it goes back to sleep, like clicking the bubble.
+    canvas.addEventListener('dblclick', () => {
+      if (this.controller.current === 'active') callbacks.onDismiss();
+    });
 
     this.loop = new RenderLoop((dt, now) => this.frame(dt, now));
     this.loop.setMaxFps(ASLEEP_FPS);
@@ -129,6 +175,19 @@ export class CatStage {
     this.controller.pet();
   }
 
+  /** Reflects the Ready state (from Rust, or the dev page) on the button and the cat's ears. */
+  setReady(on: boolean): void {
+    this.readyButton.set(on);
+    this.controller.setReady(on);
+  }
+
+  /** Space held over the cat ('armed'), then the mouse pressed ('dragging'): shows a hand cursor. */
+  setGrab(mode: 'idle' | 'armed' | 'dragging'): void {
+    this.grab = mode;
+    this.container.classList.toggle('grab-armed', mode === 'armed');
+    this.container.classList.toggle('grab-dragging', mode === 'dragging');
+  }
+
   /** Project name under the phrase (only set when more than one session is waiting). */
   setSubtitle(subtitle: string | undefined): void {
     this.subtitle = subtitle;
@@ -150,6 +209,7 @@ export class CatStage {
     this.container.style.visibility = hidden ? 'hidden' : '';
     if (hidden) this.loop.stop();
     else this.loop.start();
+    this.syncReadyButton();
     this.callbacks.onLayoutChange?.();
   }
 
@@ -157,14 +217,13 @@ export class CatStage {
     return this.hidden;
   }
 
-  /** Clickable regions: the cat (a generous box for the current pose) and the bubble while it shows. */
+  /** Clickable regions: the cat (a generous box for the current pose), the bubble and the Ready button. */
   hitboxes(): StageRect[] {
     if (this.hidden) return [];
     const rects = [this.projectBox(HIT_BOUNDS[this.phase === 'awake' ? 'awake' : 'asleep'])];
-    if (this.bubble.visible) {
-      const el = this.bubble.el;
-      // Layout box, not the bounding rect: the pop-in transform starts at scale(0).
-      rects.push({ x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight });
+    // Layout boxes, not bounding rects: the bubble's pop-in transform starts at scale(0).
+    for (const el of [this.bubble.visible ? this.bubble.el : null, this.readyButton.visible ? this.readyButton.el : null]) {
+      if (el) rects.push({ x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight });
     }
     return rects;
   }
@@ -178,13 +237,14 @@ export class CatStage {
   }
 
   dispose(): void {
+    clearTimeout(this.readyReplyTimer);
     this.loop.dispose();
     this.resizeObserver.disconnect();
     this.controller.dispose();
     this.rig.dispose();
     this.renderer.dispose();
     this.container.replaceChildren();
-    this.container.classList.remove('cat-stage', 'asleep', 'reduce-motion');
+    this.container.classList.remove('cat-stage', 'asleep', 'reduce-motion', 'grab-armed', 'grab-dragging');
   }
 
   private frame(dt: number, now: number): void {
@@ -199,9 +259,35 @@ export class CatStage {
     this.height = Math.max(1, this.container.clientHeight);
     this.renderer.setSize(this.width, this.height, false);
     this.camera.aspect = this.width / this.height;
+    // Same px-per-world scale as the base framing; extra height becomes headroom above the cat.
+    this.camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan((TAN_HALF_FOV * this.height) / BASE_HEIGHT));
+    const lift = ((this.height - BASE_HEIGHT) / 2) * WORLD_PER_PX;
+    this.camera.position.set(CAMERA_POS.x, CAMERA_POS.y + lift, CAMERA_POS.z);
+    this.camera.lookAt(this.lookTarget.set(CAMERA_TARGET.x, CAMERA_TARGET.y + lift, CAMERA_TARGET.z));
     this.camera.updateProjectionMatrix();
 
+    this.probe.copy(READY_ANCHOR).project(this.camera);
+    this.readyButton.placeAt(((this.probe.x + 1) / 2) * this.width, ((1 - this.probe.y) / 2) * this.height);
     if (notify) this.callbacks.onLayoutChange?.();
+  }
+
+  /** The button is only offered while the cat is asleep and shown; Ready is meaningless once it is awake. */
+  private syncReadyButton(): void {
+    this.readyButton.setVisible(this.phase === 'asleep' && !this.hidden);
+  }
+
+  /** The cat's short reply when you arm Ready, then the bubble goes away again. */
+  private replyReady(): void {
+    if (this.controller.current !== 'sleep') return;
+    const wasVisible = this.bubble.visible;
+    this.bubble.show(this.picker.pickReady().text);
+    if (!wasVisible) this.callbacks.onLayoutChange?.();
+    clearTimeout(this.readyReplyTimer);
+    this.readyReplyTimer = setTimeout(() => {
+      if (this.controller.current !== 'sleep') return;
+      this.bubble.hide();
+      this.callbacks.onLayoutChange?.();
+    }, READY_REPLY_MS);
   }
 
   /** Screen-space bounding rect of a world box, clamped to the stage. */

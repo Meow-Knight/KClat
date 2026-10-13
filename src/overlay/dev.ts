@@ -26,11 +26,15 @@ function readSettings(): CatSettings {
 
 const stage = new CatStage(stageEl, readSettings(), {
   onDismiss: () => {
-    note('bubble clicked → dismiss');
+    note('dismiss (bubble click or double-click on the awake cat)');
     stage.sleep();
   },
   onPhase: (phase) => note(`phase: ${phase}`),
   onLayoutChange: () => drawHitboxes(),
+  onReadyToggle: (next) => {
+    note(`ready ${next ? 'armed' : 'off'} (in the app, Rust decides when it fires)`);
+    stage.setReady(next);
+  },
 });
 
 // Hitboxes: what the overlay reports to Rust as clickable (everything else is click-through).

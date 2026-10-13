@@ -2,6 +2,17 @@
 
 What was checked at the end of each phase, how, and on what machine. Newest first. The decisions behind these results are in the README's decisions log.
 
+## Ready and aura (2026-10-11)
+
+- Tests: 79 TS (poking the sleeping cat: eyes stay shut, angry mark and swish, calms down, no swish under reduceMotion, cleared on wake; aura burns, flares and goes out; steady under reduceMotion; Ready peek and perked ear survive a wake; the Ready reply follows the language filter and stays out of the yell pool) and 79 Rust (Gate: a finished turn needs Ready armed before it, permission and input always pass, pause beats everything; Ready stays armed across turns).
+- End to end on the dev app, with fake hooks through `klat-hook.exe`:
+  - Stop without Ready: the cat stays asleep.
+  - PermissionRequest: the cat wakes with the aura; PostToolUse puts it back to sleep.
+  - Ready button: `ready: true`, the button turns gold, the log says `ready armed`.
+  - Prompt, then Stop: the cat wakes (`long-task:done`). The next prompt puts it to sleep and Ready stays on, so the next Stop wakes it again. Clicking the bell again turns Ready off (`ready off`), and a later Stop is ignored.
+- Screenshots (dev page and real overlay): the button next to the paws, gold when armed with the cat's reply bubble; the gold flame shell around the awake cat on dark and light desktops.
+- The release installer was rebuilt (2.14 MB).
+
 ## Phase 6 verification (2026-10-11, release build)
 
 - `pnpm release` builds the hook (release), stages the sidecar, then builds the app and `Klat_0.1.0_x64-setup.exe` (2.13 MB). The NSIS script installs `klat-hook.exe` into `$INSTDIR` next to `klat.exe`.

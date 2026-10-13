@@ -19,7 +19,8 @@
 .cat-bubble {
   position: absolute;
   left: 8px;
-  top: 14px;
+  /* Anchored to the bottom (the cat), so extra headroom above does not move it away from the cat. */
+  top: calc(100% - 266px);
   max-width: 172px;
   padding: 8px 13px;
   background: #fff;
@@ -61,6 +62,78 @@
   display: none;
 }
 
+/* Ready button: static styles only (an endless CSS animation would repaint the window at the display rate). */
+.cat-ready {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 2px solid #2b2d42;
+  border-radius: 50%;
+  background: #fff;
+  color: #2b2d42;
+  box-shadow: 0 2px 0 rgb(43 45 66 / 0.25);
+  cursor: pointer;
+  transition:
+    transform 0.15s,
+    background 0.2s,
+    box-shadow 0.2s;
+}
+
+.cat-ready:hover {
+  transform: scale(1.1);
+}
+
+.cat-ready:focus-visible {
+  outline: 2px solid #f5b83d;
+  outline-offset: 2px;
+}
+
+/* Bell parts. Off: an outlined bell on a white button. Ready: a gold bell with a glow. */
+.cat-ready svg {
+  stroke: #2b2d42;
+}
+
+.cat-ready .collar {
+  stroke: #f29bb0;
+}
+
+.cat-ready .bell {
+  fill: #eef0f5;
+}
+
+.cat-ready .slot {
+  fill: #2b2d42;
+  stroke: none;
+}
+
+.cat-ready .shine {
+  fill: #fff;
+  stroke: none;
+  opacity: 0;
+}
+
+.cat-ready[aria-pressed='true'] {
+  background: #fff6dd;
+  box-shadow:
+    0 0 0 3px rgb(245 184 61 / 0.4),
+    0 0 14px rgb(245 184 61 / 0.9);
+}
+
+.cat-ready[aria-pressed='true'] .bell {
+  fill: #f5b83d;
+}
+
+.cat-ready[aria-pressed='true'] .shine {
+  opacity: 0.9;
+}
+
+.cat-ready[hidden] {
+  display: none;
+}
+
 @keyframes cat-shake {
   0%,
   100% {
@@ -78,4 +151,15 @@
   80% {
     transform: translate(2px, -1px);
   }
+}
+
+/* Moving the cat with Space (src-tauri/src/drag.rs). Static styles only, so nothing repaints on its own. */
+.cat-stage.grab-armed,
+.cat-stage.grab-armed * {
+  cursor: grab !important;
+}
+
+.cat-stage.grab-dragging,
+.cat-stage.grab-dragging * {
+  cursor: grabbing !important;
 }

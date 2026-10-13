@@ -1,6 +1,7 @@
 // Phrase data from spec §7.3.
 
-export type PhraseTag = 'wake' | 'done' | 'permission' | 'input' | 'ignored' | 'general';
+/** `ready`: the cat's reply when you arm Ready ("wake me when Claude is done"). */
+export type PhraseTag = 'wake' | 'done' | 'permission' | 'input' | 'ignored' | 'general' | 'ready';
 export type PhraseLang = 'en' | 'vi';
 
 export interface Phrase {
@@ -61,4 +62,8 @@ export const PHRASES: readonly Phrase[] = [
   p('vi-10', 'Còn sống thì nhấp chuột một cái coi!', 'vi', 'ignored'),
   p('vi-11', 'Mèo này không làm báo thức miễn phí đâu!', 'vi', 'general'),
   p('vi-12', 'Sắp deadline rồi mà còn ngồi đó à?!', 'vi', 'ignored'),
+  p('ready-en-1', "Fine. I'll yell when Claude's done.", 'en', 'ready'),
+  p('ready-en-2', 'Napping. Wake you when it finishes.', 'en', 'ready'),
+  p('ready-vi-1', 'Ok, Claude xong tao gọi.', 'vi', 'ready'),
+  p('ready-vi-2', 'Ngủ tiếp đây, xong tao réo.', 'vi', 'ready'),
 ];

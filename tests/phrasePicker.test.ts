@@ -111,6 +111,19 @@ describe('PhrasePicker', () => {
     expect(picker.pick(later(4)).tags).toContain('wake');
   });
 
+  it('the Ready reply follows the language filter and never joins the yell pool', () => {
+    const vi = new PhrasePicker(PHRASES, { sfwMode: true, languages: ['vi'] }, seeded(2));
+    for (let i = 0; i < 20; i++) {
+      const p = vi.pickReady();
+      expect(p.tags).toContain('ready');
+      expect(p.lang).toBe('vi');
+    }
+    const picker = new PhrasePicker(PHRASES, ALL, seeded(2));
+    for (const reason of ['done', 'permission', 'input'] as const) {
+      expect(picker.pool(later(5, reason)).some((p) => p.tags.includes('ready'))).toBe(false);
+    }
+  });
+
   it('every phrase in the data has a unique id', () => {
     expect(new Set(PHRASES.map((p) => p.id)).size).toBe(PHRASES.length);
   });

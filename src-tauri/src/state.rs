@@ -2,10 +2,14 @@
 //!
 //! The cat is awake when a Claude Code session needs you (session store, spec §8.2) or after the tray's
 //! "Wake test". Hook events arrive through the event server and are applied here.
+//!
+//! Ready: by default a finished turn does not wake the cat (you are probably watching Claude). Arming Ready
+//! ("sleep now, wake me when Claude is done") lets finished turns wake it. Ready stays armed until you turn it
+//! off with the bell button or the tray item. Permission and input waits always wake.
 
 use crate::cursor::Rect;
 use crate::log;
-use crate::session_store::{HookEvent, Outcome, SessionStore};
+use crate::session_store::{Gate, HookEvent, Outcome, SessionStore};
 pub use crate::session_store::{SessionView, WakeReason};
 use crate::settings::{self, Settings};
 use serde::Serialize;
@@ -36,6 +40,8 @@ pub struct CatState {
     /// Sessions currently calling for you, oldest first.
     pub sessions: Vec<SessionView>,
     pub attention: Option<Attention>,
+    /// Ready is armed: finished turns wake the cat until you turn it off.
+    pub ready: bool,
 }
 
 struct Inner {
@@ -43,6 +49,8 @@ struct Inner {
     /// Set by the tray's "Wake test"; cleared by Sleep / Dismiss.
     test_wake: Option<WakeReason>,
     attention: Option<Attention>,
+    /// When Ready was armed (unix ms); None while it is off. Only finished turns that start after it count.
+    ready_since: Option<u64>,
 }
 
 pub struct AppState {
@@ -84,21 +92,29 @@ impl AppState {
                 store: SessionStore::default(),
                 test_wake: None,
                 attention: None,
+                ready_since: None,
             }),
             hitboxes: Mutex::new(Vec::new()),
             awake: AtomicBool::new(false),
         }
     }
 
+    fn gate(&self, inner: &Inner) -> Gate {
+        Gate {
+            paused: !self.settings.lock().unwrap().notifications_enabled,
+            ready_since: inner.ready_since,
+        }
+    }
+
     pub fn snapshot(&self) -> CatState {
-        let paused = !self.settings.lock().unwrap().notifications_enabled;
         let inner = self.inner.lock().unwrap();
-        let sessions = if paused {
-            Vec::new()
-        } else {
-            inner.store.waiting()
-        };
-        let awake = inner.test_wake.is_some() || inner.store.awake(paused);
+        self.snapshot_of(&inner)
+    }
+
+    fn snapshot_of(&self, inner: &Inner) -> CatState {
+        let gate = self.gate(inner);
+        let sessions = inner.store.waiting(gate);
+        let awake = inner.test_wake.is_some() || inner.store.awake(gate);
         let reason = if !awake {
             None
         } else {
@@ -109,6 +125,7 @@ impl AppState {
             reason,
             sessions,
             attention: if awake { inner.attention.clone() } else { None },
+            ready: inner.ready_since.is_some(),
         }
     }
 
@@ -124,6 +141,22 @@ pub fn wake_test(app: &AppHandle) {
         inner.test_wake = Some(WakeReason::Done);
         bump_attention(&mut inner, String::new(), WakeReason::Done);
     }
+    publish_state(app);
+}
+
+/// The Ready button next to the cat, or the tray item.
+pub fn set_ready(app: &AppHandle, on: bool) {
+    let state = app.state::<AppState>();
+    {
+        let mut inner = state.inner.lock().unwrap();
+        // Arming again while already armed keeps the original time, so nothing that already counts is lost.
+        inner.ready_since = if on {
+            inner.ready_since.or(Some(now_ms()))
+        } else {
+            None
+        };
+    }
+    log::info(format!("ready {}", if on { "armed" } else { "off" }));
     publish_state(app);
 }
 
@@ -149,7 +182,11 @@ pub fn apply_hook_event(app: &AppHandle, ev: &HookEvent) {
             reason,
         } = &outcome
         {
-            bump_attention(&mut inner, project_name.clone(), *reason);
+            // Only attention that may wake the cat makes it yell again; a finished turn without Ready does not.
+            let gate = state.gate(&inner);
+            if inner.store.calls_for_you(&ev.session_id, gate) {
+                bump_attention(&mut inner, project_name.clone(), *reason);
+            }
         }
         outcome
     };
@@ -203,6 +240,7 @@ pub fn publish_state(app: &AppHandle) {
     let snapshot = state.snapshot();
     state.awake.store(snapshot.awake, Ordering::Relaxed);
     crate::tray::set_waiting(app, snapshot.sessions.len());
+    crate::tray::set_ready_checked(snapshot.ready);
     let _ = app.emit(EVENT_STATE, snapshot);
 }
 

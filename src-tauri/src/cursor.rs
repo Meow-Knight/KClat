@@ -4,8 +4,11 @@
 //! - While the cat is awake it emits `cat://cursor` for head tracking: logical px relative to the overlay's
 //!   top-left corner, or `null` when the cursor is on another monitor (the cat then looks at its bubble).
 //!
+//! - It also hands the clickable regions to the Space hook (see drag.rs).
+//!
 //! Polls at 30Hz while awake and 5Hz while asleep (hitbox only).
 
+use crate::drag;
 use crate::overlay;
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
@@ -138,7 +141,12 @@ pub fn start(app: AppHandle) {
                 };
                 let point = to_overlay((cursor.x, cursor.y), &geometry);
 
-                let inside = hit_test(point, &state.hitboxes.lock().unwrap());
+                let inside = {
+                    let rects = state.hitboxes.lock().unwrap();
+                    drag::set_zone(geometry.origin, scale, &rects);
+                    // Never turn click-through on under a cat that is being dragged: the release must land on it.
+                    drag::dragging() || hit_test(point, &rects)
+                };
                 if inside != interactive && win.set_ignore_cursor_events(!inside).is_ok() {
                     interactive = inside;
                 }

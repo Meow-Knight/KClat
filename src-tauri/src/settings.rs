@@ -3,6 +3,7 @@
 //! Loading never fails: a missing or invalid field falls back to its default, and a file that is not a
 //! JSON object is renamed to `settings.json.corrupt.<unix-seconds>` and replaced with defaults.
 
+use crate::drag::WindowPos;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -27,6 +28,8 @@ pub struct Settings {
     pub reduce_motion: bool,
     pub start_at_login: bool,
     pub corner: String,
+    /// Where you dragged the cat (window top-left, physical px); None = the corner.
+    pub position: Option<WindowPos>,
 }
 
 impl Default for Settings {
@@ -42,6 +45,7 @@ impl Default for Settings {
             reduce_motion: false,
             start_at_login: false,
             corner: "bottom-right".into(),
+            position: None,
         }
     }
 }
@@ -77,6 +81,7 @@ impl Settings {
             } else {
                 d.corner
             },
+            position: field(obj, "position", d.position),
         }
     }
 }
@@ -203,7 +208,8 @@ mod tests {
             json!({
                 "notificationsEnabled": true, "hideWhileSleeping": false, "sfwMode": false,
                 "languages": ["en", "vi"], "yellIntervalMs": 30000, "maxYellsPerWake": 10,
-                "staleAfterMs": 1800000, "reduceMotion": false, "startAtLogin": false, "corner": "bottom-right"
+                "staleAfterMs": 1800000, "reduceMotion": false, "startAtLogin": false, "corner": "bottom-right",
+                "position": null
             })
         );
     }

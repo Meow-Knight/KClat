@@ -127,6 +127,28 @@ pub struct SessionView {
     pub reason: WakeReason,
 }
 
+/// Which waiting sessions may wake the cat.
+///
+/// - Paused: none.
+/// - Permission and input waits (Claude is blocked on you): always.
+/// - "Claude is done" waits: only when Ready was armed before the session became pending. Without Ready the
+///   cat keeps sleeping through finished turns, so it does not distract someone already watching Claude.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Gate {
+    pub paused: bool,
+    /// When Ready was armed (unix ms), if it is.
+    pub ready_since: Option<u64>,
+}
+
+impl Gate {
+    fn lets_through(&self, s: &Session) -> bool {
+        s.pending
+            && !s.dismissed
+            && (s.reason != WakeReason::Done
+                || self.ready_since.is_some_and(|armed| s.since >= armed))
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct SessionStore {
     sessions: HashMap<String, Session>,
@@ -244,12 +266,15 @@ impl SessionStore {
         changed
     }
 
-    /// Sessions currently calling for you (pending and not dismissed), oldest first.
-    pub fn waiting(&self) -> Vec<SessionView> {
+    /// Sessions currently calling for you, oldest first (see [`Gate`]).
+    pub fn waiting(&self, gate: Gate) -> Vec<SessionView> {
+        if gate.paused {
+            return Vec::new();
+        }
         let mut v: Vec<(&Session, SessionView)> = self
             .sessions
             .values()
-            .filter(|s| s.pending && !s.dismissed)
+            .filter(|s| gate.lets_through(s))
             .map(|s| {
                 let view = SessionView {
                     project_name: s.project_name.clone(),
@@ -262,8 +287,17 @@ impl SessionStore {
         v.into_iter().map(|(_, view)| view).collect()
     }
 
-    pub fn awake(&self, paused: bool) -> bool {
-        !paused && self.sessions.values().any(|s| s.pending && !s.dismissed)
+    /// Whether this session's current wait may wake the cat under `gate`.
+    pub fn calls_for_you(&self, session_id: &str, gate: Gate) -> bool {
+        !gate.paused
+            && self
+                .sessions
+                .get(session_id)
+                .is_some_and(|s| gate.lets_through(s))
+    }
+
+    pub fn awake(&self, gate: Gate) -> bool {
+        !gate.paused && self.sessions.values().any(|s| gate.lets_through(s))
     }
 
     #[cfg(test)]
@@ -299,6 +333,16 @@ mod tests {
             ..ev(name, session)
         }
     }
+    /// Ready armed from the start: "done" waits wake the cat, as before Ready existed.
+    const READY: Gate = Gate {
+        paused: false,
+        ready_since: Some(0),
+    };
+    const PAUSED: Gate = Gate {
+        paused: true,
+        ready_since: Some(0),
+    };
+
     fn attention(project: &str, reason: WakeReason) -> Outcome {
         Outcome::Attention {
             project_name: project.into(),
@@ -366,9 +410,9 @@ mod tests {
             st.apply(&ev("Stop", "a"), 1_000),
             attention("proj-a", WakeReason::Done)
         );
-        assert!(st.awake(false));
+        assert!(st.awake(READY));
         assert_eq!(
-            st.waiting(),
+            st.waiting(READY),
             vec![SessionView {
                 project_name: "proj-a".into(),
                 reason: WakeReason::Done
@@ -378,8 +422,8 @@ mod tests {
             st.apply(&ev("UserPromptSubmit", "a"), 2_000),
             Outcome::Changed
         );
-        assert!(!st.awake(false));
-        assert!(st.waiting().is_empty());
+        assert!(!st.awake(READY));
+        assert!(st.waiting(READY).is_empty());
     }
 
     #[test]
@@ -417,7 +461,7 @@ mod tests {
             st.apply(&note("permission_prompt", "a"), 7_000),
             Outcome::Unchanged
         );
-        assert!(!st.awake(false));
+        assert!(!st.awake(READY));
         // idle_prompt 60s after a Stop is ignored too.
         st.apply(&ev("Stop", "b"), 0);
         assert_eq!(
@@ -440,8 +484,8 @@ mod tests {
         st.apply(&ev("SessionEnd", "c"), 1_000);
         assert!(!st.get("a").unwrap().pending);
         assert!(st.get("b").unwrap().pending);
-        assert_eq!(st.waiting().len(), 1);
-        assert!(st.awake(false));
+        assert_eq!(st.waiting(READY).len(), 1);
+        assert!(st.awake(READY));
     }
 
     #[test]
@@ -452,12 +496,12 @@ mod tests {
             st.apply(&tool("PostToolUse", "a", "Edit"), 100),
             Outcome::Unchanged
         );
-        assert!(st.awake(false));
+        assert!(st.awake(READY));
         assert_eq!(
             st.apply(&tool("PostToolUse", "a", "Bash"), 200),
             Outcome::Changed
         );
-        assert!(!st.awake(false));
+        assert!(!st.awake(READY));
         // PostToolUseFailure means the tool ran too (approved, then failed).
         st.apply(&tool("PermissionRequest", "a", "Write"), 5_000);
         assert_eq!(
@@ -478,7 +522,7 @@ mod tests {
             st.apply(&ev("PermissionDenied", "a"), 10),
             Outcome::Unchanged
         );
-        assert!(st.awake(false));
+        assert!(st.awake(READY));
     }
 
     #[test]
@@ -499,7 +543,7 @@ mod tests {
             st.apply(&tool("PermissionDenied", "a", "Bash"), 10),
             Outcome::Changed
         );
-        assert!(!st.awake(false));
+        assert!(!st.awake(READY));
     }
 
     #[test]
@@ -519,7 +563,7 @@ mod tests {
         st.apply(&ev("Stop", "a"), 0);
         assert_eq!(st.apply(&ev("SessionEnd", "a"), 10), Outcome::Changed);
         assert!(st.get("a").is_none());
-        assert!(!st.awake(false));
+        assert!(!st.awake(READY));
     }
 
     #[test]
@@ -529,14 +573,14 @@ mod tests {
         st.apply(&ev("Stop", "b"), 0);
         assert!(st.dismiss_all());
         assert!(!st.dismiss_all()); // nothing left to dismiss
-        assert!(!st.awake(false));
+        assert!(!st.awake(READY));
         assert!(st.get("a").unwrap().pending); // still pending, just seen
                                                // A new attention_needed for a resets dismissed for a only.
         assert!(matches!(
             st.apply(&tool("PermissionRequest", "a", "Bash"), 5_000),
             Outcome::Attention { .. }
         ));
-        assert!(st.awake(false));
+        assert!(st.awake(READY));
         assert!(!st.get("a").unwrap().dismissed);
         assert!(st.get("b").unwrap().dismissed);
     }
@@ -545,8 +589,75 @@ mod tests {
     fn pause_keeps_the_cat_asleep_without_losing_state() {
         let mut st = SessionStore::default();
         st.apply(&ev("Stop", "a"), 0);
-        assert!(!st.awake(true));
-        assert!(st.awake(false));
+        assert!(!st.awake(PAUSED));
+        assert!(st.awake(READY));
+    }
+
+    #[test]
+    fn without_ready_done_waits_do_not_wake_but_permission_and_input_do() {
+        let normal = Gate::default();
+        let mut st = SessionStore::default();
+        st.apply(&ev("Stop", "a"), 1_000);
+        assert!(!st.awake(normal));
+        assert!(st.waiting(normal).is_empty());
+        st.apply(&tool("PermissionRequest", "b", "Bash"), 2_000);
+        assert!(st.awake(normal));
+        assert_eq!(
+            st.waiting(normal),
+            vec![SessionView {
+                project_name: "proj-b".into(),
+                reason: WakeReason::Permission
+            }]
+        );
+        st.apply(&note("agent_needs_input", "c"), 3_000);
+        assert_eq!(st.waiting(normal).len(), 2);
+    }
+
+    #[test]
+    fn ready_counts_only_done_waits_that_start_after_arming() {
+        let mut st = SessionStore::default();
+        st.apply(&ev("Stop", "old"), 1_000); // finished before you armed Ready
+        let armed = Gate {
+            paused: false,
+            ready_since: Some(5_000),
+        };
+        assert!(!st.awake(armed));
+        st.apply(&ev("Stop", "new"), 5_000);
+        assert!(st.awake(armed));
+        let names: Vec<_> = st
+            .waiting(armed)
+            .into_iter()
+            .map(|v| v.project_name)
+            .collect();
+        assert_eq!(names, vec!["proj-new"]);
+    }
+
+    #[test]
+    fn ready_stays_armed_across_turns() {
+        let mut st = SessionStore::default();
+        let armed = Gate {
+            paused: false,
+            ready_since: Some(5_000),
+        };
+        st.apply(&ev("Stop", "a"), 6_000);
+        assert!(st.awake(armed));
+        st.dismiss_all(); // "not now"
+        assert!(!st.awake(armed));
+        st.apply(&ev("UserPromptSubmit", "a"), 7_000);
+        st.apply(&ev("Stop", "a"), 9_000); // the next turn finishes: the cat wakes again
+        assert!(st.awake(armed));
+    }
+
+    #[test]
+    fn pause_beats_everything() {
+        let mut st = SessionStore::default();
+        st.apply(&tool("PermissionRequest", "a", "Bash"), 0);
+        let paused = Gate {
+            paused: true,
+            ready_since: None,
+        };
+        assert!(!st.awake(paused));
+        assert!(st.waiting(paused).is_empty());
     }
 
     #[test]
@@ -567,7 +678,11 @@ mod tests {
         st.apply(&ev("Stop", "a"), 1_000);
         st.apply(&tool("PermissionRequest", "b", "Bash"), 9_000); // b changes reason, keeps since
         assert_eq!(st.get("b").unwrap().since, 5_000);
-        let names: Vec<_> = st.waiting().into_iter().map(|v| v.project_name).collect();
+        let names: Vec<_> = st
+            .waiting(READY)
+            .into_iter()
+            .map(|v| v.project_name)
+            .collect();
         assert_eq!(names, vec!["proj-a", "proj-b"]);
     }
 }

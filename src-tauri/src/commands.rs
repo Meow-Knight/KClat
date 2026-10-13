@@ -24,6 +24,12 @@ pub fn dismiss(app: AppHandle) {
     state::dismiss_all(&app);
 }
 
+/// The Ready button next to the cat.
+#[tauri::command]
+pub fn set_ready(app: AppHandle, on: bool) {
+    state::set_ready(&app, on);
+}
+
 #[tauri::command]
 pub fn set_hitboxes(state: State<'_, AppState>, rects: Vec<Rect>) {
     let rects = rects

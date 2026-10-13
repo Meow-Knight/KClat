@@ -3,6 +3,7 @@
 
 mod commands;
 mod cursor;
+mod drag;
 mod event_server;
 mod hooks_installer;
 mod log;
@@ -40,6 +41,7 @@ fn main() {
             commands::get_settings,
             commands::dismiss,
             commands::set_hitboxes,
+            commands::set_ready,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::ScaleFactorChanged { .. } = event {
@@ -54,6 +56,7 @@ fn main() {
             overlay::create(app.handle())?;
             tray::create(app.handle())?;
             cursor::start(app.handle().clone());
+            drag::start(app.handle().clone());
             start_event_server(app.handle())?;
             start_stale_ticker(app.handle().clone());
             Ok(())

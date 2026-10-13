@@ -20,6 +20,12 @@ export const SPRINGS = {
   happy: [0, 140, 14],
   grumpy: [0.3, 120, 14],
   tailUp: [0, 60, 8],
+  /** Super Saiyan aura: 0 = off, 1 = burning; impulses flare it past 1 on each yell. */
+  aura: [0, 40, 9],
+  /** Poked while asleep: the angry mark (0 = hidden, 1 = shown; impulses make it pop). */
+  annoyed: [0, 260, 13],
+  /** Poked while asleep: extra tail swish on top of the sleepy sway. */
+  swish: [0, 50, 10],
 } as const satisfies Record<string, SpringSpec>;
 
 export type ParamName = keyof typeof SPRINGS;
@@ -31,6 +37,8 @@ export type CatPose = Record<ParamName, number> & {
   purring: boolean;
   /** Show the floating Zzz: asleep with the sleep sequence finished, and motion allowed. */
   zzz: boolean;
+  /** Animate the aura flames (off under reduceMotion: a steady glow instead). */
+  auraFlicker: boolean;
 };
 
 export interface YellRequest {
@@ -58,6 +66,11 @@ export type CatPhase = 'awake' | 'asleep';
 const EYE_WIDE = 1.25;
 const EYE_GRUMPY = 0.62;
 const EYE_ASLEEP = 0.02;
+/** Ear target while asleep and Ready: one ear up, listening for Claude. */
+const EAR_READY = 0.62;
+const EAR_ASLEEP = 0.3;
+/** How long the cat stays annoyed after a poke while asleep. */
+const ANNOYED_MS = 1400;
 const GRAVITY = 18;
 const LANDING_SQUASH_MIN = 1.2;
 
@@ -75,12 +88,15 @@ export class CatController {
   private purrLeft = 0;
   /** Asleep and the sleep sequence has finished (true at start: the cat boots asleep). */
   private settledAsleep = true;
+  /** Ready is armed (shown while asleep as a perked ear). */
+  private ready = false;
 
   private seqTimers: ReturnType<typeof setTimeout>[] = [];
   private yellTimer: ReturnType<typeof setTimeout> | undefined;
   private settleTimer: ReturnType<typeof setTimeout> | undefined;
   private blinkTimer: ReturnType<typeof setTimeout> | undefined;
   private twitchTimer: ReturnType<typeof setTimeout> | undefined;
+  private annoyedTimer: ReturnType<typeof setTimeout> | undefined;
   private opts: ControllerOptions;
 
   constructor(
@@ -95,7 +111,8 @@ export class CatController {
     this.pose = {
       sleepy: p.sleepy.v, eye: p.eye.v, ear: p.ear.v, earTw: p.earTw.v, mouth: p.mouth.v, puff: p.puff.v,
       squash: p.squash.v, lx: p.lx.v, ly: p.ly.v, yawn: p.yawn.v, happy: p.happy.v, grumpy: p.grumpy.v,
-      tailUp: p.tailUp.v, jumpY: 0, tapping: false, purring: false, zzz: !opts.reduceMotion,
+      tailUp: p.tailUp.v, aura: p.aura.v, annoyed: p.annoyed.v, swish: p.swish.v, jumpY: 0, tapping: false, purring: false, zzz: !opts.reduceMotion,
+      auraFlicker: !opts.reduceMotion,
     };
     this.scheduleBlink();
     this.scheduleTwitch();
@@ -124,6 +141,7 @@ export class CatController {
     this.reason = reason;
     this.yellCount = 0;
     this.onPhase('awake');
+    this.calmDown();
 
     const p = this.springs.p;
     const motion = !this.opts.reduceMotion;
@@ -134,6 +152,8 @@ export class CatController {
     this.eyeBase = EYE_WIDE;
     p.eye.t = EYE_WIDE;
     p.eye.vel += 14;
+    p.aura.t = 1;
+    if (motion) p.aura.vel += 4;
     this.setLookTarget(DEFAULT_LOOK.lx, DEFAULT_LOOK.ly);
     if (motion) p.squash.t = 0.22; // crouch before the jump
 
@@ -162,6 +182,7 @@ export class CatController {
     const p = this.springs.p;
     p.happy.t = 0;
     p.puff.t = 0;
+    p.aura.t = 0;
     p.mouth.t = 0.85; // yawn
     p.yawn.t = 1;
     this.eyeBase = 0.1;
@@ -172,7 +193,7 @@ export class CatController {
       p.mouth.t = 0;
       p.yawn.t = 0;
       p.sleepy.t = 1;
-      p.ear.t = 0.3;
+      p.ear.t = this.ready ? EAR_READY : EAR_ASLEEP;
       this.eyeBase = EYE_ASLEEP;
       p.eye.t = EYE_ASLEEP;
       p.grumpy.t = 0.3;
@@ -195,6 +216,29 @@ export class CatController {
     this.scheduleNextYell();
   }
 
+  /**
+   * Ready ("wake me when Claude is done"). Asleep, the cat peeks, perks one ear and keeps it up while it
+   * listens; it goes back down when Ready ends.
+   */
+  setReady(on: boolean): void {
+    if (on === this.ready) return;
+    this.ready = on;
+    if (this.state !== 'sleep') return;
+    const p = this.springs.p;
+    p.ear.t = on ? EAR_READY : EAR_ASLEEP;
+    p.earTw.vel += on ? 9 : -4;
+    if (on) {
+      p.eye.t = 0.4; // a quick look: "fine, I heard you"
+      this.later(700, () => {
+        if (this.state === 'sleep') p.eye.t = this.eyeBase;
+      });
+    }
+  }
+
+  get isReady(): boolean {
+    return this.ready;
+  }
+
   pet(): void {
     const p = this.springs.p;
     if (this.state === 'active') {
@@ -202,11 +246,15 @@ export class CatController {
       if (!this.opts.reduceMotion) this.purrLeft = 1.3;
       this.later(1300, () => (p.happy.t = 0));
     } else {
-      p.eye.t = 0.4; // peek
+      // "Don't touch me, I'm sleeping": eyes stay shut, brows knit, an angry mark pops up, the tail swishes.
+      const motion = !this.opts.reduceMotion;
+      p.annoyed.t = 1;
+      if (motion) p.annoyed.vel += 9;
+      p.grumpy.t = 1;
       p.earTw.vel += 9;
-      this.later(900, () => {
-        if (this.state === 'sleep') p.eye.t = this.eyeBase;
-      });
+      if (motion) p.swish.t = 1;
+      clearTimeout(this.annoyedTimer);
+      this.annoyedTimer = setTimeout(() => this.calmDown(), ANNOYED_MS);
     }
   }
 
@@ -243,6 +291,10 @@ export class CatController {
     o.happy = p.happy.v;
     o.grumpy = p.grumpy.v;
     o.tailUp = p.tailUp.v;
+    o.aura = p.aura.v;
+    o.annoyed = p.annoyed.v;
+    o.swish = p.swish.v;
+    o.auraFlicker = !this.opts.reduceMotion;
     o.jumpY = this.jump.y;
     o.tapping = this.tapping;
     o.purring = this.purrLeft > 0;
@@ -253,6 +305,7 @@ export class CatController {
     this.clearSequence();
     clearTimeout(this.blinkTimer);
     clearTimeout(this.twitchTimer);
+    clearTimeout(this.annoyedTimer);
   }
 
   private yell(first: boolean): void {
@@ -267,6 +320,7 @@ export class CatController {
     p.eye.vel += 6;
     p.ear.vel += 6;
     p.tailUp.t = 1;
+    if (!this.opts.reduceMotion) p.aura.vel += first ? 3 : 5; // flare
     if (!first && !this.opts.reduceMotion) {
       this.jump.launch(2.6);
       p.squash.vel += 2;
@@ -292,6 +346,16 @@ export class CatController {
       this.yell(false);
       this.scheduleNextYell();
     }, this.opts.yellIntervalMs);
+  }
+
+  /** Ends the poked-while-asleep look. */
+  private calmDown(): void {
+    clearTimeout(this.annoyedTimer);
+    this.annoyedTimer = undefined;
+    const p = this.springs.p;
+    p.annoyed.t = 0;
+    p.swish.t = 0;
+    if (this.state === 'sleep') p.grumpy.t = 0.3;
   }
 
   private scheduleBlink(): void {

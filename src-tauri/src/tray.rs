@@ -4,6 +4,7 @@ use crate::hooks_installer::{self as hooks, Action, Report, Status};
 use crate::log;
 use crate::state::{self, AppState};
 use std::path::PathBuf;
+use std::sync::OnceLock;
 use std::thread;
 use tauri::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::TrayIconBuilder;
@@ -11,9 +12,11 @@ use tauri::{AppHandle, Manager, Wry};
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
+const READY: &str = "ready";
 const WAKE_TEST: &str = "wake-test";
 const SLEEP: &str = "sleep";
 const DISMISS_ALL: &str = "dismiss-all";
+const RESET_POSITION: &str = "reset-position";
 const SFW: &str = "sfw";
 const PAUSE: &str = "pause";
 const HIDE: &str = "hide-while-sleeping";
@@ -24,7 +27,12 @@ const HOOKS_UNINSTALL: &str = "hooks-uninstall";
 const QUIT: &str = "quit";
 const TRAY_ID: &str = "main";
 
+/// The Ready item, so state changes made elsewhere (the overlay button, Ready switching itself off)
+/// can update its tick.
+static READY_ITEM: OnceLock<CheckMenuItem<Wry>> = OnceLock::new();
+
 struct Items {
+    ready: CheckMenuItem<Wry>,
     sfw: CheckMenuItem<Wry>,
     pause: CheckMenuItem<Wry>,
     hide: CheckMenuItem<Wry>,
@@ -41,6 +49,14 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     }
 
     let items = Items {
+        ready: CheckMenuItem::with_id(
+            app,
+            READY,
+            "Ready: wake me when Claude is done",
+            true,
+            false,
+            None::<&str>,
+        )?,
         sfw: CheckMenuItem::with_id(app, SFW, "SFW mode", true, s.sfw_mode, None::<&str>)?,
         pause: CheckMenuItem::with_id(
             app,
@@ -80,9 +96,18 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let menu = Menu::with_items(
         app,
         &[
+            &items.ready,
+            &PredefinedMenuItem::separator(app)?,
             &MenuItem::with_id(app, WAKE_TEST, "Wake test", true, None::<&str>)?,
             &MenuItem::with_id(app, SLEEP, "Sleep", true, None::<&str>)?,
             &MenuItem::with_id(app, DISMISS_ALL, "Dismiss all", true, None::<&str>)?,
+            &MenuItem::with_id(
+                app,
+                RESET_POSITION,
+                "Move the cat back to the corner",
+                true,
+                None::<&str>,
+            )?,
             &PredefinedMenuItem::separator(app)?,
             &items.sfw,
             &items.pause,
@@ -95,6 +120,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         ],
     )?;
 
+    let _ = READY_ITEM.set(items.ready.clone());
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .tooltip("Klat")
         .menu(&menu)
@@ -104,6 +130,15 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     }
     builder.build(app)?;
     Ok(())
+}
+
+/// Keeps the tray tick in step with the Ready state.
+pub fn set_ready_checked(on: bool) {
+    if let Some(item) = READY_ITEM.get() {
+        if item.is_checked().unwrap_or(!on) != on {
+            let _ = item.set_checked(on);
+        }
+    }
 }
 
 /// Tooltip shows how many sessions are waiting, e.g. "Klat · 2 sessions waiting".
@@ -122,8 +157,15 @@ fn on_menu(app: &AppHandle, event: &MenuEvent, items: &Items) {
     // Check items flip themselves before this runs; read the new state from the item.
     let checked = |item: &CheckMenuItem<Wry>| item.is_checked().unwrap_or(false);
     match event.id().as_ref() {
+        READY => state::set_ready(app, checked(&items.ready)),
         WAKE_TEST => state::wake_test(app),
         SLEEP | DISMISS_ALL => state::dismiss_all(app),
+        RESET_POSITION => {
+            state::update_settings(app, |s| s.position = None);
+            if let Some(win) = crate::overlay::get(app) {
+                let _ = crate::overlay::place(&win, None);
+            }
+        }
         SFW => {
             let on = checked(&items.sfw);
             state::update_settings(app, |s| s.sfw_mode = on);

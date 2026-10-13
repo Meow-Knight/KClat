@@ -185,13 +185,41 @@ describe('CatController', () => {
     expect(c.pose.purring).toBe(false);
   });
 
-  it('pet() while asleep peeks one eye open, then sleeps on', () => {
+  it('pet() while asleep: eyes stay shut, angry mark and tail swish, then it calms down', () => {
     const { c, advance } = setup();
     c.pet();
-    expect(c.spring('eye').t).toBe(0.4);
-    advance(1000);
+    advance(300);
     expect(c.spring('eye').t).toBe(0.02);
+    expect(c.pose.eye).toBeLessThan(0.18); // drawn closed
+    expect(c.pose.annoyed).toBeGreaterThan(0.5);
+    expect(c.pose.swish).toBeGreaterThan(0.3);
+    expect(c.spring('grumpy').t).toBe(1);
+    advance(800);
+    c.pet(); // poking again keeps it annoyed for another full stretch
+    advance(1000);
+    expect(c.spring('annoyed').t).toBe(1);
+    advance(600);
+    expect(c.spring('annoyed').t).toBe(0);
+    expect(c.spring('swish').t).toBe(0);
+    expect(c.spring('grumpy').t).toBe(0.3);
     expect(c.current).toBe('sleep');
+  });
+
+  it('pet() while asleep under reduceMotion shows the mark without the swish', () => {
+    const { c, advance } = setup({ reduceMotion: true });
+    c.pet();
+    advance(300);
+    expect(c.pose.annoyed).toBeGreaterThan(0.5);
+    expect(c.spring('swish').t).toBe(0);
+  });
+
+  it('waking clears the angry mark', () => {
+    const { c, advance } = setup();
+    c.pet();
+    advance(100);
+    c.wake();
+    expect(c.spring('annoyed').t).toBe(0);
+    expect(c.spring('swish').t).toBe(0);
   });
 
   it('setLook maps cursor offsets; lookDefault faces the bubble', () => {
@@ -202,6 +230,62 @@ describe('CatController', () => {
     c.lookDefault();
     expect(c.spring('lx').t).toBe(DEFAULT_LOOK.lx);
     expect(c.spring('ly').t).toBe(DEFAULT_LOOK.ly);
+  });
+
+  it('the aura burns while awake, flares on each yell, and goes out on sleep', () => {
+    const { c, advance } = setup({ yellIntervalMs: 1000 });
+    expect(c.spring('aura').t).toBe(0);
+    c.wake();
+    expect(c.spring('aura').t).toBe(1);
+    advance(2000);
+    const steady = c.pose.aura;
+    expect(steady).toBeGreaterThan(0.8);
+    c.yellNow();
+    advance(120);
+    expect(c.pose.aura).toBeGreaterThan(steady + 0.05); // flare
+    c.sleep();
+    expect(c.spring('aura').t).toBe(0);
+    advance(3000);
+    expect(c.pose.aura).toBeLessThan(0.02);
+  });
+
+  it('reduceMotion keeps the aura but stops its flicker and flares', () => {
+    const { c, advance } = setup({ reduceMotion: true });
+    c.wake();
+    advance(2000);
+    expect(c.pose.auraFlicker).toBe(false);
+    let peak = 0;
+    c.yellNow();
+    for (let i = 0; i < 30; i++) {
+      advance(16);
+      peak = Math.max(peak, c.pose.aura);
+    }
+    expect(peak).toBeLessThanOrEqual(1.0001);
+    expect(c.pose.aura).toBeGreaterThan(0.9);
+  });
+
+  it('Ready while asleep: a quick peek, one ear up until Ready ends', () => {
+    const { c, advance } = setup();
+    c.setReady(true);
+    expect(c.isReady).toBe(true);
+    expect(c.spring('eye').t).toBe(0.4);
+    expect(c.spring('ear').t).toBeCloseTo(0.62);
+    advance(800);
+    expect(c.spring('eye').t).toBe(0.02); // eyes closed again, ear still up
+    expect(c.spring('ear').t).toBeCloseTo(0.62);
+    c.setReady(false);
+    expect(c.spring('ear').t).toBeCloseTo(0.3);
+  });
+
+  it('Ready survives a wake and keeps the ear up after the next sleep', () => {
+    const { c, advance } = setup();
+    c.setReady(true);
+    c.wake();
+    expect(c.spring('ear').t).toBe(1);
+    advance(2000);
+    c.sleep();
+    advance(1200);
+    expect(c.spring('ear').t).toBeCloseTo(0.62);
   });
 
   it('dispose() clears every timer', () => {

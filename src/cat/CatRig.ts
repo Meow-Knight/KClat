@@ -36,6 +36,113 @@ const HEAD_Z = 0.1;
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 
 /**
+ * Super Saiyan aura while the cat is awake: sharp energy spikes shooting up from an egg-shaped outline around
+ * the cat (longest above the head, shorter down the shoulders), in two walls (a tall pale outer one and a
+ * bright inner one), with rising streaks, a soft halo and white lightning crackling around the body. Spike
+ * heights jump at ~14 steps a second, like hand-drawn anime frames. One shader quad behind the cat (one extra
+ * draw call), hidden entirely while asleep; it writes premultiplied colour for the transparent window.
+ * uMotion = 0 (reduceMotion) freezes it and turns the lightning off.
+ * The quad spans world y -0.45..6.25, which uses the stage's headroom above the cat.
+ */
+const AURA_CENTER: V3 = [ROOT_X, 2.9, -1.35];
+const AURA_SIZE: readonly [number, number] = [4.6, 6.7];
+
+const AURA_VERTEX = /* glsl */ `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const AURA_FRAGMENT = /* glsl */ `
+uniform float uTime;
+uniform float uIntensity;
+uniform float uMotion;
+varying vec2 vUv;
+
+float hash1(float n) { return fract(sin(n * 127.1) * 43758.5453); }
+
+// 0..~1: random height per spike plus a pointed tip.
+float spike(float x, float count, float seed, float tick) {
+  float s = x * count;
+  float i = floor(s);
+  float u = fract(s);
+  float h = hash1(i * 1.37 + seed + tick * 7.13);
+  float tip = 1.0 - abs(u - 0.5) * 2.0;
+  return h * 0.45 + tip * (0.3 + 0.25 * h);
+}
+
+// One wall of spikes rising from an ellipse (centre cy, radii rx, ry). Returns (fill, halo).
+vec2 wall(vec2 p, float rx, float ry, float cy, float count, float seed, float tick, float reach, float grow) {
+  float xr = p.x / rx;
+  if (abs(xr) >= 1.0) return vec2(0.0);
+  float arc = sqrt(1.0 - xr * xr);
+  float base = cy + ry * arc;
+  float floorY = cy - ry * arc;
+  float len = (0.04 + reach * pow(arc, 1.6)) * (0.3 + spike(p.x, count, seed, tick)) * grow;
+  float top = base + len;
+  float lower = smoothstep(floorY, floorY + 0.12, p.y);
+  float fill = smoothstep(0.0, 0.01, top - p.y) * lower;
+  float halo = smoothstep(0.07, 0.0, p.y - top) * (1.0 - fill) * lower;
+  return vec2(fill, halo);
+}
+
+float segDist(vec2 p, vec2 a, vec2 b) {
+  vec2 pa = p - a;
+  vec2 ba = b - a;
+  float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+  return length(pa - ba * h);
+}
+
+void main() {
+  vec2 p = vUv * 2.0 - 1.0;                          // -1..1, y up
+  float tick = floor(uTime * 14.0) * uMotion;
+  float grow = 0.82 + 0.28 * min(uIntensity, 1.5);   // flares make the spikes longer
+
+  vec2 outer = wall(p, 0.9, 0.62, -0.32, 17.0, 3.0, tick, 0.62, grow);
+  vec2 inner = wall(p, 0.7, 0.56, -0.34, 26.0, 11.0, tick + 0.5, 0.42, grow);
+
+  // Vertical streaks rushing upwards.
+  float column = floor((p.x * 0.5 + 0.5) * 36.0);
+  float stripe = 0.72 + 0.28 * sin(p.x * 50.0 + hash1(column) * 6.2832);
+  float rise = 0.8 + 0.2 * sin(p.y * 18.0 - uTime * 16.0 * uMotion + hash1(column + 9.0) * 6.2832);
+
+  vec3 pale = vec3(1.0, 0.95, 0.42);
+  vec3 gold = vec3(1.0, 0.84, 0.16);
+  vec3 white = vec3(1.0, 0.99, 0.86);
+  vec3 col = mix(pale, gold, inner.x);
+  float a = outer.x * 0.42 * stripe * rise + inner.x * 0.62 * rise + (outer.y + inner.y) * 0.18;
+  // White-hot core along the inner wall's spikes.
+  col = mix(col, white, inner.x * 0.35 * stripe);
+
+  // Lightning: up to two short zigzag arcs around the body, re-rolled 9 times a second.
+  float bolt = 0.0;
+  for (int k = 0; k < 2; k++) {
+    float seed = floor(uTime * 9.0) + float(k) * 17.0;
+    if (uMotion < 0.5 || hash1(seed) < 0.35) continue;
+    float ang = hash1(seed + 1.0) * 6.2832;
+    vec2 start = vec2(0.0, -0.34) + vec2(cos(ang) * 0.62, sin(ang) * 0.5);
+    vec2 dir = normalize(vec2(cos(ang + 1.2), sin(ang + 1.2)));
+    vec2 nrm = vec2(-dir.y, dir.x);
+    vec2 prev = start;
+    for (int j = 1; j <= 5; j++) {
+      vec2 next = start + dir * (0.055 * float(j)) + nrm * (hash1(seed + float(j) * 3.1) - 0.5) * 0.11;
+      float d = segDist(p, prev, next);
+      bolt = max(bolt, smoothstep(0.01, 0.0, d) + 0.45 * smoothstep(0.04, 0.0, d));
+      prev = next;
+    }
+  }
+  bolt = min(bolt, 1.0);
+  col = mix(col, white, bolt);
+  a = max(a, bolt * 0.95);
+
+  a = clamp(a * min(uIntensity, 1.3), 0.0, 1.0);
+  gl_FragColor = vec4(col * a, a);
+}
+`;
+
+/**
  * Floating Zzz, drawn as sprites so they animate with the (capped) render loop. As a CSS animation they ran
  * at the display's refresh rate and cost more CPU than the sleeping cat itself.
  * Units: world; ~0.022 world units per CSS px at the overlay's framing.
@@ -48,6 +155,13 @@ const ZZZ: readonly { glyph: string; size: number; dx: number; dy: number; delay
   { glyph: 'Z', size: 0.46, dx: 0.09, dy: 0.22, delay: 1.05 },
   { glyph: 'z', size: 0.29, dx: -0.04, dy: 0.09, delay: 2.1 },
 ];
+
+/**
+ * Anime angry mark (the "vein" symbol) on the head's top-right corner, between the right ear and the brow,
+ * shown when the sleeping cat is poked. A child of the head, so it follows the head. Head-local units.
+ */
+const ANGER_POS: V3 = [0.86, 0.55, 1.0];
+const ANGER_SIZE = 0.46;
 
 interface Eye {
   s: number;
@@ -86,6 +200,9 @@ export class CatRig {
   private readonly tail: TailTube;
   private readonly tip: THREE.Mesh;
   private readonly zzz: THREE.Sprite[] = [];
+  private anger: THREE.Sprite | undefined;
+  private readonly aura: THREE.Mesh;
+  private readonly auraUniforms = { uTime: { value: 0 }, uIntensity: { value: 0 }, uMotion: { value: 1 } };
   private readonly textures: THREE.Texture[] = [];
   private readonly eyes: Eye[] = [];
   private readonly ears: Ear[] = [];
@@ -198,6 +315,26 @@ export class CatRig {
     this.tip = this.mk(SPH, FUR2, this.root, { s: [0.165, 0.165, 0.165], ol: 1.25 });
 
     this.buildZzz();
+    this.buildAnger();
+
+    // Aura, behind the cat; drawn first among the transparent objects so the shadow disc lands on top.
+    const auraMat = this.mat(
+      new THREE.ShaderMaterial({
+        uniforms: this.auraUniforms,
+        vertexShader: AURA_VERTEX,
+        fragmentShader: AURA_FRAGMENT,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.CustomBlending,
+        blendSrc: THREE.OneFactor,
+        blendDst: THREE.OneMinusSrcAlphaFactor,
+      }),
+    );
+    this.aura = new THREE.Mesh(this.geo(new THREE.PlaneGeometry(AURA_SIZE[0], AURA_SIZE[1])), auraMat);
+    this.aura.position.set(...AURA_CENTER);
+    this.aura.renderOrder = -1;
+    this.aura.visible = false;
+    this.object.add(this.aura);
   }
 
   /** Port of the prototype's frame(): `t` is seconds, used for breathing, tapping and tail sway. */
@@ -247,7 +384,11 @@ export class CatRig {
     this.pawR.position.y = 0.17 + (pose.tapping ? Math.max(0, Math.sin(t * 10)) * 0.17 : 0) * awake;
 
     const asleep = sl > 0.5;
-    const sway = Math.sin(t * (asleep ? 1.1 : 2.6 + pose.tailUp * 2.5)) * (asleep ? 0.12 : 0.5 + pose.tailUp * 0.35);
+    // Asleep, a poke adds a quicker swish on top of the slow sway. Fixed frequency, so changing its amplitude
+    // never makes the tail jump.
+    const sway = asleep
+      ? Math.sin(t * 1.1) * 0.12 + Math.sin(t * 5.2) * pose.swish * 0.75
+      : Math.sin(t * (2.6 + pose.tailUp * 2.5)) * (0.5 + pose.tailUp * 0.35);
     const pts = this.tail.points;
     for (let i = 0; i < 4; i++) {
       const a = TAIL_A[i];
@@ -255,7 +396,7 @@ export class CatRig {
       const f = i / 3;
       pts[i].set(
         lerp(a[0] + sway * f * f * 0.9, z[0] + sway * f * 0.3, sl),
-        lerp(a[1] + pose.tailUp * f * 0.35, z[1], sl),
+        lerp(a[1] + pose.tailUp * f * 0.35, z[1] + pose.swish * f * f * 0.22, sl),
         lerp(a[2], z[2], sl),
       );
     }
@@ -263,6 +404,28 @@ export class CatRig {
     this.tip.position.copy(pts[3]);
 
     this.shadow.scale.setScalar(Math.max(0.5, 1 - pose.jumpY * 0.35));
+
+    // Aura: follows the jump; flares and the reduceMotion freeze are handled in the shader.
+    const aura = pose.aura;
+    this.aura.visible = aura > 0.01;
+    if (this.aura.visible) {
+      this.auraUniforms.uIntensity.value = aura;
+      this.auraUniforms.uMotion.value = pose.auraFlicker ? 1 : 0;
+      if (pose.auraFlicker) this.auraUniforms.uTime.value = t;
+      this.aura.position.y = AURA_CENTER[1] + pose.jumpY; // the shader grows the spikes on flares
+    }
+
+    // Angry mark: pops in on the spring's overshoot, throbs like a vein while shown (static under reduceMotion).
+    const anger = this.anger;
+    if (anger) {
+      const a = pose.annoyed;
+      anger.visible = a > 0.02;
+      if (anger.visible) {
+        const throb = pose.auraFlicker ? 1 + 0.1 * Math.max(0, Math.sin(t * 11)) : 1;
+        anger.scale.setScalar(ANGER_SIZE * Math.max(0, a) * throb);
+        (anger.material as THREE.SpriteMaterial).opacity = Math.min(1, a * 1.6);
+      }
+    }
 
     // Zzz: port of the prototype's CSS keyframes (fade in over 20%, drift up-right, grow .6 → 1.1, fade out).
     for (let i = 0; i < this.zzz.length; i++) {
@@ -328,6 +491,20 @@ export class CatRig {
     }
   }
 
+  private buildAnger(): void {
+    if (typeof document === 'undefined') return;
+    const map = angerTexture();
+    this.textures.push(map);
+    const sprite = new THREE.Sprite(
+      this.mat(new THREE.SpriteMaterial({ map, transparent: true, depthTest: false, depthWrite: false })),
+    );
+    sprite.position.set(...ANGER_POS);
+    sprite.renderOrder = 10;
+    sprite.visible = false;
+    this.anger = sprite;
+    this.headG.add(sprite);
+  }
+
   /** One toon material per colour, shared across meshes. */
   private toon(color: number): THREE.MeshToonMaterial {
     let m = this.toonMats.get(color);
@@ -364,6 +541,33 @@ function glyphTexture(glyph: string): THREE.CanvasTexture {
   ctx.strokeText(glyph, size / 2, size / 2);
   ctx.fillStyle = `#${FUR2.toString(16).padStart(6, '0')}`;
   ctx.fillText(glyph, size / 2, size / 2);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/** The anime angry mark: four bent strokes whose corners point at the centre, red with a white rim. */
+function angerTexture(): THREE.CanvasTexture {
+  const size = 128;
+  const c = size / 2;
+  const gap = 13;
+  const reach = 50;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  ctx.beginPath();
+  for (const [sx, sy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+    ctx.moveTo(c + sx * gap, c + sy * reach);
+    ctx.quadraticCurveTo(c + sx * gap * 0.55, c + sy * gap * 0.55, c + sx * reach, c + sy * gap);
+  }
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 24;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
+  ctx.stroke();
+  ctx.lineWidth = 13;
+  ctx.strokeStyle = '#e5383b';
+  ctx.stroke();
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;

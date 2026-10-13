@@ -19,6 +19,8 @@ const stage = new CatStage(stageEl, settings, {
   onLayoutChange: () => {
     if (ready) void bridge.setHitboxes(stage.hitboxes());
   },
+  // Rust owns Ready; its state comes back through cat://state and applyState().
+  onReadyToggle: (next) => void bridge.setReady(next),
 });
 
 /** hideWhileSleeping: the cat disappears once the sleep sequence has finished. */
@@ -29,6 +31,7 @@ function syncHidden(): void {
 let lastAttention = 0;
 
 function applyState(s: CatStatePayload): void {
+  stage.setReady(s.ready);
   // Name the project only when more than one session is waiting (spec §7.2 rule 5).
   stage.setSubtitle(s.sessions.length > 1 ? s.attention?.projectName || undefined : undefined);
   const seq = s.attention?.seq ?? lastAttention;
@@ -57,6 +60,7 @@ await bridge.onState(applyState);
 await bridge.onSettings(applySettings);
 // Same coordinate space as the stage: the stage fills the window. null = cursor on another monitor.
 await bridge.onCursor((p) => stage.lookAt(p));
+await bridge.onGrab((mode) => stage.setGrab(mode));
 ready = true;
 applyState(await bridge.getState());
 syncHidden();

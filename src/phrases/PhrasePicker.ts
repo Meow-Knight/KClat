@@ -53,6 +53,14 @@ export class PhrasePicker {
     return this.remember(this.bag.pop() ?? this.wakePhrase());
   }
 
+  /** The cat's reply when Ready is armed, in one of the chosen languages (English if none match). */
+  pickReady(): Phrase {
+    const all = this.phrases.filter((p) => p.tags.includes('ready') && this.allowed(p));
+    const inLang = all.filter((p) => this.opts.languages.includes(p.lang));
+    const pool = inLang.length ? inLang : all;
+    return pool[Math.floor(this.random() * pool.length)] ?? FALLBACK_WAKE;
+  }
+
   /** Candidates for a non-first yell, after the SFW and language filters. */
   pool(req: PickRequest): Phrase[] {
     const withIgnored = req.yellIndex >= IGNORED_FROM_YELL;
