@@ -1,4 +1,4 @@
-//! Small local log (spec §8.4): `%APPDATA%\Klat\klat.log`, capped in size.
+//! Small local log (spec §8.4): `klat.log` in the data folder (see data_dir.rs), capped in size.
 //!
 //! When the file passes MAX_BYTES it becomes `klat.log.old` (replacing the previous one), so the
 //! log never takes more than ~2 × MAX_BYTES. Callers log event names, session ids, project folder names

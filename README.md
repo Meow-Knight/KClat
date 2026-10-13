@@ -18,6 +18,12 @@ Everything runs locally: no telemetry, no cloud. The hooks only report to the ap
 
 You need Windows 10/11 with the WebView2 runtime, which comes with Windows 11 and recent Windows 10.
 
+### macOS
+
+Klat builds for macOS 11+ (a menu bar app, no Dock icon). It has not been run on a real Mac yet: for now, build
+it from source with [docs/macos-build.md](docs/macos-build.md). A ready-made `.dmg` comes later. Dragging the cat
+with Space needs the Accessibility permission; Settings → General asks for it.
+
 ## Using it
 
 | When | The cat |
@@ -146,7 +152,7 @@ Memory by process (private): WebView2 GPU 89 MB, renderer 36, browser 34, utilit
 
 ## Development
 
-Requirements: Node.js ≥ 20.19, pnpm 8+, Rust stable (MSVC) with the Visual Studio C++ Build Tools.
+Requirements: Node.js ≥ 20.19, pnpm 8+, Rust stable (MSVC) with the Visual Studio C++ Build Tools. On macOS: see [docs/macos-build.md](docs/macos-build.md).
 
 | Command | What it does |
 |---|---|
@@ -159,7 +165,8 @@ Requirements: Node.js ≥ 20.19, pnpm 8+, Rust stable (MSVC) with the Visual Stu
 | `pnpm lint` / `pnpm typecheck` / `pnpm test` | ESLint / `tsc --noEmit` / Vitest |
 | `pnpm lint:rust` / `pnpm test:rust` | `cargo fmt --check` + `clippy -D warnings` / `cargo test --workspace` |
 | `cargo build -p klat-hook` | Debug build of the hook (`target/debug/klat-hook.exe`, next to the dev app) |
-| `.\scripts\send-test-event.ps1 <Hook> [sessionId]` | Simulate a Claude Code hook through the real adapter |
+| `.\scripts\send-test-event.ps1 <Hook> [sessionId]` | Simulate a Claude Code hook through the real adapter (`scripts/send-test-event.sh` on macOS) |
+| `pnpm check:mac` | Type-check (clippy `-D warnings`) the workspace for macOS. From Windows it uses `scripts/fake-cc` in place of Apple's clang, so it proves the Rust compiles but not that it runs |
 
 `pnpm tauri build` without the release config builds the app without the bundled hook. Use `pnpm release`, which adds `src-tauri/tauri.release.conf.json` (sidecar plus `build:hook`).
 
