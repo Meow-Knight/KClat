@@ -53,6 +53,8 @@ fn main() {
             commands::hooks_status,
             commands::hooks_apply,
             commands::open_settings,
+            commands::drag_permission,
+            commands::open_drag_permission,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::ScaleFactorChanged { .. } = event {

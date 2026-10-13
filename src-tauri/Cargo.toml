@@ -17,6 +17,11 @@ tauri-plugin-dialog = "2.8.2"
 tauri-plugin-single-instance = "2.5.3"
 tauri-plugin-autostart = "2.7.0"
 
+# The macOS Space hook (drag_macos.rs). Same versions Tauri already pulls in.
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "=0.10.1"
+core-graphics = "=0.25.0"
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = [
   "Win32_Foundation",

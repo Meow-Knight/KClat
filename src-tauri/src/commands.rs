@@ -84,6 +84,18 @@ pub async fn hooks_apply(app: AppHandle, action: Action) -> HooksResult {
     }
 }
 
+/// Whether dragging the cat needs a permission first (macOS: Accessibility).
+#[tauri::command]
+pub fn drag_permission() -> crate::drag::Permission {
+    crate::drag::permission()
+}
+
+/// macOS: asks for the Accessibility permission and opens the pane where it is granted.
+#[tauri::command]
+pub fn open_drag_permission() {
+    crate::drag::request_permission();
+}
+
 /// Opens (or brings forward) the Settings window. Async: creating a window from a sync command can deadlock
 /// on Windows.
 #[tauri::command]

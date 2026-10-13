@@ -56,6 +56,9 @@ export interface HooksResult {
   message: string;
 }
 
+/** Whether dragging the cat needs a permission first (macOS: Accessibility). See src-tauri/src/drag.rs. */
+export type DragPermission = 'not-needed' | 'granted' | 'missing';
+
 /** What the Settings window may change (src-tauri/src/settings.rs `PATCHABLE`); Rust validates it again. */
 export type SettingsPatch = Partial<
   Pick<
@@ -86,6 +89,10 @@ export const bridge = {
   sleep: (): Promise<void> => invoke('sleep'),
   hooksStatus: (): Promise<HooksInfo> => invoke('hooks_status'),
   hooksApply: (action: 'install' | 'uninstall'): Promise<HooksResult> => invoke('hooks_apply', { action }),
+  dragPermission: (): Promise<DragPermission> => invoke('drag_permission'),
+  openDragPermission: (): Promise<void> => invoke('open_drag_permission'),
+  onDragPermission: (cb: (p: DragPermission) => void): Promise<UnlistenFn> =>
+    listen<DragPermission>('cat://drag-permission', (e) => cb(e.payload)),
   onState: (cb: (s: CatStatePayload) => void): Promise<UnlistenFn> => listen<CatStatePayload>('cat://state', (e) => cb(e.payload)),
   onSettings: (cb: (s: AppSettings) => void): Promise<UnlistenFn> => listen<AppSettings>('cat://settings', (e) => cb(e.payload)),
   /** 30Hz while the cat is awake, only when the cursor moved (see src-tauri/src/cursor.rs). */

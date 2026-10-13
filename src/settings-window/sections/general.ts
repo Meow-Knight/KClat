@@ -1,5 +1,6 @@
 // General: start at login, how the cat behaves, how to move it.
-import { banner, card, h, row, svg, toggle } from '../controls';
+import type { DragPermission } from '../../bridge/tauriBridge';
+import { banner, button, card, h, row, svg, toggle } from '../controls';
 import type { Ctx, SectionView } from '../context';
 
 const MOVE_ICON = `<svg class="hint-icon" viewBox="0 0 20 20" aria-hidden="true">
@@ -24,6 +25,22 @@ export function generalSection(ctx: Ctx): SectionView {
   const sfw = toggle('sfw', s.sfwMode, (on) => ctx.patch({ sfwMode: on }));
   const motion = toggle('reduceMotion', s.reduceMotion, (on) => ctx.patch({ reduceMotion: on }));
 
+  // macOS only: the Space hook needs the Accessibility permission. Hidden where it is not needed.
+  const permissionRow = h('div', { attrs: { hidden: '' } });
+  const showPermission = (p: DragPermission) => {
+    permissionRow.hidden = p === 'not-needed';
+    if (p === 'not-needed') return;
+    const control =
+      p === 'granted'
+        ? h('span', { class: 'pill pill-ok' }, h('span', { class: 'pill-dot', attrs: { 'aria-hidden': 'true' } }), t('settings.general.permission.granted'))
+        : button(t('settings.general.permission.grant'), 'primary', 'grantPermission', () => void ctx.api.openDragPermission());
+    permissionRow.replaceChildren(
+      row({ title: t('settings.general.permission'), desc: t('settings.general.permission.desc'), control }),
+    );
+  };
+  void ctx.api.dragPermission().then(showPermission);
+  void ctx.api.onDragPermission(showPermission);
+
   const el = h(
     'div',
     {},
@@ -41,6 +58,7 @@ export function generalSection(ctx: Ctx): SectionView {
     card(
       t('settings.general.move'),
       h('div', { class: 'row row-hint' }, svg(MOVE_ICON), h('p', { class: 'hint-text', text: t('settings.general.move.how') })),
+      permissionRow,
     ),
   );
 

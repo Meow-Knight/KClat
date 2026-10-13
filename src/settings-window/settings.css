@@ -276,7 +276,8 @@ h1:focus {
   padding: 12px 16px;
 }
 
-.row + .row {
+.row + .row,
+.row + div:not([hidden]) > .row {
   border-top: 1px solid var(--line);
 }
 

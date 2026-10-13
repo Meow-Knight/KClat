@@ -23,7 +23,30 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
 pub const EVENT_GRAB: &str = "cat://grab";
+/// macOS: the Accessibility permission the Space hook needs changed (payload: [`Permission`]).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub const EVENT_PERMISSION: &str = "cat://drag-permission";
 const DRAG_PERIOD: Duration = Duration::from_millis(8);
+
+/// Whether the Space hook may run. Only macOS asks (Accessibility); elsewhere it is not needed.
+// Each platform builds only some of these: macOS never says NotNeeded, the others say nothing else.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Permission {
+    NotNeeded,
+    Granted,
+    Missing,
+}
+
+pub fn permission() -> Permission {
+    platform::permission()
+}
+
+/// macOS: shows the system prompt and opens Privacy & Security > Accessibility. Elsewhere: nothing.
+pub fn request_permission() {
+    platform::request_permission();
+}
 
 /// Window top-left in physical screen px, as saved in settings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,8 +61,7 @@ pub type PxRect = (i32, i32, i32, i32);
 /// Where Space starts a grab: the overlay's clickable regions in physical screen px (kept by the cursor poller).
 static ZONE: RwLock<Vec<PxRect>> = RwLock::new(Vec::new());
 /// Space is held and kept from the focused app.
-// Only the Windows hook sets it so far; the macOS one is ClauCat-t0b.13.
-#[cfg_attr(not(windows), allow(dead_code))]
+#[cfg_attr(not(any(windows, target_os = "macos")), allow(dead_code))]
 static GRABBING: AtomicBool = AtomicBool::new(false);
 /// The window is following the cursor.
 static DRAGGING: AtomicBool = AtomicBool::new(false);
@@ -92,8 +114,8 @@ pub fn is_on_screen(pos: WindowPos, size: (u32, u32), areas: &[PxRect]) -> bool 
     areas.iter().any(|a| in_rect(centre, *a))
 }
 
-// Sent by the platform hook; the macOS hook is ClauCat-t0b.13.
-#[cfg_attr(not(windows), allow(dead_code))]
+/// Sent by the platform hook.
+#[cfg_attr(not(any(windows, target_os = "macos")), allow(dead_code))]
 enum Msg {
     GrabStarted,
     GrabEnded,
@@ -112,7 +134,7 @@ pub fn start(app: AppHandle) {
             }
         })
         .expect("failed to start the drag worker");
-    platform::install_hook(tx);
+    platform::install_hook(app, tx);
 }
 
 /// One Space hold: wait for the mouse button, follow the cursor, save on release.
@@ -191,7 +213,7 @@ fn run_grab(app: &AppHandle, rx: &std::sync::mpsc::Receiver<Msg>) {
 
 #[cfg(windows)]
 mod platform {
-    use super::{in_rect, Msg, GRABBING, ZONE};
+    use super::{in_rect, Msg, Permission, GRABBING, ZONE};
     use std::sync::atomic::Ordering;
     use std::sync::mpsc::Sender;
     use std::sync::OnceLock;
@@ -299,7 +321,13 @@ mod platform {
         unsafe { CallNextHookEx(std::ptr::null_mut(), code, wparam, lparam) }
     }
 
-    pub fn install_hook(tx: Sender<Msg>) {
+    pub fn permission() -> Permission {
+        Permission::NotNeeded
+    }
+
+    pub fn request_permission() {}
+
+    pub fn install_hook(_app: tauri::AppHandle, tx: Sender<Msg>) {
         let _ = TX.set(tx);
         std::thread::Builder::new()
             .name("space-hook".into())
@@ -327,9 +355,13 @@ mod platform {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+#[path = "drag_macos.rs"]
+mod platform;
+
+#[cfg(not(any(windows, target_os = "macos")))]
 mod platform {
-    use super::Msg;
+    use super::{Msg, Permission};
     use std::sync::mpsc::Sender;
 
     pub fn cursor() -> Option<(i32, i32)> {
@@ -339,7 +371,11 @@ mod platform {
         false
     }
     pub fn replay_space() {}
-    pub fn install_hook(_tx: Sender<Msg>) {}
+    pub fn permission() -> Permission {
+        Permission::NotNeeded
+    }
+    pub fn request_permission() {}
+    pub fn install_hook(_app: tauri::AppHandle, _tx: Sender<Msg>) {}
 }
 
 #[cfg(test)]
@@ -349,6 +385,29 @@ mod tests {
     /// 2560×1392 work area (48px taskbar). The cat sits at (150, 80)-(320, 300) inside a 360×330 window.
     const AREA: PxRect = (0, 0, 2560, 1392);
     const CAT: PxRect = (150, 80, 170, 220);
+
+    #[test]
+    fn permission_uses_the_names_the_settings_window_expects() {
+        let names: Vec<serde_json::Value> = [
+            Permission::NotNeeded,
+            Permission::Granted,
+            Permission::Missing,
+        ]
+        .iter()
+        .map(|p| serde_json::to_value(p).unwrap())
+        .collect();
+        assert_eq!(names, ["not-needed", "granted", "missing"]);
+    }
+
+    #[test]
+    fn this_platform_reports_its_permission() {
+        let expected = if cfg!(target_os = "macos") {
+            [Permission::Granted, Permission::Missing].contains(&permission())
+        } else {
+            permission() == Permission::NotNeeded
+        };
+        assert!(expected);
+    }
 
     #[test]
     fn a_position_inside_the_area_is_kept() {
