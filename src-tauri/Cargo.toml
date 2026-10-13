@@ -9,7 +9,7 @@ publish = false
 tauri-build = { version = "2.7.1", features = [] }
 
 [dependencies]
-tauri = { version = "2.12.2", features = ["tray-icon"] }
+tauri = { version = "2.12.2", features = ["tray-icon", "macos-private-api"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", features = ["preserve_order"] }
 getrandom = "0.3.4"

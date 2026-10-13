@@ -13,7 +13,8 @@ export default defineConfig({
   },
   envPrefix: ['VITE_', 'TAURI_ENV_*'],
   build: {
-    target: 'chrome105',
+    // WebView2 on Windows, WKWebView on macOS 11+.
+    target: ['chrome105', 'safari15'],
     // The overlay (index.html) and the Settings window; dev.html is served by `pnpm dev` only.
     rolldownOptions: {
       input: { overlay: 'index.html', settings: 'settings.html' },

@@ -30,6 +30,11 @@ pub fn create(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         .focused(false)
         .focusable(false)
         .visible(true);
+    // macOS: stay on every desktop (Space), as the overlay does on Windows virtual desktops.
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.visible_on_all_workspaces(true);
+    }
 
     // Approximate logical position for creation; place() then corrects it in physical px at the real DPI.
     if let Some(pos) = initial_position(app) {

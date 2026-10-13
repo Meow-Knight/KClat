@@ -38,6 +38,8 @@ pub type PxRect = (i32, i32, i32, i32);
 /// Where Space starts a grab: the overlay's clickable regions in physical screen px (kept by the cursor poller).
 static ZONE: RwLock<Vec<PxRect>> = RwLock::new(Vec::new());
 /// Space is held and kept from the focused app.
+// Only the Windows hook sets it so far; the macOS one is ClauCat-t0b.13.
+#[cfg_attr(not(windows), allow(dead_code))]
 static GRABBING: AtomicBool = AtomicBool::new(false);
 /// The window is following the cursor.
 static DRAGGING: AtomicBool = AtomicBool::new(false);
@@ -90,6 +92,8 @@ pub fn is_on_screen(pos: WindowPos, size: (u32, u32), areas: &[PxRect]) -> bool 
     areas.iter().any(|a| in_rect(centre, *a))
 }
 
+// Sent by the platform hook; the macOS hook is ClauCat-t0b.13.
+#[cfg_attr(not(windows), allow(dead_code))]
 enum Msg {
     GrabStarted,
     GrabEnded,

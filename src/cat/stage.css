@@ -4,7 +4,7 @@
   overflow: hidden;
   background: transparent;
   user-select: none;
-  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
 .cat-stage canvas {

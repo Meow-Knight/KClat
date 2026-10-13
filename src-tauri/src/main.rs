@@ -64,6 +64,9 @@ fn main() {
         .setup(|app| {
             // Logged here, not before the builder: a second launch exits inside the single-instance plugin.
             log::info(format!("Klat {} starting", env!("CARGO_PKG_VERSION")));
+            // macOS: a menu bar app, without a Dock icon or an app menu.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             overlay::create(app.handle())?;
             autostart::reconcile(app.handle());
             tray::create(app.handle())?;

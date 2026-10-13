@@ -89,11 +89,26 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
                 open_settings(tray.app_handle());
             }
         });
-    if let Some(icon) = app.default_window_icon() {
-        builder = builder.icon(icon.clone());
-    }
+    builder = tray_icon(app, builder);
     builder.build(app)?;
     Ok(())
+}
+
+/// Windows: the app icon. macOS: a black template image that the menu bar tints for light and dark mode
+/// (drawn by scripts/make-tray-template.py).
+#[cfg(target_os = "macos")]
+fn tray_icon(_app: &AppHandle, builder: TrayIconBuilder<Wry>) -> TrayIconBuilder<Wry> {
+    builder
+        .icon(tauri::include_image!("icons/tray-template.png"))
+        .icon_as_template(true)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn tray_icon(app: &AppHandle, builder: TrayIconBuilder<Wry>) -> TrayIconBuilder<Wry> {
+    match app.default_window_icon() {
+        Some(icon) => builder.icon(icon.clone()),
+        None => builder,
+    }
 }
 
 fn set_checked(item: &CheckMenuItem<Wry>, on: bool) {

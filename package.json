@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint:rust": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings",
-    "test:rust": "cargo test --workspace"
+    "test:rust": "cargo test --workspace",
+    "check:mac": "node scripts/check-macos.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.2",

@@ -12,3 +12,4 @@ src-tauri/gen/
 .beads-credential-key
 .beads/proxieddb/
 *.gate.lock*
+scripts/fake-cc/target/
