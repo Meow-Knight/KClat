@@ -72,11 +72,19 @@ export class PhrasePicker {
     );
   }
 
-  /** Wake phrases skip the language filter: there is no Vietnamese one, and the first yell must always happen. */
+  /**
+   * The first yell: one wake phrase per chosen language (the explicit one unless SFW), picked at random when the
+   * cat speaks both. With no wake phrase in the chosen languages it still yells, in whatever wake phrase is left.
+   */
   private wakePhrase(): Phrase {
     const wakes = this.phrases.filter((p) => p.tags.includes('wake') && this.allowed(p));
-    const preferred = this.opts.sfwMode ? wakes[0] : (wakes.find((p) => p.explicit) ?? wakes[0]);
-    return preferred ?? FALLBACK_WAKE;
+    const preferred = (list: Phrase[]): Phrase | undefined =>
+      this.opts.sfwMode ? list[0] : (list.find((p) => p.explicit) ?? list[0]);
+    const perLanguage = this.opts.languages
+      .map((lang) => preferred(wakes.filter((p) => p.lang === lang)))
+      .filter((p): p is Phrase => p !== undefined);
+    if (perLanguage.length > 0) return perLanguage[Math.floor(this.random() * perLanguage.length)];
+    return preferred(wakes) ?? FALLBACK_WAKE;
   }
 
   private allowed(p: Phrase): boolean {

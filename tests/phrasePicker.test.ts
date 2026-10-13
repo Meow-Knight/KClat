@@ -3,6 +3,10 @@ import { PHRASES, type Phrase } from '../src/phrases/phrases';
 import { PhrasePicker, type PickRequest, type PickerOptions } from '../src/phrases/PhrasePicker';
 
 const ALL: PickerOptions = { sfwMode: false, languages: ['en', 'vi'] };
+const EN: PickerOptions = { sfwMode: false, languages: ['en'] };
+const VI: PickerOptions = { sfwMode: false, languages: ['vi'] };
+const FIRST: PickRequest = { first: true, yellIndex: 1, reason: 'done' };
+const VI_WAKE = 'Dậy dậy dậy, dầu nhớt đây!!!';
 
 /** Deterministic PRNG (mulberry32) so failures reproduce. */
 function seeded(seed: number): () => number {
@@ -18,22 +22,39 @@ function seeded(seed: number): () => number {
 const later = (yellIndex: number, reason: PickRequest['reason'] = 'done'): PickRequest => ({ first: false, yellIndex, reason });
 
 describe('PhrasePicker', () => {
-  it('the first yell is always the wake phrase', () => {
-    const picker = new PhrasePicker(PHRASES, ALL, seeded(1));
+  it('in English the first yell is always the English wake phrase', () => {
+    const picker = new PhrasePicker(PHRASES, EN, seeded(1));
     for (let i = 0; i < 5; i++) {
       expect(picker.pick({ first: true, yellIndex: 1, reason: 'permission' }).text).toBe('Wake up, B**CH!!!');
       picker.pick(later(2));
     }
+    const sfw = new PhrasePicker(PHRASES, { ...EN, sfwMode: true });
+    expect(sfw.pick(FIRST).text).toBe('Wake up, human!!!');
   });
 
-  it('the first yell is the SFW wake phrase in SFW mode', () => {
-    const picker = new PhrasePicker(PHRASES, { ...ALL, sfwMode: true });
-    expect(picker.pick({ first: true, yellIndex: 1, reason: 'done' }).text).toBe('Wake up, human!!!');
+  it('in Vietnamese the first yell is the Vietnamese wake phrase, SFW or not', () => {
+    for (const sfwMode of [false, true]) {
+      const picker = new PhrasePicker(PHRASES, { ...VI, sfwMode }, seeded(2));
+      for (let i = 0; i < 5; i++) expect(picker.pick(FIRST).text).toBe(VI_WAKE);
+    }
   });
 
-  it('the wake phrase survives a language filter without English', () => {
-    const picker = new PhrasePicker(PHRASES, { sfwMode: false, languages: ['vi'] });
-    expect(picker.pick({ first: true, yellIndex: 1, reason: 'done' }).id).toBe('wake-1');
+  it('with both languages (Auto) the first yell is one of the two wake phrases', () => {
+    for (const [sfwMode, english] of [
+      [false, 'Wake up, B**CH!!!'],
+      [true, 'Wake up, human!!!'],
+    ] as const) {
+      const seen = new Set<string>();
+      for (let seed = 1; seed <= 40; seed++) {
+        seen.add(new PhrasePicker(PHRASES, { ...ALL, sfwMode }, seeded(seed)).pick(FIRST).text);
+      }
+      expect([...seen].sort()).toEqual([english, VI_WAKE].sort());
+    }
+  });
+
+  it('the first yell still happens when no language is chosen', () => {
+    const picker = new PhrasePicker(PHRASES, { sfwMode: false, languages: [] });
+    expect(picker.pick(FIRST).tags).toContain('wake');
   });
 
   it('does not repeat a phrase until the bag is empty', () => {
@@ -89,10 +110,18 @@ describe('PhrasePicker', () => {
   });
 
   it('filters by language', () => {
-    const vi = new PhrasePicker(PHRASES, { sfwMode: false, languages: ['vi'] }, seeded(4));
+    const vi = new PhrasePicker(PHRASES, VI, seeded(4));
+    expect(vi.pick(FIRST).lang).toBe('vi');
     for (let i = 0; i < 50; i++) expect(vi.pick(later(4)).lang).toBe('vi');
-    const en = new PhrasePicker(PHRASES, { sfwMode: false, languages: ['en'] }, seeded(4));
+    const en = new PhrasePicker(PHRASES, EN, seeded(4));
+    expect(en.pick(FIRST).lang).toBe('en');
     for (let i = 0; i < 50; i++) expect(en.pick(later(4)).lang).toBe('en');
+  });
+
+  it('Auto mixes both languages in later yells', () => {
+    const picker = new PhrasePicker(PHRASES, ALL, seeded(6));
+    const langs = new Set(Array.from({ length: 60 }, () => picker.pick(later(4)).lang));
+    expect([...langs].sort()).toEqual(['en', 'vi']);
   });
 
   it('setOptions takes effect on the next pick', () => {

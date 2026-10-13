@@ -1,6 +1,6 @@
 # Klat
 
-A desktop companion for Claude Code on Windows. A grumpy toon cat sleeps in the corner of your screen. When Claude needs you, it jumps up in a blaze of golden Super Saiyan aura and yells "Wake up, B\*\*CH!!!" until you go back to the terminal. It follows your cursor, and you can pet it.
+A desktop companion for Claude Code on Windows. A grumpy toon cat sleeps in the corner of your screen. When Claude needs you, it jumps up in a blaze of golden Super Saiyan aura and yells "Wake up, B\*\*CH!!!" (or "Dậy dậy dậy, dầu nhớt đây!!!" in Vietnamese) until you go back to the terminal. It follows your cursor, and you can pet it.
 
 - **Claude asks for permission or waits for your input:** the cat always wakes you.
 - **Claude finishes a turn:** the cat wakes you only if you put it on **Ready** first, using the little bell button to its right. Use Ready when you hand Claude a long task and look away. While you are watching Claude anyway, the cat leaves you alone.
@@ -42,7 +42,7 @@ The overlay never takes focus, and clicks on its empty area go through to the wi
 | Wake test | Wakes the cat without Claude Code |
 | Sleep / Dismiss all | Puts the cat to sleep and marks waiting sessions as seen |
 | Move the cat back to the corner | Forgets the spot you dragged it to |
-| SFW mode | No swearing (the first line becomes "Wake up, human!!!") |
+| SFW mode | No swearing (the English first line becomes "Wake up, human!!!"; the Vietnamese one is already clean) |
 | Pause notifications | The cat stays asleep. Sessions are still tracked, and unpausing wakes it if something is still waiting |
 | Hide cat while sleeping | The cat shows only while it is awake |
 | Start at login | Off by default. Adds or removes Klat in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` |
@@ -227,7 +227,7 @@ Small decisions made during implementation, as the spec asks (§11).
   - A yell's 1.1s "settle into the squint" timer is replaced by the next yell, so it cannot close the new yell's mouth early (the prototype could).
   - `sleep()` clears the happy face and puff. In the prototype, a pet right before sleep left the ^ ^ eyes on forever, because sleep cancelled the timer that resets them.
   - On wake the cat first looks at the bubble (`lx=-.35, ly=-.08`, §6.4) until cursor data arrives.
-  - Wake phrases skip the language filter, because there is no Vietnamese wake phrase and the first yell must always happen. If the filters leave the pool empty, the picker falls back to the wake phrase.
+  - The first yell follows Klat Language: "Wake up, B**CH!!!" (SFW: "Wake up, human!!!") in English, "Dậy dậy dậy, dầu nhớt đây!!!" in Vietnamese, and one of the two at random on Auto. If no wake phrase matches, it still yells with whatever wake phrase is left; if the filters leave the later pool empty, the picker falls back to the wake phrase.
   - When the pool changes (the reason changes, or `ignored` phrases join from the 3rd yell), a new shuffle bag starts. It never opens with the phrase just said.
   - The tail evaluates its centripetal Catmull-Rom spline itself instead of calling `THREE.CatmullRomCurve3.getPoint`. Three's version boxes a float per coefficient and was the biggest allocator left in the frame. A test checks that the result matches three's curve to 1e-4.
   - The tail samples the spline uniformly by parameter, not by arc length (the prototype's `TubeGeometry` used arc length). The difference is not visible, and arc-length sampling allocates.

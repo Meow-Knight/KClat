@@ -23,6 +23,7 @@ const p = (id: string, text: string, lang: PhraseLang, tag: PhraseTag, explicit 
 export const PHRASES: readonly Phrase[] = [
   p('wake-1', 'Wake up, B**CH!!!', 'en', 'wake', true),
   p('wake-sfw', 'Wake up, human!!!', 'en', 'wake'),
+  p('wake-vi', 'Dậy dậy dậy, dầu nhớt đây!!!', 'vi', 'wake'),
   p('en-01', "Claude's done. Your turn, lazy a**!", 'en', 'done', true),
   p('en-02', 'HEY! The robot is waiting on YOU!', 'en', 'general'),
   p('en-03', 'Get your butt back here, human!', 'en', 'general'),
