@@ -1,5 +1,7 @@
 // The small Ready button next to the sleeping cat: "sleep now, wake me when Claude is done".
 // Icon: a cat's collar bell (pink collar, jingle bell) - ring the bell and the cat will ring you back.
+import { t } from '../i18n';
+import type { UiLanguage } from '../settings';
 
 const ICON = `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
   <path class="collar" d="M3.5 5.2 Q12 9.4 20.5 5.2" fill="none" stroke-width="2.6" stroke-linecap="round"/>
@@ -11,12 +13,10 @@ const ICON = `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
   <circle class="shine" cx="9.6" cy="12" r="1.1"/>
 </svg>`;
 
-const TITLE_OFF = 'Ready: wake me when Claude is done';
-const TITLE_ON = 'Ready: the cat will wake you when Claude is done (click to cancel)';
-
 export class ReadyButton {
   readonly el: HTMLButtonElement;
   private on = false;
+  private lang: UiLanguage = 'en';
 
   constructor(
     parent: HTMLElement,
@@ -48,6 +48,13 @@ export class ReadyButton {
     this.render();
   }
 
+  /** Platform Language for the tooltip. */
+  setLanguage(lang: UiLanguage): void {
+    if (lang === this.lang) return;
+    this.lang = lang;
+    this.render();
+  }
+
   setVisible(visible: boolean): void {
     this.el.hidden = !visible;
   }
@@ -60,7 +67,7 @@ export class ReadyButton {
 
   private render(): void {
     this.el.setAttribute('aria-pressed', String(this.on));
-    this.el.title = this.on ? TITLE_ON : TITLE_OFF;
+    this.el.title = t(this.lang, this.on ? 'ready.on' : 'ready.off');
     this.el.setAttribute('aria-label', this.el.title);
   }
 }

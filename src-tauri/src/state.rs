@@ -256,7 +256,7 @@ pub fn update_settings(app: &AppHandle, change: impl FnOnce(&mut Settings)) -> S
     if let Err(e) = settings::save(&state.settings_path, &next) {
         log::warn(format!("could not save settings: {e}"));
     }
-    crate::tray::sync_settings(&next);
+    crate::tray::sync_settings(app, &next);
     let _ = app.emit(EVENT_SETTINGS, next.clone());
     // Pausing or resuming notifications changes whether the cat is awake.
     publish_state(app);

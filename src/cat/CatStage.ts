@@ -5,7 +5,7 @@ import { Bubble } from '../bubble/Bubble';
 import { ReadyButton } from '../bubble/ReadyButton';
 import { PHRASES } from '../phrases/phrases';
 import { PhrasePicker, type PickerOptions, type WakeReason } from '../phrases/PhrasePicker';
-import { phraseLanguages, type CatSettings } from '../settings';
+import { phraseLanguages, type CatSettings, type UiLanguage } from '../settings';
 import { CatController, type CatPhase } from './CatController';
 import { CatRig, HIT_BOUNDS } from './CatRig';
 import { RenderLoop } from './RenderLoop';
@@ -173,6 +173,11 @@ export class CatStage {
 
   pet(): void {
     this.controller.pet();
+  }
+
+  /** Platform Language for the overlay's own text (the Ready button tooltip). */
+  setUiLanguage(lang: UiLanguage): void {
+    this.readyButton.setLanguage(lang);
   }
 
   /** Reflects the Ready state (from Rust, or the dev page) on the button and the cat's ears. */

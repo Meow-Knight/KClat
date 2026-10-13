@@ -1,11 +1,13 @@
-//! Tray menu (spec §2.3).
+//! Tray menu (spec §2.3). Labels and tooltip follow the Platform Language and change as soon as it does.
 
 use crate::autostart;
 use crate::hooks_installer::{Action, Status};
 use crate::hooks_ui;
-use crate::settings::Settings;
+use crate::i18n::{self, t, tf};
+use crate::settings::{Settings, UiLanguage};
 use crate::state::{self, AppState};
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Mutex, OnceLock};
 use std::thread;
 use tauri::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::TrayIconBuilder;
@@ -27,8 +29,10 @@ const HOOKS_UNINSTALL: &str = "hooks-uninstall";
 const QUIT: &str = "quit";
 const TRAY_ID: &str = "main";
 
-/// The menu items, so changes made elsewhere (the overlay button, the Settings window) can update their ticks.
+/// The menu items, so changes made elsewhere (the overlay button, the Settings window) can update them.
 static ITEMS: OnceLock<Items> = OnceLock::new();
+/// Sessions waiting, so the tooltip can be rewritten when the language changes.
+static WAITING: AtomicUsize = AtomicUsize::new(0);
 
 struct Items {
     ready: CheckMenuItem<Wry>,
@@ -37,6 +41,34 @@ struct Items {
     hide: CheckMenuItem<Wry>,
     autostart: CheckMenuItem<Wry>,
     hooks: Submenu<Wry>,
+    /// Items without a tick, with their catalog key.
+    plain: Vec<(MenuItem<Wry>, &'static str)>,
+    lang: Mutex<UiLanguage>,
+}
+
+impl Items {
+    fn lang(&self) -> UiLanguage {
+        *self.lang.lock().unwrap()
+    }
+
+    fn relabel(&self, lang: UiLanguage) {
+        let checks = [
+            (&self.ready, "tray.ready"),
+            (&self.sfw, "tray.sfw"),
+            (&self.pause, "tray.pause"),
+            (&self.hide, "tray.hide"),
+            (&self.autostart, "tray.startAtLogin"),
+        ];
+        for (item, key) in checks {
+            let _ = item.set_text(t(lang, key));
+        }
+        for (item, key) in &self.plain {
+            let _ = item.set_text(t(lang, key));
+        }
+        let _ = self
+            .hooks
+            .set_text(hooks_title(lang, hooks_ui::current_status()));
+    }
 }
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
@@ -46,82 +78,68 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     if autostart_on != s.start_at_login {
         state::update_settings(app, |s| s.start_at_login = autostart_on);
     }
-
-    let items = Items {
-        ready: CheckMenuItem::with_id(
-            app,
-            READY,
-            "Ready: wake me when Claude is done",
-            true,
-            false,
-            None::<&str>,
-        )?,
-        sfw: CheckMenuItem::with_id(app, SFW, "SFW mode", true, s.sfw_mode, None::<&str>)?,
-        pause: CheckMenuItem::with_id(
-            app,
-            PAUSE,
-            "Pause notifications",
-            true,
-            !s.notifications_enabled,
-            None::<&str>,
-        )?,
-        hide: CheckMenuItem::with_id(
-            app,
-            HIDE,
-            "Hide cat while sleeping",
-            true,
-            s.hide_while_sleeping,
-            None::<&str>,
-        )?,
-        autostart: CheckMenuItem::with_id(
-            app,
-            AUTOSTART,
-            "Start at login",
-            true,
-            autostart_on,
-            None::<&str>,
-        )?,
-        hooks: Submenu::with_items(
-            app,
-            hooks_title(hooks_ui::current_status()),
-            true,
-            &[
-                &MenuItem::with_id(app, HOOKS_INSTALL, "Install", true, None::<&str>)?,
-                &MenuItem::with_id(app, HOOKS_REPAIR, "Repair", true, None::<&str>)?,
-                &MenuItem::with_id(app, HOOKS_UNINSTALL, "Uninstall", true, None::<&str>)?,
-            ],
-        )?,
+    let lang = s.ui_language;
+    let check = |id: &str, key: &str, on: bool| {
+        CheckMenuItem::with_id(app, id, t(lang, key), true, on, None::<&str>)
     };
+    let plain = |id: &str, key: &'static str| {
+        MenuItem::with_id(app, id, t(lang, key), true, None::<&str>).map(|item| (item, key))
+    };
+
+    let ready = check(READY, "tray.ready", false)?;
+    let sfw = check(SFW, "tray.sfw", s.sfw_mode)?;
+    let pause = check(PAUSE, "tray.pause", !s.notifications_enabled)?;
+    let hide = check(HIDE, "tray.hide", s.hide_while_sleeping)?;
+    let autostart = check(AUTOSTART, "tray.startAtLogin", autostart_on)?;
+    let install = plain(HOOKS_INSTALL, "tray.hooks.install")?;
+    let repair = plain(HOOKS_REPAIR, "tray.hooks.repair")?;
+    let uninstall = plain(HOOKS_UNINSTALL, "tray.hooks.uninstall")?;
+    let hooks = Submenu::with_items(
+        app,
+        hooks_title(lang, hooks_ui::current_status()),
+        true,
+        &[&install.0, &repair.0, &uninstall.0],
+    )?;
+    let wake_test = plain(WAKE_TEST, "tray.wakeTest")?;
+    let sleep = plain(SLEEP, "tray.sleep")?;
+    let dismiss = plain(DISMISS_ALL, "tray.dismissAll")?;
+    let reset = plain(RESET_POSITION, "tray.resetPosition")?;
+    let quit = plain(QUIT, "tray.quit")?;
     let menu = Menu::with_items(
         app,
         &[
-            &items.ready,
+            &ready,
             &PredefinedMenuItem::separator(app)?,
-            &MenuItem::with_id(app, WAKE_TEST, "Wake test", true, None::<&str>)?,
-            &MenuItem::with_id(app, SLEEP, "Sleep", true, None::<&str>)?,
-            &MenuItem::with_id(app, DISMISS_ALL, "Dismiss all", true, None::<&str>)?,
-            &MenuItem::with_id(
-                app,
-                RESET_POSITION,
-                "Move the cat back to the corner",
-                true,
-                None::<&str>,
-            )?,
+            &wake_test.0,
+            &sleep.0,
+            &dismiss.0,
+            &reset.0,
             &PredefinedMenuItem::separator(app)?,
-            &items.sfw,
-            &items.pause,
-            &items.hide,
-            &items.autostart,
+            &sfw,
+            &pause,
+            &hide,
+            &autostart,
             &PredefinedMenuItem::separator(app)?,
-            &items.hooks,
+            &hooks,
             &PredefinedMenuItem::separator(app)?,
-            &MenuItem::with_id(app, QUIT, "Quit", true, None::<&str>)?,
+            &quit.0,
         ],
     )?;
 
-    let _ = ITEMS.set(items);
+    let _ = ITEMS.set(Items {
+        ready,
+        sfw,
+        pause,
+        hide,
+        autostart,
+        hooks,
+        plain: vec![
+            install, repair, uninstall, wake_test, sleep, dismiss, reset, quit,
+        ],
+        lang: Mutex::new(lang),
+    });
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
-        .tooltip("Klat")
+        .tooltip(tooltip(lang, 0))
         .menu(&menu)
         .on_menu_event(|app, event| on_menu(app, &event));
     if let Some(icon) = app.default_window_icon() {
@@ -144,13 +162,19 @@ pub fn set_ready_checked(on: bool) {
     }
 }
 
-/// Keeps the ticks in step with settings changed elsewhere (the Settings window).
-pub fn sync_settings(s: &Settings) {
-    if let Some(items) = ITEMS.get() {
-        set_checked(&items.sfw, s.sfw_mode);
-        set_checked(&items.pause, !s.notifications_enabled);
-        set_checked(&items.hide, s.hide_while_sleeping);
-        set_checked(&items.autostart, s.start_at_login);
+/// Keeps ticks and labels in step with settings changed elsewhere (the Settings window).
+pub fn sync_settings(app: &AppHandle, s: &Settings) {
+    let Some(items) = ITEMS.get() else {
+        return;
+    };
+    set_checked(&items.sfw, s.sfw_mode);
+    set_checked(&items.pause, !s.notifications_enabled);
+    set_checked(&items.hide, s.hide_while_sleeping);
+    set_checked(&items.autostart, s.start_at_login);
+    let previous = std::mem::replace(&mut *items.lang.lock().unwrap(), s.ui_language);
+    if previous != s.ui_language {
+        items.relabel(s.ui_language);
+        set_waiting(app, WAITING.load(Ordering::Relaxed));
     }
 }
 
@@ -159,19 +183,25 @@ pub fn refresh_hooks_title() {
     if let Some(items) = ITEMS.get() {
         let _ = items
             .hooks
-            .set_text(hooks_title(hooks_ui::current_status()));
+            .set_text(hooks_title(items.lang(), hooks_ui::current_status()));
     }
 }
 
-/// Tooltip shows how many sessions are waiting, e.g. "Klat · 2 sessions waiting".
+/// "Klat · 2 sessions waiting".
+fn tooltip(lang: UiLanguage, count: usize) -> String {
+    match count {
+        0 => t(lang, "tray.tooltip.idle"),
+        1 => t(lang, "tray.tooltip.one"),
+        n => tf(lang, "tray.tooltip.many", &[("count", &n.to_string())]),
+    }
+}
+
+/// Tooltip shows how many sessions are waiting.
 pub fn set_waiting(app: &AppHandle, count: usize) {
-    let tip = match count {
-        0 => "Klat".to_owned(),
-        1 => "Klat · 1 session waiting".to_owned(),
-        n => format!("Klat · {n} sessions waiting"),
-    };
+    WAITING.store(count, Ordering::Relaxed);
+    let lang = ITEMS.get().map_or_else(|| i18n::current(app), Items::lang);
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        let _ = tray.set_tooltip(Some(tip));
+        let _ = tray.set_tooltip(Some(tooltip(lang, count)));
     }
 }
 
@@ -214,48 +244,48 @@ fn on_menu(app: &AppHandle, event: &MenuEvent) {
 fn set_autostart(app: &AppHandle, on: bool, item: &CheckMenuItem<Wry>) {
     if let Err(e) = autostart::set(app, on) {
         let _ = item.set_checked(!on);
-        notify_error(app, format!("Could not change \"Start at login\": {e}"));
+        let text = tf(
+            i18n::current(app),
+            "dialog.startAtLoginFailed",
+            &[("error", &e)],
+        );
+        message(app, MessageDialogKind::Error, text);
     }
 }
 
 /// A plain message box from the tray app.
 pub fn notify(app: &AppHandle, text: impl Into<String>) {
+    message(app, MessageDialogKind::Info, text);
+}
+
+fn message(app: &AppHandle, kind: MessageDialogKind, text: impl Into<String>) {
     app.dialog()
         .message(text)
         .title("Klat")
-        .kind(MessageDialogKind::Info)
+        .kind(kind)
         .show(|_| {});
 }
 
-fn notify_error(app: &AppHandle, text: impl Into<String>) {
-    app.dialog()
-        .message(text)
-        .title("Klat")
-        .kind(MessageDialogKind::Error)
-        .show(|_| {});
-}
-
-fn hooks_title(status: Status) -> &'static str {
-    match status {
-        Status::Installed => "Hooks (installed)",
-        Status::NeedsRepair => "Hooks (needs repair)",
-        Status::NotInstalled => "Hooks (not installed)",
-    }
+fn hooks_title(lang: UiLanguage, status: Status) -> String {
+    t(
+        lang,
+        match status {
+            Status::Installed => "tray.hooks.installed",
+            Status::NeedsRepair => "tray.hooks.needsRepair",
+            Status::NotInstalled => "tray.hooks.notInstalled",
+        },
+    )
 }
 
 /// File I/O off the menu thread; the outcome is reported in a message box.
 fn run_installer(app: &AppHandle, action: Action) {
     let app = app.clone();
     thread::spawn(move || {
-        let (kind, text) = match hooks_ui::apply(action) {
+        let (kind, text) = match hooks_ui::apply(i18n::current(&app), action) {
             Ok(text) => (MessageDialogKind::Info, text),
             Err(text) => (MessageDialogKind::Error, text),
         };
         refresh_hooks_title();
-        app.dialog()
-            .message(text)
-            .title("Klat")
-            .kind(kind)
-            .show(|_| {});
+        message(&app, kind, text);
     });
 }

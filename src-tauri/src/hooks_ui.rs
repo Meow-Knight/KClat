@@ -1,8 +1,10 @@
 //! What the tray and the Settings window show and do about the Claude Code hooks (the file work itself is in
-//! hooks_installer.rs).
+//! hooks_installer.rs). Messages are in the Platform Language; the log stays in English.
 
-use crate::hooks_installer::{self as hooks, Action, Report, Status};
+use crate::hooks_installer::{self as hooks, Action, InstallError, Report, Status};
+use crate::i18n::{t, tf};
 use crate::log;
+use crate::settings::UiLanguage;
 use std::path::{Path, PathBuf};
 
 /// `~/.claude/settings.json` and the hook adapter next to the app, if both can be located.
@@ -21,12 +23,9 @@ pub fn current_status() -> Status {
 
 /// Installs or removes the hooks. Ok and Err both carry the text to show the user. Does file I/O: call it off
 /// the UI thread.
-pub fn apply(action: Action) -> Result<String, String> {
+pub fn apply(lang: UiLanguage, action: Action) -> Result<String, String> {
     let Some((settings, exe)) = paths() else {
-        return Err(
-            "Could not locate %USERPROFILE%\\.claude\\settings.json or the hook program."
-                .to_owned(),
-        );
+        return Err(t(lang, "hooks.notFound"));
     };
     match hooks::apply(&settings, &exe, action) {
         Ok(report) => {
@@ -34,27 +33,97 @@ pub fn apply(action: Action) -> Result<String, String> {
                 "hooks {action:?}: {report:?} (exe {})",
                 exe.display()
             ));
-            Ok(success_text(action, &report, &settings))
+            Ok(success_text(lang, action, &report, &settings))
         }
         Err(e) => {
             log::warn(format!("hooks {action:?} failed: {e}"));
-            Err(e.to_string())
+            Err(error_text(lang, &e))
         }
     }
 }
 
-fn success_text(action: Action, report: &Report, settings: &Path) -> String {
-    let what = match action {
-        Action::Install => "Klat hooks are installed",
-        Action::Uninstall => "Klat hooks are removed",
+fn success_text(lang: UiLanguage, action: Action, report: &Report, settings: &Path) -> String {
+    let prefix = match action {
+        Action::Install => "hooks.install",
+        Action::Uninstall => "hooks.uninstall",
     };
+    let path = settings.display().to_string();
     match report {
-        Report::NoChange => format!("{what}. Nothing needed to change in {}.", settings.display()),
-        Report::Written { backup: Some(b) } => format!(
-            "{what} in {}.\n\nYour previous settings were saved to {}.\n\nNew Claude Code sessions pick this up; restart open sessions if the cat stays asleep.",
-            settings.display(),
-            b.display()
+        Report::NoChange => tf(lang, &format!("{prefix}.noChange"), &[("path", &path)]),
+        Report::Written { backup: Some(b) } => tf(
+            lang,
+            &format!("{prefix}.written"),
+            &[("path", &path), ("backup", &b.display().to_string())],
         ),
-        Report::Written { backup: None } => format!("{what} in {} (new file).", settings.display()),
+        Report::Written { backup: None } => {
+            tf(lang, &format!("{prefix}.newFile"), &[("path", &path)])
+        }
+    }
+}
+
+fn error_text(lang: UiLanguage, e: &InstallError) -> String {
+    match e {
+        InstallError::BrokenJson(detail) => {
+            tf(lang, "hooks.error.brokenJson", &[("detail", detail)])
+        }
+        InstallError::UnexpectedShape(what) => {
+            tf(lang, "hooks.error.unexpectedShape", &[("what", what)])
+        }
+        InstallError::ExeMissing(p) => tf(
+            lang,
+            "hooks.error.exeMissing",
+            &[("path", &p.display().to_string())],
+        ),
+        InstallError::ChangedConcurrently => t(lang, "hooks.error.changedConcurrently"),
+        InstallError::Io(err) => tf(lang, "hooks.error.io", &[("detail", &err.to_string())]),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io;
+
+    #[test]
+    fn every_outcome_has_a_text_in_both_languages() {
+        let settings = Path::new("/home/me/.claude/settings.json");
+        let reports = [
+            Report::NoChange,
+            Report::Written {
+                backup: Some(PathBuf::from("/home/me/.claude/settings.json.bak.1")),
+            },
+            Report::Written { backup: None },
+        ];
+        for lang in [UiLanguage::En, UiLanguage::Vi] {
+            for action in [Action::Install, Action::Uninstall] {
+                for report in &reports {
+                    let text = success_text(lang, action, report, settings);
+                    assert!(text.contains("/home/me/.claude/settings.json"), "{text}");
+                    assert!(!text.contains('{'), "unfilled placeholder: {text}");
+                }
+            }
+            let errors = [
+                InstallError::BrokenJson("line 1".into()),
+                InstallError::UnexpectedShape("\"hooks\""),
+                InstallError::ExeMissing(PathBuf::from("/x/klat-hook")),
+                InstallError::ChangedConcurrently,
+                InstallError::Io(io::Error::other("disk full")),
+            ];
+            for e in &errors {
+                let text = error_text(lang, e);
+                assert!(!text.contains('{') && !text.starts_with("hooks."), "{text}");
+            }
+        }
+    }
+
+    #[test]
+    fn vietnamese_texts_are_vietnamese() {
+        let text = success_text(
+            UiLanguage::Vi,
+            Action::Install,
+            &Report::NoChange,
+            Path::new("s.json"),
+        );
+        assert!(text.contains("đã được cài"), "{text}");
     }
 }

@@ -4,6 +4,7 @@ use crate::autostart;
 use crate::cursor::Rect;
 use crate::hooks_installer::{Action, Status};
 use crate::hooks_ui;
+use crate::i18n;
 use crate::settings::{self, Settings};
 use crate::state::{self, AppState, CatState};
 use serde::Serialize;
@@ -69,10 +70,12 @@ pub struct HooksResult {
     pub message: String,
 }
 
-/// `action`: "install" (also repairs) or "uninstall". File I/O runs off the main thread.
+/// `action`: "install" (also repairs) or "uninstall". File I/O runs off the main thread; the message is in
+/// the Platform Language.
 #[tauri::command]
-pub async fn hooks_apply(action: Action) -> HooksResult {
-    let result = tauri::async_runtime::spawn_blocking(move || hooks_ui::apply(action))
+pub async fn hooks_apply(app: AppHandle, action: Action) -> HooksResult {
+    let lang = i18n::current(&app);
+    let result = tauri::async_runtime::spawn_blocking(move || hooks_ui::apply(lang, action))
         .await
         .unwrap_or_else(|e| Err(e.to_string()));
     crate::tray::refresh_hooks_title();

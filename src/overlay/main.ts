@@ -52,6 +52,7 @@ function applyState(s: CatStatePayload): void {
 function applySettings(next: AppSettings): void {
   settings = next;
   stage.setSettings(next);
+  stage.setUiLanguage(next.uiLanguage);
   syncHidden();
 }
 
@@ -62,6 +63,7 @@ await bridge.onSettings(applySettings);
 await bridge.onCursor((p) => stage.lookAt(p));
 await bridge.onGrab((mode) => stage.setGrab(mode));
 ready = true;
+stage.setUiLanguage(settings.uiLanguage);
 applyState(await bridge.getState());
 syncHidden();
 void bridge.setHitboxes(stage.hitboxes());

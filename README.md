@@ -191,11 +191,15 @@ With the app running and the hook built:
 | `src/cat/CatStage.ts` | Composes renderer, rig, controller, bubble and loop; reports hitboxes |
 | `src/bubble/Bubble.ts` | Speech bubble |
 | `src/bubble/ReadyButton.ts` | The Ready button (a cat's collar bell) |
+| `src/i18n/{en,vi}.json`, `src/i18n/index.ts` | Platform Language texts, shared with Rust; `t(lang, key, vars)` |
 | `src/phrases/` | Phrase data and `PhrasePicker` |
 | `src/bridge/tauriBridge.ts` | Typed events and commands |
 | `src/overlay/main.ts`, `dev.ts` | Overlay entry, dev page entry |
 | `src-tauri/src/overlay.rs` | Overlay window (transparent, topmost, no taskbar, never activates; DPI-correct placement) |
-| `src-tauri/src/tray.rs` | Tray menu, autostart, hook installer UI |
+| `src-tauri/src/tray.rs` | Tray menu; labels follow the Platform Language |
+| `src-tauri/src/i18n.rs` | Reads the shared `src/i18n` catalogs |
+| `src-tauri/src/autostart.rs` | Start at login |
+| `src-tauri/src/hooks_ui.rs` | Hook status and install/uninstall messages for the tray and the Settings window |
 | `src-tauri/src/cursor.rs` | Cursor poller: click-through and `cat://cursor` |
 | `src-tauri/src/state.rs` | Shared state, `cat://state` / `cat://settings` |
 | `src-tauri/src/session_store.rs` | Hook event mapping and per-session state. Pure logic |

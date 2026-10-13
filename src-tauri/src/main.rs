@@ -8,6 +8,7 @@ mod drag;
 mod event_server;
 mod hooks_installer;
 mod hooks_ui;
+mod i18n;
 mod log;
 mod overlay;
 mod session_store;
@@ -30,10 +31,7 @@ fn main() {
         // Must come first: a second launch hands over to this instance and exits before creating anything.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             log::info("second launch ignored: already running");
-            tray::notify(
-                app,
-                "Klat is already running. Look for the cat in the tray.",
-            );
+            tray::notify(app, i18n::t(i18n::current(app), "dialog.alreadyRunning"));
         }))
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
