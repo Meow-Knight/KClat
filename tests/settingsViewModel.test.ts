@@ -9,14 +9,17 @@ import {
   toDisplay,
 } from '../src/settings-window/viewModel';
 
-const { yellIntervalMs: yell, maxYellsPerWake: yells, staleAfterMs: stale } = NUMBER_FIELDS;
-const settings = { yellIntervalMs: 30_000, maxYellsPerWake: 10, staleAfterMs: 1_800_000 };
+const yell = NUMBER_FIELDS.yellIntervalMs;
+const settings = { yellIntervalMs: 30_000 };
 
 describe('settings window view model', () => {
-  it('shows numbers in seconds, times and minutes', () => {
+  it('shows the yell interval in seconds', () => {
     expect(toDisplay(yell, settings)).toBe(30);
-    expect(toDisplay(yells, settings)).toBe(10);
-    expect(toDisplay(stale, settings)).toBe(30);
+    expect(toDisplay(yell, { yellIntervalMs: 7_400 })).toBe(7);
+  });
+
+  it('offers only the yell interval among the numbers', () => {
+    expect(Object.keys(NUMBER_FIELDS)).toEqual(['yellIntervalMs']);
   });
 
   it('turns typed values back into settings values, clamped and whole', () => {
@@ -25,8 +28,7 @@ describe('settings window view model', () => {
     expect(fromDisplay(yell, '7,4')).toBe(7_000);
     expect(fromDisplay(yell, '1')).toBe(5_000);
     expect(fromDisplay(yell, '9999')).toBe(600_000);
-    expect(fromDisplay(yells, 0)).toBe(1);
-    expect(fromDisplay(stale, '300')).toBe(14_400_000);
+    expect(fromDisplay(yell, 0)).toBe(5_000);
   });
 
   it('rejects input that is not a number', () => {
@@ -43,7 +45,6 @@ describe('settings window view model', () => {
     // An off-grid value from a hand-edited file snaps to the grid.
     expect(stepped(yell, 7, 1)).toBe(10);
     expect(stepped(yell, 7, -1)).toBe(5);
-    expect(stepped(yells, 10, 1)).toBe(11);
   });
 
   it('offers install, repair or nothing depending on the hooks status', () => {

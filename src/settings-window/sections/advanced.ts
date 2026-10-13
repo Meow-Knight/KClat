@@ -1,4 +1,4 @@
-// Advanced: the three timing numbers, and buttons to try the cat out.
+// Advanced: how often the cat yells, and buttons to try the cat out.
 import type { AppSettings } from '../../settings';
 import { button, card, row, stepper, h, type Control } from '../controls';
 import type { Ctx, SectionView } from '../context';
@@ -7,8 +7,6 @@ import type { UiKey } from '../../i18n';
 
 const ROWS: readonly { field: NumberField; title: UiKey; desc: UiKey }[] = [
   { field: NUMBER_FIELDS.yellIntervalMs, title: 'settings.advanced.yellInterval', desc: 'settings.advanced.yellInterval.desc' },
-  { field: NUMBER_FIELDS.maxYellsPerWake, title: 'settings.advanced.maxYells', desc: 'settings.advanced.maxYells.desc' },
-  { field: NUMBER_FIELDS.staleAfterMs, title: 'settings.advanced.stale', desc: 'settings.advanced.stale.desc' },
 ];
 
 export function advancedSection(ctx: Ctx): SectionView {

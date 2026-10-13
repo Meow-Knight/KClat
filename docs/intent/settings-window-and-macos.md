@@ -8,7 +8,7 @@
 | **Outcome** | Klat có một **cửa sổ Settings** riêng để chỉnh mọi thứ; tray chỉ còn thao tác nhanh; Klat chạy được trên **macOS**. |
 | **Tray** | Chỉ giữ Ready, Pause, Dismiss all, *Settings…*, Quit. |
 | **Giao diện Settings** | Bố cục chặt kiểu Settings của hệ điều hành: sidebar trái (General / Language / Hooks / Advanced), mỗi dòng có tên setting, mô tả ngắn và control bên phải, tự đổi sáng/tối theo hệ thống. Thêm chất Klat ở mức vừa phải: mèo nhỏ ở header, màu nhấn lấy từ aura, phần Language cho xem trước một câu thoại mẫu. Phải đẹp, bắt mắt, bố cục chặt chẽ và hợp lý. |
-| **Nội dung Settings** | SFW, Hide while sleeping, Start at login, Reduce motion; Hooks (Install/Repair/Uninstall); 3 tham số đang ẩn (khoảng cách giữa hai lần gọi, số lần gọi tối đa, thời gian session bị coi là cũ); mục Advanced chứa Wake test và Sleep. |
+| **Nội dung Settings** | SFW, Hide while sleeping, Start at login, Reduce motion; Hooks (Install/Repair/Uninstall); khoảng cách giữa hai lần gọi (số lần gọi tối đa và thời gian session bị coi là cũ bị bỏ khỏi cửa sổ ngày 2026-10-13); mục Advanced chứa Wake test và Sleep. |
 | **Ngôn ngữ** | **Platform Language** (English / Tiếng Việt) đổi toàn bộ chữ giao diện: tray, Settings, thông báo. Mặc định English. **Klat Language** (English / Tiếng Việt / Auto) chỉ đổi câu thoại của mèo; Auto random cả hai thứ tiếng. Mặc định Auto. Đổi setting là áp dụng ngay, không cần nút Save. |
 | **User** | Người dùng thường: tải `.dmg` về và mở theo guide có ảnh. Dev: tự build từ source theo guide. |
 | **Success** | Trên Windows mọi thứ chạy như cũ, cộng thêm cửa sổ Settings và hai lựa chọn ngôn ngữ. Code Rust biên dịch được cho target macOS. Có hai tài liệu: build `.dmg` (cho dev) và cài đặt, mở app khi chưa ký (cho người dùng thường). |

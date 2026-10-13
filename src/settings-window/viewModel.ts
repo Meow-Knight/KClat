@@ -7,9 +7,12 @@ import type { AppSettings } from '../settings';
 export type SectionId = 'general' | 'language' | 'hooks' | 'advanced';
 export const SECTIONS: readonly SectionId[] = ['general', 'language', 'hooks', 'advanced'];
 
-/** A number setting shown in a friendlier unit. Ranges match src-tauri/src/settings.rs. */
+/**
+ * A number setting shown in a friendlier unit. Ranges match src-tauri/src/settings.rs. maxYellsPerWake and
+ * staleAfterMs stay out of the window (owner's call, 2026-10-13); they can still be set in settings.json.
+ */
 export interface NumberField {
-  key: 'yellIntervalMs' | 'maxYellsPerWake' | 'staleAfterMs';
+  key: 'yellIntervalMs';
   /** Settings value per displayed unit. */
   scale: number;
   min: number;
@@ -20,8 +23,6 @@ export interface NumberField {
 
 export const NUMBER_FIELDS: Readonly<Record<NumberField['key'], NumberField>> = {
   yellIntervalMs: { key: 'yellIntervalMs', scale: 1000, min: 5, max: 600, step: 5, unit: 'settings.unit.seconds' },
-  maxYellsPerWake: { key: 'maxYellsPerWake', scale: 1, min: 1, max: 50, step: 1, unit: 'settings.unit.times' },
-  staleAfterMs: { key: 'staleAfterMs', scale: 60_000, min: 5, max: 240, step: 5, unit: 'settings.unit.minutes' },
 };
 
 /** The value to display for a setting, in the field's unit. */

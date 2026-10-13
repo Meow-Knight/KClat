@@ -174,7 +174,7 @@ Settings. **Không dịch:** log file, câu thoại (thuộc Klat Language), tê
 | **General** | Card "Startup": Start at login. Card "Cat": Pause notifications (đồng bộ hai chiều với tray), Hide cat while sleeping, SFW mode, Reduce motion. Card "Moving the cat": một dòng hướng dẫn "Giữ Space, nhấn chuột lên mèo rồi kéo; thả Space để đặt". Trên macOS dòng này kèm trạng thái quyền Accessibility và nút "Cấp quyền" khi `drag_permission` = `missing`. |
 | **Language** | Card "Platform Language": segmented English / Tiếng Việt. Card "Klat Language": segmented English / Tiếng Việt / Auto + **ô xem trước**: bong bóng thoại cùng kiểu bubble overlay, hiện một câu bốc bằng `PhrasePicker` theo `klatLanguage` + `sfwMode`, nút "Câu khác" (↻) bốc câu mới. |
 | **Hooks** | Card trạng thái: pill Installed / Needs repair / Not installed, đường dẫn `settings.json` (monospace, có thể chọn copy). Nút chính đổi theo trạng thái (Install / Repair; ẩn khi Installed), nút phụ Uninstall. Kết quả hiện **banner inline** trong card (thành công xanh / lỗi đỏ), không bật hộp thoại. |
-| **Advanced** | Card "Timing": khoảng cách giữa hai lần gọi (giây), số lần gọi tối đa, thời gian session bị coi là cũ (phút); mỗi dòng là stepper số có đơn vị. Card "Test": Wake test, Sleep. |
+| **Advanced** | Card "Timing": khoảng cách giữa hai lần gọi (giây), stepper số có đơn vị. Card "Test": Wake test, Sleep. Số lần gọi tối đa và thời gian session bị coi là cũ **không** có trong cửa sổ (quyết định 2026-10-13); vẫn sửa được trong `settings.json`. |
 
 ### 4.3 Hệ thiết kế
 
