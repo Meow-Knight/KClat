@@ -85,6 +85,13 @@ pub async fn hooks_apply(app: AppHandle, action: Action) -> HooksResult {
     }
 }
 
+/// Opens (or brings forward) the Settings window. Async: creating a window from a sync command can deadlock
+/// on Windows.
+#[tauri::command]
+pub async fn open_settings(app: AppHandle) -> Result<(), String> {
+    crate::settings_window::open(&app).map_err(|e| e.to_string())
+}
+
 /// Bubble clicked: same as tray "Dismiss all".
 #[tauri::command]
 pub fn dismiss(app: AppHandle) {

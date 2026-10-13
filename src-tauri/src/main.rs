@@ -13,6 +13,7 @@ mod log;
 mod overlay;
 mod session_store;
 mod settings;
+mod settings_window;
 mod state;
 mod tray;
 
@@ -48,6 +49,7 @@ fn main() {
             commands::sleep,
             commands::hooks_status,
             commands::hooks_apply,
+            commands::open_settings,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::ScaleFactorChanged { .. } = event {

@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::thread;
 use tauri::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
-use tauri::tray::TrayIconBuilder;
+use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, Wry};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
@@ -26,6 +26,7 @@ const AUTOSTART: &str = "start-at-login";
 const HOOKS_INSTALL: &str = "hooks-install";
 const HOOKS_REPAIR: &str = "hooks-repair";
 const HOOKS_UNINSTALL: &str = "hooks-uninstall";
+const SETTINGS: &str = "settings";
 const QUIT: &str = "quit";
 const TRAY_ID: &str = "main";
 
@@ -104,6 +105,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let sleep = plain(SLEEP, "tray.sleep")?;
     let dismiss = plain(DISMISS_ALL, "tray.dismissAll")?;
     let reset = plain(RESET_POSITION, "tray.resetPosition")?;
+    let settings_item = plain(SETTINGS, "tray.settings")?;
     let quit = plain(QUIT, "tray.quit")?;
     let menu = Menu::with_items(
         app,
@@ -122,6 +124,8 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
             &PredefinedMenuItem::separator(app)?,
             &hooks,
             &PredefinedMenuItem::separator(app)?,
+            &settings_item.0,
+            &PredefinedMenuItem::separator(app)?,
             &quit.0,
         ],
     )?;
@@ -134,14 +138,32 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         autostart,
         hooks,
         plain: vec![
-            install, repair, uninstall, wake_test, sleep, dismiss, reset, quit,
+            install,
+            repair,
+            uninstall,
+            wake_test,
+            sleep,
+            dismiss,
+            reset,
+            settings_item,
+            quit,
         ],
         lang: Mutex::new(lang),
     });
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .tooltip(tooltip(lang, 0))
         .menu(&menu)
-        .on_menu_event(|app, event| on_menu(app, &event));
+        .on_menu_event(|app, event| on_menu(app, &event))
+        // Windows: double-clicking the tray icon opens Settings.
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::DoubleClick {
+                button: MouseButton::Left,
+                ..
+            } = event
+            {
+                open_settings(tray.app_handle());
+            }
+        });
     if let Some(icon) = app.default_window_icon() {
         builder = builder.icon(icon.clone());
     }
@@ -236,8 +258,15 @@ fn on_menu(app: &AppHandle, event: &MenuEvent) {
         AUTOSTART => set_autostart(app, checked(&items.autostart), &items.autostart),
         HOOKS_INSTALL | HOOKS_REPAIR => run_installer(app, Action::Install),
         HOOKS_UNINSTALL => run_installer(app, Action::Uninstall),
+        SETTINGS => open_settings(app),
         QUIT => app.exit(0),
         _ => {}
+    }
+}
+
+fn open_settings(app: &AppHandle) {
+    if let Err(e) = crate::settings_window::open(app) {
+        crate::log::warn(format!("could not open settings: {e}"));
     }
 }
 

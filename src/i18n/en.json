@@ -14,6 +14,7 @@
   "tray.hooks.install": "Install",
   "tray.hooks.repair": "Repair",
   "tray.hooks.uninstall": "Uninstall",
+  "tray.settings": "Settings…",
   "tray.quit": "Quit",
   "tray.tooltip.idle": "Klat",
   "tray.tooltip.one": "Klat · 1 session waiting",

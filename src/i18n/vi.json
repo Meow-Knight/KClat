@@ -14,6 +14,7 @@
   "tray.hooks.install": "Cài đặt",
   "tray.hooks.repair": "Sửa",
   "tray.hooks.uninstall": "Gỡ bỏ",
+  "tray.settings": "Cài đặt…",
   "tray.quit": "Thoát",
   "tray.tooltip.idle": "Klat",
   "tray.tooltip.one": "Klat · 1 phiên đang chờ",
