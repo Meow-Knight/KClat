@@ -62,6 +62,7 @@ fn main() {
             // Logged here, not before the builder: a second launch exits inside the single-instance plugin.
             log::info(format!("Klat {} starting", env!("CARGO_PKG_VERSION")));
             overlay::create(app.handle())?;
+            autostart::reconcile(app.handle());
             tray::create(app.handle())?;
             cursor::start(app.handle().clone());
             drag::start(app.handle().clone());

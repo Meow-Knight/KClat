@@ -11,13 +11,13 @@ Look for the cat in the tray (it may be under the **^** hidden-icons arrow). The
 
 ## 2. Are the hooks installed?
 
-The tray's **Hooks** submenu title shows the status:
+Tray → **Settings…** → **Hooks** shows the status (the dot next to **Hooks** in the sidebar too):
 
-| Title | Meaning | What to do |
+| Status | Meaning | What to do |
 |---|---|---|
-| Hooks (installed) | All entries are present and point at this app's `klat-hook.exe` | Nothing |
-| Hooks (needs repair) | Some entries are missing, duplicated, or point at another path (for example, you moved or reinstalled the app, or switched between a dev build and the installed one) | **Hooks → Repair** |
-| Hooks (not installed) | No Klat entries | **Hooks → Install** |
+| Installed | All entries are present and point at this app's `klat-hook.exe` | Nothing |
+| Needs repair | Some entries are missing, duplicated, or point at another path (for example, you moved or reinstalled the app, or switched between a dev build and the installed one) | **Repair** |
+| Not installed | No Klat entries | **Install** |
 
 To check by hand, open `%USERPROFILE%\.claude\settings.json` and look under `"hooks"` for entries like this:
 
@@ -59,7 +59,7 @@ If `settings.json` is not valid JSON, **Install / Repair / Uninstall refuse to w
 
 ## 7. Uninstalling
 
-Run **Hooks → Uninstall** before removing the app. It removes only Klat's entries and keeps everything else in `settings.json`, including other hooks and the order of keys. If the app is already gone, delete the entries whose `command` contains `klat-hook.exe` by hand. While the app is not running, leftover entries only cost a few milliseconds per hook.
+Run Settings → **Hooks** → **Uninstall** before removing the app. It removes only Klat's entries and keeps everything else in `settings.json`, including other hooks and the order of keys. If the app is already gone, delete the entries whose `command` contains `klat-hook.exe` by hand. While the app is not running, leftover entries only cost a few milliseconds per hook.
 
 ## What the hook never does
 

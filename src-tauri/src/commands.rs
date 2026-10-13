@@ -78,7 +78,6 @@ pub async fn hooks_apply(app: AppHandle, action: Action) -> HooksResult {
     let result = tauri::async_runtime::spawn_blocking(move || hooks_ui::apply(lang, action))
         .await
         .unwrap_or_else(|e| Err(e.to_string()));
-    crate::tray::refresh_hooks_title();
     match result {
         Ok(message) => HooksResult { ok: true, message },
         Err(message) => HooksResult { ok: false, message },

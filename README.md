@@ -13,7 +13,7 @@ Everything runs locally: no telemetry, no cloud. The hooks only report to the ap
 
 1. Run `Klat_<version>_x64-setup.exe`. It is a per-user install into `%LOCALAPPDATA%\Klat`, so no admin rights are needed. The installer contains `klat.exe` and the hook program `klat-hook.exe`.
 2. Start **Klat**. A sleeping cat appears in the bottom-right corner, and a cat icon appears in the tray (it may be under the **^** hidden-icons arrow).
-3. Tray → **Hooks → Install**. This adds Klat's hooks to `%USERPROFILE%\.claude\settings.json`, after saving a backup. Your other hooks and settings stay as they are.
+3. Tray → **Settings…** → **Hooks** → **Install**. This adds Klat's hooks to `%USERPROFILE%\.claude\settings.json`, after saving a backup. Your other hooks and settings stay as they are.
 4. Restart any open Claude Code sessions. From now on the cat wakes when Claude asks for permission or input. Before you look away from a long task, click the **bell button** to the right of the cat (Ready) to be woken when Claude finishes.
 
 You need Windows 10/11 with the WebView2 runtime, which comes with Windows 11 and recent Windows 10.
@@ -34,24 +34,30 @@ You need Windows 10/11 with the WebView2 runtime, which comes with Windows 11 an
 
 The overlay never takes focus, and clicks on its empty area go through to the window below.
 
-**Tray menu:**
+**Tray menu** (quick actions only):
 
 | Item | What it does |
 |---|---|
 | Ready: wake me when Claude is done | Same as the bell button; the two stay in sync |
-| Wake test | Wakes the cat without Claude Code |
-| Sleep / Dismiss all | Puts the cat to sleep and marks waiting sessions as seen |
-| Move the cat back to the corner | Forgets the spot you dragged it to |
-| SFW mode | No swearing (the English first line becomes "Wake up, human!!!"; the Vietnamese one is already clean) |
 | Pause notifications | The cat stays asleep. Sessions are still tracked, and unpausing wakes it if something is still waiting |
-| Hide cat while sleeping | The cat shows only while it is awake |
-| Start at login | Off by default. Adds or removes Klat in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` |
-| Hooks → Install / Repair / Uninstall | Manage the entries in `settings.json` (see [Hooks](#hooks)). The submenu title shows the current status |
+| Dismiss all | Puts the cat to sleep and marks waiting sessions as seen |
+| Settings… | Opens the Settings window (on Windows, double-clicking the tray icon does too) |
 | Quit | Quits the app |
 
 The tray tooltip shows how many sessions are waiting.
 
-**Settings** are in `%APPDATA%\Klat\settings.json`. Tray toggles write the file immediately. Hand edits are read at start-up. A missing or invalid field falls back to its default. A file that is not JSON at all is renamed to `settings.json.corrupt.<time>` and replaced with defaults.
+**Settings window:**
+
+| Section | What is in it |
+|---|---|
+| General | Start at login (off by default; an entry in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`), Pause notifications, Hide the cat while it sleeps, SFW mode (no swearing; the English first line becomes "Wake up, human!!!", the Vietnamese one is already clean), Reduce motion, and how to move the cat |
+| Language | Platform Language (menus, dialogs, this window) and Klat Language (what the cat says: English, Tiếng Việt, or Auto for both), with a sample line |
+| Hooks | Whether Claude Code is wired to Klat, the `settings.json` it uses, and Install / Repair / Uninstall (see [Hooks](#hooks)) |
+| Advanced | Time between yells; Wake test and Sleep buttons to try the cat out |
+
+Changes apply at once; there is no Save button.
+
+**Settings** are in `%APPDATA%\Klat\settings.json`. The Settings window writes the file immediately. Hand edits are read at start-up. A missing or invalid field falls back to its default. A file that is not JSON at all is renamed to `settings.json.corrupt.<time>` and replaced with defaults.
 
 | Field | Default | |
 |---|---|---|
@@ -64,7 +70,7 @@ The tray tooltip shows how many sessions are waiting.
 | `maxYellsPerWake` | `10` | Includes the first yell; 1 to 50 |
 | `staleAfterMs` | `1800000` | A session waiting longer than this stops counting; 300000 to 14400000 |
 | `reduceMotion` | `false` | No jumps, squash, puff, text shake, purr shake or Zzz; the aura glows steadily without flickering or flaring; springs are critically damped |
-| `startAtLogin` | `false` | Use the tray item; it keeps the registry in sync |
+| `startAtLogin` | `false` | Use the Settings window; it keeps the registry in sync |
 | `corner` | `"bottom-right"` | The only corner supported so far |
 
 ## Hooks
@@ -80,13 +86,13 @@ The tray tooltip shows how many sessions are waiting.
 - If `settings.json` is not valid JSON, nothing is written and a message box says so.
 - Installing again changes nothing. **Repair** re-points the entries after you move or reinstall the app, or switch between a dev build and the installed one.
 - **Uninstall** removes only entries whose command contains `klat-hook.exe`, and keeps everything else, including key order.
-- The app never installs or changes hooks on its own; only these tray items do.
+- The app never installs or changes hooks on its own; only the buttons in Settings → Hooks do.
 
 The hook reads the event from stdin and forwards five fields: event name, session id, project folder name, tool name and notification type. It sends them to `127.0.0.1`, prints nothing, and always exits 0. Its budget is 300ms. When the app is not running, it exits in a few milliseconds.
 
 ## Uninstall
 
-1. Tray → **Hooks → Uninstall**, then **Quit**.
+1. Tray → **Settings…** → **Hooks** → **Uninstall**, then tray → **Quit**.
 2. Windows Settings → Apps → **Klat** → Uninstall.
 3. Optional: delete `%APPDATA%\Klat` (settings and log) and any `%USERPROFILE%\.claude\settings.json.bak.*` backups you no longer need.
 
@@ -104,7 +110,7 @@ If you uninstall the app first, the hook entries stay in `settings.json`. They a
 
 | Problem | Try |
 |---|---|
-| The cat doesn't wake when Claude finishes | That is the default. Click the bell button (Ready) before you look away. If it still doesn't wake, check the tray: does it say **Hooks (installed)**? If not, run Install or Repair. Then restart the Claude Code session. See [docs/hooks-troubleshooting.md](docs/hooks-troubleshooting.md) for step-by-step checks and how to read the log |
+| The cat doesn't wake when Claude finishes | That is the default. Click the bell button (Ready) before you look away. If it still doesn't wake, open Settings → **Hooks**: does it say **Installed**? If not, click Install or Repair. Then restart the Claude Code session. See [docs/hooks-troubleshooting.md](docs/hooks-troubleshooting.md) for step-by-step checks and how to read the log |
 | "Hooks (needs repair)" | The entries point at another copy of `klat-hook.exe` (moved or reinstalled app, dev vs installed): run **Repair** |
 | Install says settings.json is invalid | Fix the JSON, or restore a `settings.json.bak.*` backup; nothing was changed |
 | The cat stays awake | Send a prompt or click the bubble. A session waiting longer than 30 minutes is dropped automatically |
@@ -330,5 +336,5 @@ Small decisions made during implementation, as the spec asks (§11).
   - The overlay never takes focus, so it cannot see the keyboard. A low-level keyboard hook (`drag.rs`) looks at Space only, and only takes it from the focused app while the pointer is over the cat (or its bubble or Ready button) with no modifier held. Anywhere else Space passes through untouched. A tap with no click is replayed to the focused app with `SendInput`, so typing with the pointer resting on the cat is not lost.
   - Grab plus the primary mouse button starts the drag. The window follows the cursor at ~120Hz until Space is released. The grip is kept in logical px, so crossing to a monitor with another DPI keeps the cat in hand, and the DPI re-place is skipped while dragging.
   - The cat (not the whole window, which is mostly transparent) is kept inside the work area of the monitor under the cursor, so it can sit flush against any edge.
-  - The spot is saved as `position` in settings.json (window top-left, physical px). At start it is used only if the window's centre is still on a monitor; otherwise the cat goes back to the corner. Tray: "Move the cat back to the corner".
+  - The spot is saved as `position` in settings.json (window top-left, physical px). At start it is used only if the window's centre is still on a monitor; otherwise the cat goes back to the corner. (A tray item "Move the cat back to the corner" existed until 2026-10-13; it was dropped because you can drag the cat.)
   - The press that moves the cat is swallowed in the capture phase (`cat://grab`), so it never pets, dismisses or toggles Ready. Click-through is never turned on under a cat that is being dragged.

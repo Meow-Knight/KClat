@@ -1,4 +1,4 @@
-//! What the tray and the Settings window show and do about the Claude Code hooks (the file work itself is in
+//! What the Settings window shows and does about the Claude Code hooks (the file work itself is in
 //! hooks_installer.rs). Messages are in the Platform Language; the log stays in English.
 
 use crate::hooks_installer::{self as hooks, Action, InstallError, Report, Status};
