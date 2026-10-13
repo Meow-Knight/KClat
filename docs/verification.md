@@ -2,6 +2,33 @@
 
 What was checked at the end of each phase, how, and on what machine. Newest first. The decisions behind these results are in the README's decisions log.
 
+## Settings window and languages (2026-10-13, debug build under `pnpm tauri dev`, Windows 11 Pro 22621)
+
+Spec: [docs/specs/settings-i18n-macos.md](specs/settings-i18n-macos.md). Driven through WebView2 remote debugging (`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222`) and by the owner on the tray; nothing clicked the tray or taskbar automatically.
+
+| Check | Result | How |
+|---|---|---|
+| Gates | ✅ | `pnpm lint`, `pnpm typecheck`, `pnpm test` (95), `pnpm lint:rust`, `pnpm test:rust` (96), `pnpm build` |
+| An old `settings.json` with `languages` loads and is saved in the new shape | ✅ | The real file had `"languages": ["en","vi"]`; after the first change it had `uiLanguage: "en"`, `klatLanguage: "auto"` and no `languages`, other values kept |
+| Opening Settings twice gives one window | ✅ | `open_settings` twice; one `settings.html` page |
+| A switch in Settings applies at once | ✅ | SFW: switch on, `settings.json` `sfwMode: true`, overlay `get_settings` agrees |
+| Stepper steps and clamps | ✅ | + gave 35 s (35000); typing 2 gave 5 s (5000) |
+| Platform Language switches without restart | ✅ | Vietnamese: page text, native window title "Cài đặt Klat", overlay Ready tooltip; owner saw tray labels and tooltip change |
+| Changes made elsewhere show up in the window | ✅ | `set_settings` from the overlay page: the Klat Language segment and the preview bubble followed |
+| Hooks section reads the real status and path | ✅ | "Đã cài", `C:\Users\ADMIN\.claude\settings.json`. Install/Uninstall not pressed (it would point the hooks at the dev build) |
+| Closing Settings frees its webview | ✅ | 7 → 6 processes, 474 → 401 MB working set (dev build with the debug port, so only the difference counts) |
+| Tray has the 5 quick actions; Pause tick follows Settings; double-click opens Settings | ✅ | Owner, on the dev build |
+| Klat Language Vietnamese on the real overlay | ✅ | Wake test: "Dậy dậy dậy, dầu nhớt đây!!!" with the aura (screenshot below) |
+| Real window matches the approved design | ✅ | Screenshot of the window content below; design screenshots in `docs/images/settings-window/` |
+
+![Overlay waking in Vietnamese](images/verification/2026-10-13-overlay-wake-vi.png) ![Settings window, Language, Vietnamese](images/verification/2026-10-13-settings-language-vi.png)
+
+Not checked yet:
+- Start at login from Settings (toggling it from a dev build would point the Run entry at the dev exe). Check on the next release build.
+- Install / Repair / Uninstall from Settings → Hooks on a release build.
+- Keyboard-only use of the window (Tab, arrow keys in the sidebar and segmented controls, Enter/Escape in the stepper): only checked by reading the code, not by automation.
+- Memory of a release build with Settings closed against the 150 MB target (ClauCat-gwd).
+
 ## Ready and aura (2026-10-11)
 
 - Tests: 79 TS (poking the sleeping cat: eyes stay shut, angry mark and swish, calms down, no swish under reduceMotion, cleared on wake; aura burns, flares and goes out; steady under reduceMotion; Ready peek and perked ear survive a wake; the Ready reply follows the language filter and stays out of the yell pool) and 79 Rust (Gate: a finished turn needs Ready armed before it, permission and input always pass, pause beats everything; Ready stays armed across turns).
