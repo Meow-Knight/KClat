@@ -85,7 +85,7 @@ Changes apply at once; there is no Save button.
 - Before any change, the file is saved as `settings.json.bak.<unix-seconds>`.
 - If `settings.json` is not valid JSON, nothing is written and a message box says so.
 - Installing again changes nothing. **Repair** re-points the entries after you move or reinstall the app, or switch between a dev build and the installed one.
-- **Uninstall** removes only entries whose command contains `klat-hook.exe`, and keeps everything else, including key order.
+- **Uninstall** removes only entries whose command contains `klat-hook` (`klat-hook.exe` on Windows), and keeps everything else, including key order.
 - The app never installs or changes hooks on its own; only the buttons in Settings → Hooks do.
 
 The hook reads the event from stdin and forwards five fields: event name, session id, project folder name, tool name and notification type. It sends them to `127.0.0.1`, prints nothing, and always exits 0. Its budget is 300ms. When the app is not running, it exits in a few milliseconds.
@@ -96,7 +96,7 @@ The hook reads the event from stdin and forwards five fields: event name, sessio
 2. Windows Settings → Apps → **Klat** → Uninstall.
 3. Optional: delete `%APPDATA%\Klat` (settings and log) and any `%USERPROFILE%\.claude\settings.json.bak.*` backups you no longer need.
 
-If you uninstall the app first, the hook entries stay in `settings.json`. They are harmless (the program is gone, so the hook just fails quietly), but you can delete them by hand: they are the entries whose `command` contains `klat-hook.exe`.
+If you uninstall the app first, the hook entries stay in `settings.json`. They are harmless (the program is gone, so the hook just fails quietly), but you can delete them by hand: they are the entries whose `command` contains `klat-hook`.
 
 ## Privacy
 

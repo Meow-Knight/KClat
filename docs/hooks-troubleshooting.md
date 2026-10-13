@@ -59,7 +59,7 @@ If `settings.json` is not valid JSON, **Install / Repair / Uninstall refuse to w
 
 ## 7. Uninstalling
 
-Run Settings → **Hooks** → **Uninstall** before removing the app. It removes only Klat's entries and keeps everything else in `settings.json`, including other hooks and the order of keys. If the app is already gone, delete the entries whose `command` contains `klat-hook.exe` by hand. While the app is not running, leftover entries only cost a few milliseconds per hook.
+Run Settings → **Hooks** → **Uninstall** before removing the app. It removes only Klat's entries and keeps everything else in `settings.json`, including other hooks and the order of keys. If the app is already gone, delete the entries whose `command` contains `klat-hook` by hand. While the app is not running, leftover entries only cost a few milliseconds per hook.
 
 ## What the hook never does
 

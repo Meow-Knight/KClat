@@ -1,4 +1,4 @@
-//! Settings file `%APPDATA%\Klat\settings.json` (spec §10, docs/specs/settings-i18n-macos.md §2).
+//! Settings file `settings.json` in the data folder (`%APPDATA%\Klat`, `~/Library/Application Support/Klat`) (spec §10, docs/specs/settings-i18n-macos.md §2).
 //!
 //! Loading never fails: a missing or invalid field falls back to its default, and a file that is not a
 //! JSON object is renamed to `settings.json.corrupt.<unix-seconds>` and replaced with defaults.
@@ -164,14 +164,13 @@ pub enum LoadOutcome {
     RecoveredCorrupt(PathBuf),
 }
 
-/// `%APPDATA%\Klat`, or None when APPDATA is not set.
-pub fn default_dir() -> Option<PathBuf> {
-    std::env::var_os("APPDATA").map(|p| PathBuf::from(p).join("Klat"))
-}
-
 /// Moves `%APPDATA%\ClaudeCat` (the folder from before the rename to Klat) to `%APPDATA%\Klat` once,
-/// so settings carry over. Best effort: if it fails, the app starts with defaults.
+/// so settings carry over. Windows only: Claude Cat never ran anywhere else. Best effort: if it fails, the app
+/// starts with defaults.
 pub fn migrate_legacy_dir() {
+    if !cfg!(windows) {
+        return;
+    }
     if let Some(appdata) = std::env::var_os("APPDATA") {
         migrate_legacy_dir_in(Path::new(&appdata));
     }

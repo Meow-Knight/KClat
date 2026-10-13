@@ -4,6 +4,9 @@
 mod autostart;
 mod commands;
 mod cursor;
+// Shared with the hook adapter so both always agree on where runtime.json lives.
+#[path = "../../crates/klat-hook/src/data_dir.rs"]
+mod data_dir;
 mod drag;
 mod event_server;
 mod hooks_installer;

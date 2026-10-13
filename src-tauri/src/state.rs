@@ -63,9 +63,9 @@ pub struct AppState {
     pub awake: AtomicBool,
 }
 
-/// `%APPDATA%\Klat` (settings, runtime.json, log).
+/// The data folder (settings, runtime.json, log): see data_dir.rs. The temp folder if the base is unknown.
 pub fn data_dir() -> PathBuf {
-    settings::default_dir().unwrap_or_else(|| std::env::temp_dir().join("Klat"))
+    crate::data_dir::data_dir().unwrap_or_else(|| std::env::temp_dir().join("Klat"))
 }
 
 pub fn now_ms() -> u64 {

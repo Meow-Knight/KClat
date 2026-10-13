@@ -29,13 +29,9 @@ pub struct RuntimeInfo {
     pub pid: u32,
 }
 
-/// `%APPDATA%\Klat\runtime.json` (the hook adapter derives the same path).
+/// `runtime.json` in the data folder; the hook adapter reads the same path (data_dir.rs is shared).
 pub fn runtime_path() -> PathBuf {
-    std::env::var_os("APPDATA")
-        .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir)
-        .join("Klat")
-        .join("runtime.json")
+    crate::data_dir::runtime_path()
 }
 
 pub fn write_runtime(path: &Path, info: &RuntimeInfo) -> io::Result<()> {

@@ -1,15 +1,15 @@
-//! Installs the Klat hooks into `%USERPROFILE%\.claude\settings.json` (spec §8.5).
+//! Installs the Klat hooks into `~/.claude/settings.json` (spec §8.5).
 //!
 //! - User-level settings only; project settings are never touched.
 //! - Broken JSON (or a non-object) aborts before anything is written.
 //! - Before any write: a copy to `settings.json.bak.<unix-seconds>`. Writes are atomic, and refused if the
 //!   file changed on disk while we were working (Claude Code edits it too).
-//! - Our entries are recognised by a command containing `klat-hook.exe` (or `claude-cat-hook.exe`, the
-//!   name before the rename to Klat), so reinstalling never duplicates them, repairing moves old entries
+//! - Our entries are recognised by a command containing `klat-hook` (`klat-hook.exe` on Windows; or
+//!   `claude-cat-hook`, the name before the rename to Klat), so reinstalling never duplicates them, repairing moves old entries
 //!   to the new program, and uninstalling removes only them. Everything else keeps its content and order.
-//! - Exec form (`command` + `args`): no shell is involved on Windows (Git Bash or PowerShell), so a path
-//!   with spaces needs no quoting at all.
-//! - Runs only on request (the Settings window or the tray), never at start-up.
+//! - Exec form (`command` + `args`): no shell is involved (Git Bash or PowerShell on Windows, zsh on macOS),
+//!   so a path with spaces needs no quoting at all.
+//! - Runs only on request (Settings > Hooks), never at start-up.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -30,9 +30,10 @@ pub const HOOK_EVENTS: [&str; 9] = [
     "PermissionDenied",
     "SessionEnd",
 ];
-pub const MARKER: &str = "klat-hook.exe";
+/// Our entries are recognised by this in their command (case-insensitive), with or without `.exe`.
+pub const MARKER: &str = "klat-hook";
 /// The adapter's name when the app was called Claude Cat; such entries are ours too.
-const LEGACY_MARKER: &str = "claude-cat-hook.exe";
+const LEGACY_MARKER: &str = "claude-cat-hook";
 /// Seconds. The adapter gives up after 300ms on its own; this is Claude Code's hard stop.
 pub const TIMEOUT_SECS: u64 = 1;
 
@@ -93,17 +94,23 @@ pub enum Report {
     },
 }
 
-/// `%USERPROFILE%\.claude\settings.json`.
+/// `~/.claude/settings.json` (`%USERPROFILE%` on Windows, `$HOME` elsewhere).
 pub fn user_settings_path() -> Option<PathBuf> {
     std::env::var_os("USERPROFILE")
         .or_else(|| std::env::var_os("HOME"))
         .map(|home| PathBuf::from(home).join(".claude").join("settings.json"))
 }
 
-/// The adapter ships next to the app executable (dev: `target/debug`, bundled: install dir).
+/// `klat-hook.exe` on Windows, `klat-hook` elsewhere.
+pub fn adapter_file_name() -> String {
+    format!("{MARKER}{}", std::env::consts::EXE_SUFFIX)
+}
+
+/// The adapter ships next to the app executable (dev: `target/debug`, Windows install dir, or
+/// `Klat.app/Contents/MacOS`).
 pub fn default_exe_path() -> io::Result<PathBuf> {
     let exe = std::env::current_exe()?;
-    Ok(exe.with_file_name(MARKER))
+    Ok(exe.with_file_name(adapter_file_name()))
 }
 
 fn our_entry(exe: &str, event: &str) -> Value {
@@ -361,6 +368,28 @@ mod tests {
     const EXE: &str = r"C:\Program Files\Klat\klat-hook.exe";
 
     #[test]
+    fn our_entries_are_recognised_on_every_platform() {
+        let cmd = |c: &str| json!({ "type": "command", "command": c });
+        assert!(is_ours(&cmd(r"C:\Program Files\Klat\klat-hook.exe")));
+        assert!(is_ours(&cmd(
+            r"C:\Users\Me\AppData\Local\Klat\KLAT-HOOK.EXE"
+        )));
+        assert!(is_ours(&cmd(
+            "/Applications/Klat.app/Contents/MacOS/klat-hook"
+        )));
+        assert!(is_ours(&cmd(r"D:\old\claude-cat-hook.exe")));
+        assert!(!is_ours(&cmd("notify-send done")));
+        assert!(!is_ours(&json!({ "type": "command" })));
+    }
+
+    #[test]
+    fn the_adapter_name_matches_this_platform() {
+        let name = adapter_file_name();
+        assert_eq!(name.ends_with(".exe"), cfg!(windows));
+        assert!(name.starts_with(MARKER));
+    }
+
+    #[test]
     fn status_and_action_use_the_names_the_settings_window_sends() {
         let names: Vec<Value> = [Status::Installed, Status::NeedsRepair, Status::NotInstalled]
             .iter()
@@ -536,7 +565,7 @@ mod tests {
             fs::create_dir_all(settings.parent().unwrap()).unwrap();
             fs::write(&settings, text).unwrap();
         }
-        let exe = dir.path().join("Klat").join(MARKER);
+        let exe = dir.path().join("Klat").join(adapter_file_name());
         fs::create_dir_all(exe.parent().unwrap()).unwrap();
         fs::write(&exe, b"").unwrap();
         Env {
@@ -645,7 +674,7 @@ mod dry_run {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("settings.json");
         fs::write(&path, &original).unwrap();
-        let exe = dir.path().join(MARKER);
+        let exe = dir.path().join(adapter_file_name());
         fs::write(&exe, b"").unwrap();
 
         apply(&path, &exe, Action::Install).unwrap();
