@@ -204,6 +204,7 @@ With the app running and the hook built:
 | `src/cat/CatStage.ts` | Composes renderer, rig, controller, bubble and loop; reports hitboxes |
 | `src/bubble/Bubble.ts` | Speech bubble |
 | `src/bubble/ReadyButton.ts` | The Ready button (a cat's collar bell) |
+| `src/assets/fonts/` | Grandstander (headings, the cat's bubble) and Nunito (UI text), bundled woff2 with their OFL licences |
 | `src/i18n/{en,vi}.json`, `src/i18n/index.ts` | Platform Language texts, shared with Rust; `t(lang, key, vars)` |
 | `src/phrases/` | Phrase data and `PhrasePicker` |
 | `src/bridge/tauriBridge.ts` | Typed events and commands |

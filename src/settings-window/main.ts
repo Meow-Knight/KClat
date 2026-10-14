@@ -10,6 +10,7 @@ import { advancedSection } from './sections/advanced';
 import { generalSection } from './sections/general';
 import { hooksSection } from './sections/hooks';
 import { languageSection } from './sections/language';
+import '../assets/fonts/fonts.css';
 import './settings.css';
 import { SECTIONS, nextSection, sectionFromHash, type SectionId } from './viewModel';
 

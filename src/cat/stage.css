@@ -4,7 +4,8 @@
   overflow: hidden;
   background: transparent;
   user-select: none;
-  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  /* Bundled in src/assets/fonts (imported by CatStage.ts). */
+  font-family: 'Nunito', 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
 .cat-stage canvas {
@@ -27,8 +28,9 @@
   border: 2px solid #2b2d42;
   border-radius: 16px;
   color: #2b2d42;
+  font-family: 'Grandstander', 'Nunito', 'Segoe UI', -apple-system, system-ui, sans-serif;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.25;
   transform: scale(0) rotate(-8deg);
   transform-origin: 95% 90%;

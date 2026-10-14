@@ -192,8 +192,9 @@ Token màu trên `:root`, đổi theo `prefers-color-scheme` (không có toggle 
 | `--on-accent` | `#2b2d42` | `#2b2d42` | chữ/icon trên nền accent (không dùng trắng: tương phản kém) |
 | `--ok` / `--warn` / `--danger` | `#2f9e6a` / `#c98a12` / `#d64545` | `#4cc38a` / `#f5b83d` / `#ff6b6b` | pill trạng thái, banner |
 
-- Font: `"Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif`. Chữ tiếng
-  Việt có dấu phải hiển thị đúng trên cả hai OS.
+- Font (chủ dự án chọn ngày 2026-10-14, thay font hệ thống vì "trông quá AI"): **Grandstander** cho tiêu đề, chữ
+  "Klat" và bong bóng của mèo (cả trên overlay); **Nunito** cho chữ giao diện. Cả hai là variable font OFL, đóng gói
+  trong `src/assets/fonts/` (subset latin, latin-ext, vietnamese; khoảng 176 KB) vì app chạy offline.
 - Control tự vẽ bằng HTML/CSS, không thêm thư viện UI: switch (`role="switch"`), segmented control (radio group),
   stepper (`<input type="number">` + nút −/+), button primary (accent) / secondary (viền) / danger (chữ đỏ).
 - Chuyển động: chuyển mục 120ms fade; switch 150ms. Tắt hết khi `reduceMotion` hoặc `prefers-reduced-motion`.

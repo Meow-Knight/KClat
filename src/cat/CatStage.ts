@@ -9,6 +9,7 @@ import { phraseLanguages, type CatSettings, type UiLanguage } from '../settings'
 import { CatController, type CatPhase } from './CatController';
 import { CatRig, HIT_BOUNDS } from './CatRig';
 import { RenderLoop } from './RenderLoop';
+import '../assets/fonts/fonts.css';
 import './stage.css';
 
 const AWAKE_FPS = 60;
