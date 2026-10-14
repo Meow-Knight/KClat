@@ -1,7 +1,8 @@
 # Building and running Klat on macOS (from source)
 
-For developers. This runs Klat straight from the source tree with `pnpm tauri dev`. Packaging a `.dmg` for
-other people is a separate step (ClauCat-t0b.10) and is not covered here yet.
+For developers. This runs Klat straight from the source tree with `pnpm tauri dev`, and builds the `.dmg` for
+other people ([Building the .dmg](#building-the-dmg)). People who only install the `.dmg` follow
+[macos-install.md](macos-install.md).
 
 > **Status (2026-10-13):** the macOS code has been type-checked from Windows (`pnpm check:mac`) but has **not
 > run on a real Mac yet**. Your first run is the first real test. Please note everything that goes wrong
@@ -76,6 +77,52 @@ Or use Settings → **Advanced** → **Wake test**.
 | Settings, `runtime.json`, log (`klat.log`) | `~/Library/Application Support/Klat/` |
 | Claude Code hooks | `~/.claude/settings.json` (backups next to it: `settings.json.bak.<time>`) |
 | Hook program (dev) | `target/debug/klat-hook` |
+
+## Building the .dmg
+
+One `.dmg` for Apple Silicon and Intel ("universal"). It has to be built on a Mac.
+
+```bash
+rustup target add aarch64-apple-darwin x86_64-apple-darwin   # once; the script also does it
+pnpm release:mac
+```
+
+`pnpm release:mac` runs two steps:
+
+1. `node scripts/stage-sidecar.mjs --target universal-apple-darwin` builds `klat-hook` for both chips and joins
+   them with `lipo` into `src-tauri/binaries/klat-hook-universal-apple-darwin` (add `--dry-run` to only print
+   the steps).
+2. `tauri build --target universal-apple-darwin --config src-tauri/tauri.release.conf.json` builds the app for
+   both chips and bundles it. `src-tauri/tauri.macos.conf.json` adds the macOS settings: `app` and `dmg`
+   targets, macOS 11.0 minimum, ad-hoc signing (`signingIdentity: "-"`; Apple Silicon refuses to run unsigned
+   code, and there is no Developer ID).
+
+The output:
+
+| What | Where |
+|---|---|
+| The disk image to share | `target/universal-apple-darwin/release/bundle/dmg/Klat_<version>_universal.dmg` |
+| The app | `target/universal-apple-darwin/release/bundle/macos/Klat.app` |
+| The hook inside it | `Klat.app/Contents/MacOS/klat-hook`, next to the app's binary: where Settings → Hooks points |
+
+Check the result before sharing it:
+
+```bash
+lipo -archs target/universal-apple-darwin/release/bundle/macos/Klat.app/Contents/MacOS/klat-hook   # x86_64 arm64
+codesign -dv target/universal-apple-darwin/release/bundle/macos/Klat.app                            # Signature=adhoc
+```
+
+The `.dmg` is not notarized, so people who download it have to confirm it once: see
+[macos-install.md](macos-install.md). Each build has a new ad-hoc signature, so after an update macOS forgets
+the Accessibility permission (the guide explains how to grant it again).
+
+| Build error | Try this |
+|---|---|
+| `error[E0463]: can't find crate for 'core'` / `target may not be installed` | `rustup target add aarch64-apple-darwin x86_64-apple-darwin` |
+| `lipo: can't open input file` | One of the two `cargo build --target` steps failed; scroll up for its error |
+| `lipo: command not found` or `xcrun: error` | `xcode-select --install` (lipo comes with the Command Line Tools) |
+| `resource path 'binaries/klat-hook-universal-apple-darwin' doesn't exist` | Step 1 did not run; use `pnpm release:mac`, not `pnpm tauri build` |
+| `failed to bundle project` while creating the `.dmg` | Close any Finder window showing a mounted Klat disk image and eject it, then build again |
 
 ## Checks
 

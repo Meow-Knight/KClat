@@ -20,9 +20,10 @@ You need Windows 10/11 with the WebView2 runtime, which comes with Windows 11 an
 
 ### macOS
 
-Klat builds for macOS 11+ (a menu bar app, no Dock icon). It has not been run on a real Mac yet: for now, build
-it from source with [docs/macos-build.md](docs/macos-build.md). A ready-made `.dmg` comes later. Dragging the cat
-with Space needs the Accessibility permission; Settings → General asks for it.
+Klat builds for macOS 11+ (a menu bar app, no Dock icon). It has not been run on a real Mac yet. Install a
+`.dmg` with [docs/macos-install.md](docs/macos-install.md) (it is not notarized, so macOS asks you to confirm
+once), or build from source with [docs/macos-build.md](docs/macos-build.md), which also shows how to build the
+`.dmg`. Dragging the cat with Space needs the Accessibility permission; Settings → General asks for it.
 
 ## Using it
 
@@ -175,7 +176,8 @@ Requirements: Node.js ≥ 20.19, pnpm 8+, Rust stable (MSVC) with the Visual Stu
 | `pnpm release` | Build the hook (release), stage it as a sidecar, build the app and the NSIS installer → `target/release/bundle/nsis/` |
 | `pnpm dev` | Vite only; the dev page is at http://localhost:1420/dev.html |
 | `pnpm build` | Typecheck and build the frontend into `dist/` |
-| `pnpm build:hook` | Build `klat-hook` (release) and copy it to `src-tauri/binaries/` |
+| `pnpm release:mac` | macOS only: universal `klat-hook` (lipo), then the universal app and `.dmg` → `target/universal-apple-darwin/release/bundle/dmg/` ([details](docs/macos-build.md#building-the-dmg)) |
+| `pnpm build:hook` | Build `klat-hook` (release) for the target being built and copy it to `src-tauri/binaries/` |
 | `pnpm lint` / `pnpm typecheck` / `pnpm test` | ESLint / `tsc --noEmit` / Vitest |
 | `pnpm lint:rust` / `pnpm test:rust` | `cargo fmt --check` + `clippy -D warnings` / `cargo test --workspace` |
 | `cargo build -p klat-hook` | Debug build of the hook (`target/debug/klat-hook.exe`, next to the dev app) |

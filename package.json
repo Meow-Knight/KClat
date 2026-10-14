@@ -7,8 +7,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "build:hook": "cargo build -p klat-hook --release && node scripts/stage-sidecar.mjs",
+    "build:hook": "node scripts/stage-sidecar.mjs",
     "release": "tauri build --config src-tauri/tauri.release.conf.json",
+    "release:mac": "node scripts/stage-sidecar.mjs --target universal-apple-darwin && tauri build --target universal-apple-darwin --config src-tauri/tauri.release.conf.json",
     "preview": "vite preview",
     "tauri": "tauri",
     "lint": "eslint .",
