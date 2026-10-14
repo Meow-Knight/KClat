@@ -44,6 +44,8 @@
   "settings.general.sfw.desc": "No swearing.",
   "settings.general.reduceMotion": "Reduce motion",
   "settings.general.reduceMotion.desc": "No jumps, shaking or flickering aura.",
+  "settings.general.size": "Cat size",
+  "settings.general.size.desc": "Drag right for a bigger cat, left for a smaller one.",
   "settings.general.move": "Moving the cat",
   "settings.general.move.how": "Hold Space, press the mouse on the cat and drag. Release Space to drop it there.",
   "settings.general.permission": "Accessibility permission",

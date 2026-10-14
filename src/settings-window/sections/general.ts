@@ -1,6 +1,7 @@
-// General: start at login, how the cat behaves, how to move it.
+// General: start at login, how the cat behaves and how big it is, how to move it.
 import type { DragPermission } from '../../bridge/tauriBridge';
-import { banner, button, card, h, row, svg, toggle } from '../controls';
+import { CAT_SCALE } from '../../settings';
+import { banner, button, card, h, row, slider, svg, toggle } from '../controls';
 import type { Ctx, SectionView } from '../context';
 
 const MOVE_ICON = `<svg class="hint-icon" viewBox="0 0 20 20" aria-hidden="true">
@@ -24,6 +25,13 @@ export function generalSection(ctx: Ctx): SectionView {
   const hide = toggle('hide', s.hideWhileSleeping, (on) => ctx.patch({ hideWhileSleeping: on }));
   const sfw = toggle('sfw', s.sfwMode, (on) => ctx.patch({ sfwMode: on }));
   const motion = toggle('reduceMotion', s.reduceMotion, (on) => ctx.patch({ reduceMotion: on }));
+  const size = slider({
+    focusKey: 'catScale',
+    value: s.catScale,
+    ...CAT_SCALE,
+    format: (v) => `${v}%`,
+    onChange: (v) => ctx.patch({ catScale: v }),
+  });
 
   // macOS only: the Space hook needs the Accessibility permission. Hidden where it is not needed.
   const permissionRow = h('div', { attrs: { hidden: '' } });
@@ -54,6 +62,7 @@ export function generalSection(ctx: Ctx): SectionView {
       row({ title: t('settings.general.hide'), desc: t('settings.general.hide.desc'), control: hide.el }),
       row({ title: t('settings.general.sfw'), desc: t('settings.general.sfw.desc'), control: sfw.el }),
       row({ title: t('settings.general.reduceMotion'), desc: t('settings.general.reduceMotion.desc'), control: motion.el }),
+      row({ title: t('settings.general.size'), desc: t('settings.general.size.desc'), control: size.el }),
     ),
     card(
       t('settings.general.move'),
@@ -70,6 +79,7 @@ export function generalSection(ctx: Ctx): SectionView {
       hide.set(next.hideWhileSleeping);
       sfw.set(next.sfwMode);
       motion.set(next.reduceMotion);
+      size.set(next.catScale);
     },
   };
 }

@@ -1,4 +1,5 @@
-// Small DOM building blocks for the Settings window: rows, cards, switches, segmented controls, steppers, buttons.
+// Small DOM building blocks for the Settings window: rows, cards, switches, segmented controls, steppers, sliders,
+// buttons.
 // Each control returns its element plus a `set` that reflects a value coming back from Rust without firing.
 
 type Child = Node | string | null | undefined | false;
@@ -205,6 +206,76 @@ export function stepper(p: StepperParts): Control<number> {
         minus.disabled = value <= p.min;
         plus.disabled = value >= p.max;
       }
+    },
+  };
+}
+
+export interface SliderParts {
+  focusKey: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  /** The value as shown next to the track and read by screen readers ("120%"). */
+  format(value: number): string;
+  /** While dragging (at most every SLIDER_LIVE_MS) and once more on release; arrow keys send each step. */
+  onChange(value: number): void;
+}
+
+/** How often a dragged slider sends its value, so the result follows the hand without flooding Rust. */
+const SLIDER_LIVE_MS = 50;
+
+/** A horizontal range slider with its value beside it. Native keyboard: arrows, Page Up/Down, Home/End. */
+export function slider(p: SliderParts): Control<number> {
+  const input = h('input', {
+    class: 'slider-input',
+    attrs: { type: 'range', min: String(p.min), max: String(p.max), step: String(p.step), 'data-focus-key': p.focusKey },
+  });
+  const label = h('span', { class: 'slider-value', attrs: { 'aria-hidden': 'true' } });
+  let value = p.value;
+  let sent = p.value;
+  let dragging = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const render = (v: number) => {
+    input.value = String(v);
+    input.setAttribute('aria-valuetext', p.format(v));
+    input.style.setProperty('--fill', `${((v - p.min) / (p.max - p.min)) * 100}%`);
+    label.textContent = p.format(v);
+  };
+  const send = () => {
+    clearTimeout(timer);
+    timer = undefined;
+    const v = Number(input.value);
+    if (v !== sent) {
+      sent = v;
+      p.onChange(v);
+    }
+  };
+
+  input.addEventListener('pointerdown', () => (dragging = true));
+  input.addEventListener('input', () => {
+    render(Number(input.value));
+    if (!dragging) send(); // keyboard: every step counts
+    else timer ??= setTimeout(send, SLIDER_LIVE_MS);
+  });
+  const release = () => {
+    if (!dragging) return;
+    dragging = false;
+    send(); // Rust's answer to the final value comes back through set()
+  };
+  input.addEventListener('change', release);
+  input.addEventListener('pointerup', release);
+  input.addEventListener('pointercancel', release);
+  render(value);
+
+  return {
+    el: h('div', { class: 'slider' }, input, label),
+    set(next) {
+      value = next;
+      sent = next;
+      // Replies to earlier values arrive while dragging; moving the thumb under the hand would fight it.
+      if (!dragging) render(next);
     },
   };
 }

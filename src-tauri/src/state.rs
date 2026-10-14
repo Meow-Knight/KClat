@@ -70,8 +70,8 @@ pub struct AppState {
     pub settings: Mutex<Settings>,
     pub settings_path: PathBuf,
     inner: Mutex<Inner>,
-    /// Clickable regions of the overlay in logical px, reported by the frontend.
-    pub hitboxes: Mutex<Vec<Rect>>,
+    /// Clickable regions of the overlay as the page reports them (CSS px); see `hitboxes()`.
+    pub page_hitboxes: Mutex<Vec<Rect>>,
     /// Mirrors the last published `awake`, read lock-free by the cursor poller.
     pub awake: AtomicBool,
 }
@@ -108,7 +108,7 @@ impl AppState {
                 ready_since: None,
                 sleep_cause: SleepCause::Auto,
             }),
-            hitboxes: Mutex::new(Vec::new()),
+            page_hitboxes: Mutex::new(Vec::new()),
             awake: AtomicBool::new(false),
         }
     }
@@ -142,6 +142,13 @@ impl AppState {
             ready: inner.ready_since.is_some(),
             sleep_cause: inner.sleep_cause,
         }
+    }
+
+    /// Clickable regions in logical px relative to the overlay's top-left corner.
+    pub fn hitboxes(&self) -> Vec<Rect> {
+        let zoom = self.settings.lock().unwrap().zoom();
+        let rects = self.page_hitboxes.lock().unwrap();
+        rects.iter().map(|r| r.scaled(zoom)).collect()
     }
 
     pub fn settings(&self) -> Settings {
@@ -311,7 +318,7 @@ mod tests {
                 ready_since: None,
                 sleep_cause: SleepCause::User,
             }),
-            hitboxes: Mutex::new(Vec::new()),
+            page_hitboxes: Mutex::new(Vec::new()),
             awake: AtomicBool::new(false),
         };
         let json = serde_json::to_value(state.snapshot()).unwrap();

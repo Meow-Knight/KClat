@@ -74,6 +74,7 @@ export type SettingsPatch = Partial<
     | 'maxYellsPerWake'
     | 'staleAfterMs'
     | 'reduceMotion'
+    | 'catScale'
   >
 >;
 

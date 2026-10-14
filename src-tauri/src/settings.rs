@@ -45,6 +45,8 @@ pub struct Settings {
     pub max_yells_per_wake: u32,
     pub stale_after_ms: u64,
     pub reduce_motion: bool,
+    /// Size of the cat in percent (the whole overlay: cat, bubble and Ready button).
+    pub cat_scale: u32,
     pub start_at_login: bool,
     pub corner: String,
     /// Where you dragged the cat (window top-left, physical px); None = the corner.
@@ -63,6 +65,7 @@ impl Default for Settings {
             max_yells_per_wake: 10,
             stale_after_ms: 1_800_000,
             reduce_motion: false,
+            cat_scale: 100,
             start_at_login: false,
             corner: "bottom-right".into(),
             position: None,
@@ -73,10 +76,11 @@ impl Default for Settings {
 const YELL_INTERVAL_MS: (u64, u64) = (5_000, 600_000);
 const MAX_YELLS_PER_WAKE: (u32, u32) = (1, 50);
 const STALE_AFTER_MS: (u64, u64) = (300_000, 14_400_000);
+pub const CAT_SCALE: (u32, u32) = (50, 200);
 
 /// Fields the Settings window may change. `position` belongs to dragging, `corner` has one value, and
 /// `startAtLogin` must go through the OS (see `autostart`).
-pub const PATCHABLE: [&str; 9] = [
+pub const PATCHABLE: [&str; 10] = [
     "notificationsEnabled",
     "hideWhileSleeping",
     "sfwMode",
@@ -86,9 +90,15 @@ pub const PATCHABLE: [&str; 9] = [
     "maxYellsPerWake",
     "staleAfterMs",
     "reduceMotion",
+    "catScale",
 ];
 
 impl Settings {
+    /// `catScale` as a factor: the overlay window's size and its webview zoom.
+    pub fn zoom(&self) -> f64 {
+        f64::from(self.cat_scale) / 100.0
+    }
+
     /// Builds settings from a JSON object field by field; anything missing or mistyped keeps its default, and
     /// numbers outside their range are clamped into it.
     fn from_object(obj: &Map<String, Value>) -> Self {
@@ -111,6 +121,7 @@ impl Settings {
             stale_after_ms: field(obj, "staleAfterMs", d.stale_after_ms)
                 .clamp(STALE_AFTER_MS.0, STALE_AFTER_MS.1),
             reduce_motion: field(obj, "reduceMotion", d.reduce_motion),
+            cat_scale: field(obj, "catScale", d.cat_scale).clamp(CAT_SCALE.0, CAT_SCALE.1),
             start_at_login: field(obj, "startAtLogin", d.start_at_login),
             corner: if CORNERS.contains(&corner.as_str()) {
                 corner
@@ -271,7 +282,8 @@ mod tests {
             json!({
                 "notificationsEnabled": true, "hideWhileSleeping": false, "sfwMode": false,
                 "uiLanguage": "en", "klatLanguage": "auto", "yellIntervalMs": 30000, "maxYellsPerWake": 10,
-                "staleAfterMs": 1800000, "reduceMotion": false, "startAtLogin": false, "corner": "bottom-right",
+                "staleAfterMs": 1800000, "reduceMotion": false, "catScale": 100, "startAtLogin": false,
+                "corner": "bottom-right",
                 "position": null
             })
         );
@@ -329,6 +341,24 @@ mod tests {
             ),
             (600_000, 50, 14_400_000)
         );
+    }
+
+    #[test]
+    fn cat_scale_is_clamped_and_falls_back() {
+        let scale = |v: Value| {
+            Settings::from_object(json!({ "catScale": v }).as_object().unwrap()).cat_scale
+        };
+        assert_eq!(scale(json!(150)), 150);
+        assert_eq!(scale(json!(10)), 50);
+        assert_eq!(scale(json!(1000)), 200);
+        assert_eq!(scale(json!("big")), 100);
+        assert_eq!(scale(json!(-3)), 100);
+        let patched = apply_patch(
+            &Settings::default(),
+            json!({ "catScale": 125 }).as_object().unwrap(),
+        );
+        assert_eq!(patched.cat_scale, 125);
+        assert_eq!(patched.zoom(), 1.25);
     }
 
     #[test]

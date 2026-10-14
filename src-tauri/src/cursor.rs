@@ -31,6 +31,16 @@ pub struct Rect {
 }
 
 impl Rect {
+    /// The same region `zoom` times larger: the page reports CSS px, the webview zoom (catScale) enlarges them.
+    pub fn scaled(&self, zoom: f64) -> Self {
+        Self {
+            x: self.x * zoom,
+            y: self.y * zoom,
+            w: self.w * zoom,
+            h: self.h * zoom,
+        }
+    }
+
     fn contains(&self, (x, y): Point) -> bool {
         x >= self.x && x < self.x + self.w && y >= self.y && y < self.y + self.h
     }
@@ -142,7 +152,7 @@ pub fn start(app: AppHandle) {
                 let point = to_overlay((cursor.x, cursor.y), &geometry);
 
                 let inside = {
-                    let rects = state.hitboxes.lock().unwrap();
+                    let rects = state.hitboxes();
                     drag::set_zone(geometry.origin, scale, &rects);
                     // Never turn click-through on under a cat that is being dragged: the release must land on it.
                     drag::dragging() || hit_test(point, &rects)
@@ -152,7 +162,15 @@ pub fn start(app: AppHandle) {
                 }
 
                 if let Some(payload) = tracker.update(awake, point) {
-                    let _ = app.emit(EVENT_CURSOR, payload.map(|(x, y)| CursorPoint { x, y }));
+                    // The page works in CSS px: logical px divided by the webview zoom.
+                    let zoom = state.settings.lock().unwrap().zoom();
+                    let _ = app.emit(
+                        EVENT_CURSOR,
+                        payload.map(|(x, y)| CursorPoint {
+                            x: x / zoom,
+                            y: y / zoom,
+                        }),
+                    );
                 }
             }
         })
@@ -215,6 +233,29 @@ mod tests {
             ..PRIMARY
         };
         assert!(to_overlay((-500.0, 300.0), &unknown).is_some());
+    }
+
+    #[test]
+    fn page_rects_scale_with_the_cat_size() {
+        // A 100×80 CSS px box at (200, 150) on a 150% cat covers 150×120 logical px at (300, 225).
+        let page = Rect {
+            x: 200.0,
+            y: 150.0,
+            w: 100.0,
+            h: 80.0,
+        };
+        let logical = page.scaled(1.5);
+        assert_eq!(
+            logical,
+            Rect {
+                x: 300.0,
+                y: 225.0,
+                w: 150.0,
+                h: 120.0
+            }
+        );
+        assert!(hit_test(Some((440.0, 340.0)), &[logical]));
+        assert!(!hit_test(Some((440.0, 340.0)), &[page]));
     }
 
     #[test]

@@ -5,11 +5,12 @@ use crate::cursor::Rect;
 use crate::hooks_installer::{Action, Status};
 use crate::hooks_ui;
 use crate::i18n;
+use crate::overlay;
 use crate::settings::{self, Settings};
 use crate::state::{self, AppState, CatState};
 use serde::Serialize;
 use serde_json::{Map, Value};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 /// Upper bound on reported hitboxes; the overlay sends at most cat + bubble.
 const MAX_HITBOXES: usize = 8;
@@ -28,7 +29,16 @@ pub fn get_settings(state: State<'_, AppState>) -> Settings {
 /// loaded file. Returns the settings now in effect.
 #[tauri::command]
 pub fn set_settings(app: AppHandle, patch: Map<String, Value>) -> Settings {
-    state::update_settings(&app, |s| *s = settings::apply_patch(s, &patch))
+    let scale_before = app.state::<AppState>().settings().cat_scale;
+    let next = state::update_settings(&app, |s| *s = settings::apply_patch(s, &patch));
+    if next.cat_scale == scale_before {
+        return next;
+    }
+    match overlay::rescale(&app, next.zoom()) {
+        // A dragged cat keeps its spot: save the window's new top-left.
+        Some(pos) => state::update_settings(&app, |s| s.position = Some(pos)),
+        None => next,
+    }
 }
 
 /// Returns the state that is now in effect; on failure the setting is unchanged and the error is the OS reason.
@@ -122,5 +132,5 @@ pub fn set_hitboxes(state: State<'_, AppState>, rects: Vec<Rect>) {
         .filter(|r| [r.x, r.y, r.w, r.h].iter().all(|v| v.is_finite()) && r.w > 0.0 && r.h > 0.0)
         .take(MAX_HITBOXES)
         .collect();
-    *state.hitboxes.lock().unwrap() = rects;
+    *state.page_hitboxes.lock().unwrap() = rects;
 }

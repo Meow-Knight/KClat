@@ -44,6 +44,8 @@
   "settings.general.sfw.desc": "Không chửi bậy.",
   "settings.general.reduceMotion": "Giảm chuyển động",
   "settings.general.reduceMotion.desc": "Không nhảy, không rung, aura không chớp.",
+  "settings.general.size": "Kích thước mèo",
+  "settings.general.size.desc": "Kéo sang phải để mèo to hơn, sang trái để nhỏ lại.",
   "settings.general.move": "Di chuyển mèo",
   "settings.general.move.how": "Giữ Space, nhấn chuột lên mèo rồi kéo. Thả Space để đặt mèo ở đó.",
   "settings.general.permission": "Quyền Trợ năng (Accessibility)",

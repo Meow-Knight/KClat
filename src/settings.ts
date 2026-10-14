@@ -21,6 +21,8 @@ export interface AppSettings extends CatSettings {
   hideWhileSleeping: boolean;
   uiLanguage: UiLanguage;
   staleAfterMs: number;
+  /** Cat size in percent (CAT_SCALE range). Rust sizes and zooms the overlay window; the page does not see it. */
+  catScale: number;
   startAtLogin: boolean;
   corner: 'bottom-right';
   /** Where the cat was dragged (window top-left, physical px); null = the corner. */
@@ -37,10 +39,14 @@ export const DEFAULT_SETTINGS: Readonly<AppSettings> = {
   maxYellsPerWake: 10,
   staleAfterMs: 1_800_000,
   reduceMotion: false,
+  catScale: 100,
   startAtLogin: false,
   corner: 'bottom-right',
   position: null,
 };
+
+/** Cat size slider: percent range and step (Rust clamps to the same range). */
+export const CAT_SCALE = { min: 50, max: 200, step: 5 } as const;
 
 /** The phrase languages the cat may use for a Klat Language. */
 export function phraseLanguages(klat: KlatLanguage): PhraseLang[] {

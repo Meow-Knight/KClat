@@ -173,9 +173,7 @@ fn run_grab(app: &AppHandle, rx: &std::sync::mpsc::Receiver<Msg>) {
             );
             let cat = app
                 .state::<AppState>()
-                .hitboxes
-                .lock()
-                .unwrap()
+                .hitboxes()
                 .first()
                 .map(|r| to_px((0.0, 0.0), scale, r));
             let area = app

@@ -28,6 +28,8 @@ const TAN_HALF_FOV = Math.tan(THREE.MathUtils.degToRad(BASE_FOV / 2));
 const WORLD_PER_PX = (2 * CAMERA_POS.distanceTo(CAMERA_TARGET) * TAN_HALF_FOV) / BASE_HEIGHT;
 /** Where the Ready button sits: on the ground to the right of the sleeping cat (world space). */
 const READY_ANCHOR = new THREE.Vector3(3.2, 0.35, 0.9);
+/** Canvas resolution: the display's pixel ratio (which includes the cat-size zoom), capped. */
+const pixelRatio = () => Math.min(window.devicePixelRatio, 3);
 /** How long the cat's "fine, I'll wake you" reply stays up. */
 const READY_REPLY_MS = 2200;
 
@@ -61,6 +63,8 @@ export class CatStage {
   private readonly picker: PhrasePicker;
   private readonly loop: RenderLoop;
   private readonly resizeObserver: ResizeObserver;
+  /** Matches the current devicePixelRatio; fires when it changes (cat size, or a monitor with another DPI). */
+  private dprQuery: MediaQueryList | undefined;
   private readonly head = { x: 0, y: 0 };
   private readonly probe = new THREE.Vector3();
   private readonly lookTarget = new THREE.Vector3();
@@ -86,7 +90,7 @@ export class CatStage {
     const canvas = document.createElement('canvas');
     container.append(canvas);
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, premultipliedAlpha: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(pixelRatio());
     this.renderer.setClearColor(0x000000, 0);
 
     this.camera.position.copy(CAMERA_POS);
@@ -157,6 +161,7 @@ export class CatStage {
     this.resizeObserver = new ResizeObserver(() => this.resize(true));
     this.resizeObserver.observe(container);
     this.resize(false);
+    this.watchPixelRatio();
     this.loop.start();
   }
 
@@ -247,6 +252,7 @@ export class CatStage {
     clearTimeout(this.readyReplyTimer);
     this.loop.dispose();
     this.resizeObserver.disconnect();
+    this.dprQuery?.removeEventListener('change', this.onPixelRatioChange);
     this.controller.dispose();
     this.rig.dispose();
     this.renderer.dispose();
@@ -277,6 +283,21 @@ export class CatStage {
     this.readyButton.placeAt(((this.probe.x + 1) / 2) * this.width, ((1 - this.probe.y) / 2) * this.height);
     if (notify) this.callbacks.onLayoutChange?.();
   }
+
+  /**
+   * A zoom (the cat size) or a DPI change leaves the stage's CSS size alone, so the ResizeObserver stays quiet:
+   * follow devicePixelRatio instead, or the canvas would be stretched and blurry.
+   */
+  private watchPixelRatio(): void {
+    this.dprQuery?.removeEventListener('change', this.onPixelRatioChange);
+    this.dprQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+    this.dprQuery.addEventListener('change', this.onPixelRatioChange);
+  }
+
+  private readonly onPixelRatioChange = (): void => {
+    this.renderer.setPixelRatio(pixelRatio());
+    this.watchPixelRatio();
+  };
 
   /** The button is only offered while the cat is asleep and shown; Ready is meaningless once it is awake. */
   private syncReadyButton(): void {
