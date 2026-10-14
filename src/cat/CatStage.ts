@@ -7,7 +7,8 @@ import { PHRASES } from '../phrases/phrases';
 import { PhrasePicker, type PickerOptions, type WakeReason } from '../phrases/PhrasePicker';
 import { phraseLanguages, type CatSettings, type UiLanguage } from '../settings';
 import { CatController, type CatPhase, type SleepStyle } from './CatController';
-import { CatRig, HIT_BOUNDS } from './CatRig';
+import { createRig } from '../characters';
+import type { CharacterRig } from '../kit/CharacterRig';
 import { RenderLoop } from './RenderLoop';
 import '../assets/fonts/fonts.css';
 import './stage.css';
@@ -59,7 +60,7 @@ export class CatStage {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
-  private readonly rig = new CatRig();
+  private rig: CharacterRig;
   private readonly picker: PhrasePicker;
   private readonly loop: RenderLoop;
   private readonly resizeObserver: ResizeObserver;
@@ -98,6 +99,7 @@ export class CatStage {
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.95));
     const sun = new THREE.DirectionalLight(0xffffff, 2.3);
     sun.position.set(-3, 5, 6);
+    this.rig = createRig(settings.character);
     this.scene.add(sun, this.rig.object);
 
 
@@ -232,7 +234,7 @@ export class CatStage {
   /** Clickable regions: the cat (a generous box for the current pose), the bubble and the Ready button. */
   hitboxes(): StageRect[] {
     if (this.hidden) return [];
-    const rects = [this.projectBox(HIT_BOUNDS[this.phase === 'awake' ? 'awake' : 'asleep'])];
+    const rects = [this.projectBox(this.rig.hitBounds[this.phase === 'awake' ? 'awake' : 'asleep'])];
     // Layout boxes, not bounding rects: the bubble's pop-in transform starts at scale(0).
     for (const el of [this.bubble.visible ? this.bubble.el : null, this.readyButton.visible ? this.readyButton.el : null]) {
       if (el) rects.push({ x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight });
@@ -241,7 +243,9 @@ export class CatStage {
   }
 
   setSettings(settings: CatSettings): void {
+    const switched = settings.character !== this.settings.character;
     this.settings = { ...settings };
+    if (switched) this.swapRig();
     this.controller.setOptions(settings);
     this.picker.setOptions(pickerOptions(settings));
     this.bubble.setReduceMotion(settings.reduceMotion);
@@ -258,6 +262,15 @@ export class CatStage {
     this.renderer.dispose();
     this.container.replaceChildren();
     this.container.classList.remove('cat-stage', 'asleep', 'reduce-motion', 'grab-armed', 'grab-dragging');
+  }
+
+  /** Another character picked in Settings: same brain and pose, new body. Its hitbox may differ. */
+  private swapRig(): void {
+    this.scene.remove(this.rig.object);
+    this.rig.dispose();
+    this.rig = createRig(this.settings.character);
+    this.scene.add(this.rig.object);
+    this.callbacks.onLayoutChange?.();
   }
 
   private frame(dt: number, now: number): void {

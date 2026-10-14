@@ -1,7 +1,7 @@
 // Browser dev page (pnpm dev → /dev.html): drive the cat with buttons, no Tauri needed.
 import { CatStage } from '../cat/CatStage';
 import type { WakeReason } from '../phrases/PhrasePicker';
-import { DEFAULT_SETTINGS, type CatSettings, type KlatLanguage } from '../settings';
+import { DEFAULT_SETTINGS, type CatSettings, type CharacterId, type KlatLanguage } from '../settings';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -15,6 +15,7 @@ function readSettings(): CatSettings {
   const klatLanguage: KlatLanguage = en === vi ? 'auto' : en ? 'en' : 'vi';
   return {
     ...DEFAULT_SETTINGS,
+    character: $<HTMLSelectElement>('character').value as CharacterId,
     sfwMode: $<HTMLInputElement>('sfw').checked,
     reduceMotion: $<HTMLInputElement>('reduce').checked,
     klatLanguage,
@@ -63,7 +64,7 @@ $('knockout').addEventListener('click', () => {
 });
 $('next').addEventListener('click', () => stage.yellNow(reason()));
 $('pet').addEventListener('click', () => stage.pet());
-for (const id of ['sfw', 'reduce', 'en', 'vi', 'interval', 'max']) {
+for (const id of ['character', 'sfw', 'reduce', 'en', 'vi', 'interval', 'max']) {
   $(id).addEventListener('change', () => stage.setSettings(readSettings()));
 }
 $<HTMLInputElement>('dark').addEventListener('change', (e) => {

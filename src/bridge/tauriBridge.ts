@@ -65,6 +65,7 @@ export type DragPermission = 'not-needed' | 'granted' | 'missing';
 export type SettingsPatch = Partial<
   Pick<
     AppSettings,
+    | 'character'
     | 'notificationsEnabled'
     | 'hideWhileSleeping'
     | 'sfwMode'

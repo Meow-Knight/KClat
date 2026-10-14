@@ -6,9 +6,13 @@ import type { PhraseLang } from './phrases/phrases';
 export type UiLanguage = 'en' | 'vi';
 /** Klat Language: what the cat says. Auto mixes both languages. */
 export type KlatLanguage = PhraseLang | 'auto';
+/** Who sits in the corner (src/characters). */
+export const CHARACTERS = ['cat', 'snake', 'dragon'] as const;
+export type CharacterId = (typeof CHARACTERS)[number];
 
 /** The part of the settings the cat itself uses. */
 export interface CatSettings {
+  character: CharacterId;
   sfwMode: boolean;
   klatLanguage: KlatLanguage;
   yellIntervalMs: number;
@@ -30,6 +34,7 @@ export interface AppSettings extends CatSettings {
 }
 
 export const DEFAULT_SETTINGS: Readonly<AppSettings> = {
+  character: 'cat',
   notificationsEnabled: true,
   hideWhileSleeping: false,
   sfwMode: false,

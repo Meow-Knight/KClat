@@ -412,6 +412,80 @@ h1:focus {
   box-shadow: var(--shadow-xs), inset 0 0 0 1px var(--line);
 }
 
+/* Picture choice (the character picker): one card per option. The picked card shows its character awake and
+   grumpy, the others asleep; hovering wakes them up too. */
+
+.picks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.pick {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 6px 10px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: var(--code);
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 0.12s, background-color 0.12s, color 0.12s;
+}
+
+.pick:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.pick[aria-checked='true'] {
+  border-color: var(--accent);
+  background: var(--active);
+  color: var(--ink);
+}
+
+.pick-art {
+  position: relative;
+  display: none;
+  width: 100%;
+  max-width: 150px;
+  aspect-ratio: 150 / 140;
+}
+
+.has-pictures .pick-art {
+  display: block;
+}
+
+.pick-art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transition: opacity 0.15s;
+}
+
+.pick-awake,
+.pick:hover .pick-asleep,
+.pick[aria-checked='true'] .pick-asleep {
+  opacity: 0;
+}
+
+.pick:hover .pick-awake,
+.pick[aria-checked='true'] .pick-awake {
+  opacity: 1;
+}
+
+.pick-label {
+  padding-top: 4px;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+}
+
 /* Preview bubble: same look as the cat's bubble on the overlay. */
 
 .preview {

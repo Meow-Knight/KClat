@@ -1,5 +1,5 @@
-// Small DOM building blocks for the Settings window: rows, cards, switches, segmented controls, steppers, sliders,
-// buttons.
+// Small DOM building blocks for the Settings window: rows, cards, switches, segmented controls, picture choices,
+// steppers, sliders, buttons.
 // Each control returns its element plus a `set` that reflects a value coming back from Rust without firing.
 
 type Child = Node | string | null | undefined | false;
@@ -120,6 +120,62 @@ export function segmented<T extends string>(
       attrs: { type: 'button', role: 'radio', 'data-focus-key': `${focusKey}:${o.value}`, ...(o.lang ? { lang: o.lang } : {}) },
     }),
   );
+  el.append(...buttons);
+  return radioGroup(el, buttons, options, value, onChange);
+}
+
+/** What the picture choice shows for one option: the picked one awake, the others asleep (awake on hover). */
+export interface Pictures {
+  awake: string;
+  asleep: string;
+}
+
+/**
+ * A radio group of picture cards, one per option. Pictures can arrive later (setPictures); until then the
+ * cards show their labels only.
+ */
+export function pictureChoice<T extends string>(
+  focusKey: string,
+  label: string,
+  options: readonly Option<T>[],
+  value: T,
+  onChange: (next: T) => void,
+): Control<T> & { setPictures(pictures: Readonly<Record<T, Pictures>>): void } {
+  const el = h('div', { class: 'picks', attrs: { role: 'radiogroup', 'aria-label': label } });
+  const art = new Map<T, [HTMLImageElement, HTMLImageElement]>();
+  const buttons = options.map((o) => {
+    // Decorative: the label names the option.
+    const asleep = h('img', { class: 'pick-asleep', attrs: { alt: '', draggable: 'false' } });
+    const awake = h('img', { class: 'pick-awake', attrs: { alt: '', draggable: 'false' } });
+    art.set(o.value, [asleep, awake]);
+    return h(
+      'button',
+      { class: 'pick', attrs: { type: 'button', role: 'radio', 'data-focus-key': `${focusKey}:${o.value}` } },
+      h('span', { class: 'pick-art', attrs: { 'aria-hidden': 'true' } }, asleep, awake),
+      h('span', { class: 'pick-label', text: o.label }),
+    );
+  });
+  el.append(...buttons);
+  return {
+    ...radioGroup(el, buttons, options, value, onChange),
+    setPictures(pictures) {
+      for (const [v, [asleep, awake]] of art) {
+        asleep.src = pictures[v].asleep;
+        awake.src = pictures[v].awake;
+      }
+      el.classList.add('has-pictures');
+    },
+  };
+}
+
+/** Radio behaviour for a group of buttons: one tab stop, click to pick, arrow keys move and pick. */
+function radioGroup<T extends string>(
+  el: HTMLElement,
+  buttons: HTMLElement[],
+  options: readonly Option<T>[],
+  value: T,
+  onChange: (next: T) => void,
+): Control<T> {
   let current = value;
   const render = () =>
     buttons.forEach((b, i) => {
@@ -140,7 +196,6 @@ export function segmented<T extends string>(
       onChange(options[j].value);
     });
   });
-  el.append(...buttons);
   render();
   return {
     el,

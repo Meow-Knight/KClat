@@ -1,7 +1,7 @@
-// General: start at login, how the cat behaves and how big it is, how to move it.
+// General: start at login, which character, how it behaves and how big it is, how to move it.
 import type { DragPermission } from '../../bridge/tauriBridge';
-import { CAT_SCALE } from '../../settings';
-import { banner, button, card, h, row, slider, svg, toggle } from '../controls';
+import { CAT_SCALE, CHARACTERS, type CharacterId } from '../../settings';
+import { banner, button, card, h, pictureChoice, row, slider, svg, toggle } from '../controls';
 import type { Ctx, SectionView } from '../context';
 
 const MOVE_ICON = `<svg class="hint-icon" viewBox="0 0 20 20" aria-hidden="true">
@@ -21,6 +21,18 @@ export function generalSection(ctx: Ctx): SectionView {
       .catch((e: unknown) => startError.append(banner('error', t('settings.general.startAtLogin.error', { error: String(e) }))))
       .finally(() => startAtLogin.setBusy(false));
   });
+  const character = pictureChoice<CharacterId>(
+    'character',
+    t('settings.general.character'),
+    CHARACTERS.map((c) => ({ value: c, label: t(`settings.character.${c}`) })),
+    s.character,
+    (v) => ctx.patch({ character: v }),
+  );
+  // Drawn from the real rigs once the window is up; without WebGL the cards keep just their names.
+  void import('../../characters/pictures')
+    .then((m) => m.characterPictures())
+    .then((pictures) => character.setPictures(pictures))
+    .catch(() => {});
   const pause = toggle('pause', !s.notificationsEnabled, (on) => ctx.patch({ notificationsEnabled: !on }));
   const hide = toggle('hide', s.hideWhileSleeping, (on) => ctx.patch({ hideWhileSleeping: on }));
   const sfw = toggle('sfw', s.sfwMode, (on) => ctx.patch({ sfwMode: on }));
@@ -58,6 +70,7 @@ export function generalSection(ctx: Ctx): SectionView {
     ),
     card(
       t('settings.general.cat'),
+      row({ title: t('settings.general.character'), desc: t('settings.general.character.desc'), below: character.el }),
       row({ title: t('settings.general.pause'), desc: t('settings.general.pause.desc'), control: pause.el }),
       row({ title: t('settings.general.hide'), desc: t('settings.general.hide.desc'), control: hide.el }),
       row({ title: t('settings.general.sfw'), desc: t('settings.general.sfw.desc'), control: sfw.el }),
@@ -75,6 +88,7 @@ export function generalSection(ctx: Ctx): SectionView {
     el,
     update(next) {
       startAtLogin.set(next.startAtLogin);
+      character.set(next.character);
       pause.set(!next.notificationsEnabled);
       hide.set(next.hideWhileSleeping);
       sfw.set(next.sfwMode);

@@ -33,9 +33,20 @@ pub enum KlatLanguage {
     Auto,
 }
 
+/// Who sits in the corner (src/characters in the frontend). The overlay draws it; Rust only stores the choice.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Character {
+    #[default]
+    Cat,
+    Snake,
+    Dragon,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
+    pub character: Character,
     pub notifications_enabled: bool,
     pub hide_while_sleeping: bool,
     pub sfw_mode: bool,
@@ -56,6 +67,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            character: Character::Cat,
             notifications_enabled: true,
             hide_while_sleeping: false,
             sfw_mode: false,
@@ -80,7 +92,8 @@ pub const CAT_SCALE: (u32, u32) = (50, 200);
 
 /// Fields the Settings window may change. `position` belongs to dragging, `corner` has one value, and
 /// `startAtLogin` must go through the OS (see `autostart`).
-pub const PATCHABLE: [&str; 10] = [
+pub const PATCHABLE: [&str; 11] = [
+    "character",
     "notificationsEnabled",
     "hideWhileSleeping",
     "sfwMode",
@@ -105,6 +118,7 @@ impl Settings {
         let d = Self::default();
         let corner: String = field(obj, "corner", d.corner.clone());
         Self {
+            character: field(obj, "character", d.character),
             notifications_enabled: field(obj, "notificationsEnabled", d.notifications_enabled),
             hide_while_sleeping: field(obj, "hideWhileSleeping", d.hide_while_sleeping),
             sfw_mode: field(obj, "sfwMode", d.sfw_mode),
@@ -280,6 +294,7 @@ mod tests {
         assert_eq!(
             v,
             json!({
+                "character": "cat",
                 "notificationsEnabled": true, "hideWhileSleeping": false, "sfwMode": false,
                 "uiLanguage": "en", "klatLanguage": "auto", "yellIntervalMs": 30000, "maxYellsPerWake": 10,
                 "staleAfterMs": 1800000, "reduceMotion": false, "catScale": 100, "startAtLogin": false,
@@ -301,13 +316,16 @@ mod tests {
         assert_eq!(s.max_yells_per_wake, 10);
         assert_eq!(s.ui_language, UiLanguage::En);
         assert_eq!(s.klat_language, KlatLanguage::Auto);
+        // Files written before characters existed get the cat.
+        assert_eq!(s.character, Character::Cat);
     }
 
     #[test]
     fn mistyped_and_out_of_range_fields_fall_back_individually() {
         let obj = json!({
             "sfwMode": "yes", "reduceMotion": true, "yellIntervalMs": 10, "maxYellsPerWake": 0,
-            "staleAfterMs": -5, "uiLanguage": "fr", "klatLanguage": 3, "corner": "top-left", "unknown": 1
+            "staleAfterMs": -5, "uiLanguage": "fr", "klatLanguage": 3, "corner": "top-left", "unknown": 1,
+            "character": "unicorn"
         });
         let s = Settings::from_object(obj.as_object().unwrap());
         assert!(!s.sfw_mode);
@@ -318,6 +336,7 @@ mod tests {
         assert_eq!(s.ui_language, UiLanguage::En);
         assert_eq!(s.klat_language, KlatLanguage::Auto);
         assert_eq!(s.corner, "bottom-right");
+        assert_eq!(s.character, Character::Cat);
     }
 
     #[test]
@@ -413,10 +432,11 @@ mod tests {
             ..Settings::default()
         };
         let patch = json!({
-            "sfwMode": true, "uiLanguage": "vi", "klatLanguage": "en", "yellIntervalMs": 1,
+            "character": "dragon", "sfwMode": true, "uiLanguage": "vi", "klatLanguage": "en", "yellIntervalMs": 1,
             "position": null, "startAtLogin": true, "corner": "top-left", "bogus": 1
         });
         let next = apply_patch(&current, patch.as_object().unwrap());
+        assert_eq!(next.character, Character::Dragon);
         assert!(next.sfw_mode);
         assert_eq!(next.ui_language, UiLanguage::Vi);
         assert_eq!(next.klat_language, KlatLanguage::En);
