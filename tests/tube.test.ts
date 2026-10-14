@@ -1,19 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { TailTube } from '../src/cat/tail';
+import { ToonTube } from '../src/kit/tube';
 
 type Pts = [number, number, number][];
 const AWAKE: Pts = [[0.55, 0.45, -0.75], [1.25, 0.55, -0.7], [1.62, 1.15, -0.55], [1.45, 1.8, -0.45]];
 const ASLEEP: Pts = [[0.55, 0.35, -0.7], [1.15, 0.27, -0.1], [0.9, 0.22, 0.7], [0.25, 0.2, 1.05]];
 const REPEATED: Pts = [[0, 0, 0], [0, 0, 0], [1, 1, 0], [1, 1, 0]];
 
-function makeTail(pts: Pts = AWAKE): TailTube {
-  const tail = new TailTube(new THREE.MeshBasicMaterial(), new THREE.MeshBasicMaterial());
+function makeTail(pts: Pts = AWAKE): ToonTube {
+  const tail = new ToonTube(new THREE.MeshBasicMaterial(), new THREE.MeshBasicMaterial());
   pts.forEach((p, i) => tail.points[i].set(...p));
   return tail;
 }
 
-describe('TailTube', () => {
+describe('ToonTube', () => {
   it('reuses the same buffers across updates', () => {
     const tail = makeTail();
     tail.update(0.155, 0.195);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { createToonGradient, toonGradientData } from '../src/cat/materials';
+import { createToonGradient, toonGradientData } from '../src/kit/materials';
 
 describe('toon gradient', () => {
   it('encodes the three spec bands as opaque grey texels', () => {

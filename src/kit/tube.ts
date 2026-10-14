@@ -1,4 +1,5 @@
-// Tail tube that is allocated once and rewritten in place every frame (spec §6.3).
+// Toon tube through 4 control points (the cat's tail; also scarves, antennae, hair strands), allocated once and
+// rewritten in place every frame (spec §6.3).
 // The prototype rebuilt a TubeGeometry per frame (~12 MB/s of garbage). Here the centreline, frames and
 // vertices all live in preallocated typed arrays, and the spline is evaluated inline: THREE.CatmullRomCurve3
 // boxes a float per coefficient on every getPoint(), which was the largest allocation left in the frame.
@@ -35,7 +36,7 @@ function tubeGeometry(withNormals: boolean): THREE.BufferGeometry {
   return geo;
 }
 
-export class TailTube {
+export class ToonTube {
   /** The 4 control points; write them, then call update(). */
   readonly points: THREE.Vector3[] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
   readonly mesh: THREE.Mesh;
