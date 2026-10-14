@@ -44,7 +44,8 @@ function applyState(s: CatStatePayload): void {
       stage.yellNow(s.attention.reason);
     }
   } else {
-    stage.sleep();
+    // Something you did (answered Claude, dismissed) gets the cat knocked out; an expiry or Pause, a yawn.
+    stage.sleep(s.sleepCause === 'user' ? 'knockout' : 'yawn');
   }
   lastAttention = seq;
 }

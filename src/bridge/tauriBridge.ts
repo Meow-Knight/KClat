@@ -25,6 +25,8 @@ export interface CatStatePayload {
   attention: Attention | null;
   /** Ready is armed: finished turns wake the cat until you turn it off. */
   ready: boolean;
+  /** Why the latest change happened: 'user' (you answered or dismissed) or 'auto' (expiry, Pause). */
+  sleepCause: 'user' | 'auto';
 }
 
 /** Cursor in logical px relative to the overlay's top-left corner; null = on another monitor. */

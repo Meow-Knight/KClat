@@ -6,7 +6,7 @@ import { ReadyButton } from '../bubble/ReadyButton';
 import { PHRASES } from '../phrases/phrases';
 import { PhrasePicker, type PickerOptions, type WakeReason } from '../phrases/PhrasePicker';
 import { phraseLanguages, type CatSettings, type UiLanguage } from '../settings';
-import { CatController, type CatPhase } from './CatController';
+import { CatController, type CatPhase, type SleepStyle } from './CatController';
 import { CatRig, HIT_BOUNDS } from './CatRig';
 import { RenderLoop } from './RenderLoop';
 import '../assets/fonts/fonts.css';
@@ -164,8 +164,9 @@ export class CatStage {
     this.controller.wake(reason);
   }
 
-  sleep(): void {
-    this.controller.sleep();
+  /** 'knockout' when you did something (answered, dismissed); 'yawn' when nobody did. */
+  sleep(style: SleepStyle = 'yawn'): void {
+    this.controller.sleep(style);
   }
 
   yellNow(reason?: WakeReason): void {

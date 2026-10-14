@@ -1,14 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CatController, type CatPhase, type ControllerOptions, type YellRequest } from '../src/cat/CatController';
+import {
+  CatController,
+  KNOCKOUT_FLIGHT_END_S,
+  KNOCKOUT_OBJECTS,
+  type CatPhase,
+  type ControllerOptions,
+  type YellRequest,
+} from '../src/cat/CatController';
 import { DEFAULT_LOOK } from '../src/cat/lookTarget';
 
 const OPTS: ControllerOptions = { yellIntervalMs: 30_000, maxYellsPerWake: 10, reduceMotion: false };
 
-function setup(opts: Partial<ControllerOptions> = {}) {
+function setup(opts: Partial<ControllerOptions> = {}, random: () => number = () => 0.5) {
   const says: YellRequest[] = [];
   const hush = vi.fn();
   const phases: CatPhase[] = [];
-  const c = new CatController({ say: (r) => says.push(r), hush }, { ...OPTS, ...opts }, (p) => phases.push(p), () => 0.5);
+  const c = new CatController({ say: (r) => says.push(r), hush }, { ...OPTS, ...opts }, (p) => phases.push(p), random);
   /** Advance timers and physics together, like the render loop would. */
   const advance = (ms: number): void => {
     for (let t = 0; t < ms; t += 16) {
@@ -293,5 +300,85 @@ describe('CatController', () => {
     c.wake();
     c.dispose();
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  describe('knockout (you answered, so something hits the cat)', () => {
+    /** Awake and past the wake sequence, then knocked out. */
+    function knocked(opts: Partial<ControllerOptions> = {}, random?: () => number) {
+      const t = setup(opts, random);
+      t.c.wake('done');
+      t.advance(2000);
+      t.phases.length = 0;
+      t.c.sleep('knockout');
+      return t;
+    }
+
+    it('throws one of the four objects, picked at random', () => {
+      const seen = [0, 0.3, 0.6, 0.99].map((r) => knocked({}, () => r).c.knockoutObject);
+      expect(seen).toEqual(['stick', 'slipper', 'durian', 'pan']);
+      expect(KNOCKOUT_OBJECTS).toHaveLength(4);
+    });
+
+    it('flies in, hits at ~380ms, then the cat sees stars and gets a bump', () => {
+      const { c, advance } = knocked();
+      advance(16); // the pose is written by the frame update
+      expect(c.pose.bonkKind).toBeGreaterThanOrEqual(0);
+      advance(144);
+      expect(c.pose.bonkT).toBeGreaterThan(0.1);
+      expect(c.spring('dizzy').t).toBe(0);
+      advance(320);
+      expect(c.spring('dizzy').t).toBe(1);
+      expect(c.spring('bump').t).toBe(1);
+      expect(c.spring('ear').t).toBe(0);
+      advance(200);
+      expect(c.pose.dizzy).toBeGreaterThan(0.5);
+    });
+
+    it('slumps over, settles asleep at ~2.1s, and the object is gone by then', () => {
+      const { c, phases, advance } = knocked();
+      advance(1200);
+      expect(c.spring('sleepy').t).toBe(1);
+      expect(phases).toEqual([]);
+      advance(1000);
+      expect(phases).toEqual(['asleep']);
+      expect(c.spring('dizzy').t).toBe(0);
+      expect(c.pose.zzz).toBe(true);
+      expect(c.pose.bonkKind).toBe(-1);
+      expect(KNOCKOUT_FLIGHT_END_S).toBeLessThan(2.1);
+      advance(2500);
+      expect(c.spring('bump').t).toBe(0);
+    });
+
+    it('under reduceMotion nothing flies: a short dizzy moment, then sleep', () => {
+      const { c, phases, advance } = knocked({ reduceMotion: true });
+      expect(c.pose.bonkKind).toBe(-1);
+      expect(c.knockoutObject).toBeNull();
+      expect(c.spring('dizzy').t).toBe(1);
+      advance(1100);
+      expect(phases).toEqual(['asleep']);
+      expect(c.spring('dizzy').t).toBe(0);
+    });
+
+    it('a wake during the knockout cancels it cleanly', () => {
+      const { c, advance } = knocked();
+      advance(500);
+      c.wake('permission');
+      advance(16);
+      expect(c.current).toBe('active');
+      expect(c.pose.bonkKind).toBe(-1);
+      expect(c.spring('dizzy').t).toBe(0);
+      expect(c.spring('bump').t).toBe(0);
+      advance(3000);
+      expect(c.current).toBe('active');
+    });
+
+    it('the default is still the yawn', () => {
+      const t = setup();
+      t.c.wake();
+      t.advance(2000);
+      t.c.sleep();
+      expect(t.c.knockoutObject).toBeNull();
+      expect(t.c.spring('yawn').t).toBe(1);
+    });
   });
 });

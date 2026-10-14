@@ -25,8 +25,8 @@ function readSettings(): CatSettings {
 
 const stage = new CatStage(stageEl, readSettings(), {
   onDismiss: () => {
-    note('dismiss (bubble click or double-click on the awake cat)');
-    stage.sleep();
+    note('dismiss (bubble click or double-click on the awake cat): knockout');
+    stage.sleep('knockout');
   },
   onPhase: (phase) => note(`phase: ${phase}`),
   onLayoutChange: () => drawHitboxes(),
@@ -57,6 +57,10 @@ function note(msg: string): void {
 
 $('wake').addEventListener('click', () => stage.wake(reason()));
 $('sleep').addEventListener('click', () => stage.sleep());
+$('knockout').addEventListener('click', () => {
+  stage.sleep('knockout');
+  note(`knockout: ${stage.controller.knockoutObject ?? 'no object (reduce motion, or already asleep)'}`);
+});
 $('next').addEventListener('click', () => stage.yellNow(reason()));
 $('pet').addEventListener('click', () => stage.pet());
 for (const id of ['sfw', 'reduce', 'en', 'vi', 'interval', 'max']) {

@@ -32,6 +32,16 @@ pub struct Attention {
     pub reason: WakeReason,
 }
 
+/// Why the last change happened, so the overlay can pick how the cat falls asleep: knocked out by a flying
+/// object when you did something (answered Claude, dismissed, turned Ready off), a yawn when nobody did
+/// (a waiting session expired, notifications were paused).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SleepCause {
+    User,
+    Auto,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CatState {
@@ -42,6 +52,8 @@ pub struct CatState {
     pub attention: Option<Attention>,
     /// Ready is armed: finished turns wake the cat until you turn it off.
     pub ready: bool,
+    /// Why the latest change happened; read by the overlay when the cat goes from awake to asleep.
+    pub sleep_cause: SleepCause,
 }
 
 struct Inner {
@@ -51,6 +63,7 @@ struct Inner {
     attention: Option<Attention>,
     /// When Ready was armed (unix ms); None while it is off. Only finished turns that start after it count.
     ready_since: Option<u64>,
+    sleep_cause: SleepCause,
 }
 
 pub struct AppState {
@@ -93,6 +106,7 @@ impl AppState {
                 test_wake: None,
                 attention: None,
                 ready_since: None,
+                sleep_cause: SleepCause::Auto,
             }),
             hitboxes: Mutex::new(Vec::new()),
             awake: AtomicBool::new(false),
@@ -126,6 +140,7 @@ impl AppState {
             sessions,
             attention: if awake { inner.attention.clone() } else { None },
             ready: inner.ready_since.is_some(),
+            sleep_cause: inner.sleep_cause,
         }
     }
 
@@ -149,6 +164,7 @@ pub fn set_ready(app: &AppHandle, on: bool) {
     let state = app.state::<AppState>();
     {
         let mut inner = state.inner.lock().unwrap();
+        inner.sleep_cause = SleepCause::User;
         // Arming again while already armed keeps the original time, so nothing that already counts is lost.
         inner.ready_since = if on {
             inner.ready_since.or(Some(now_ms()))
@@ -165,6 +181,7 @@ pub fn dismiss_all(app: &AppHandle) {
     let state = app.state::<AppState>();
     {
         let mut inner = state.inner.lock().unwrap();
+        inner.sleep_cause = SleepCause::User;
         inner.test_wake = None;
         inner.store.dismiss_all();
     }
@@ -176,6 +193,8 @@ pub fn apply_hook_event(app: &AppHandle, ev: &HookEvent) {
     let state = app.state::<AppState>();
     let outcome = {
         let mut inner = state.inner.lock().unwrap();
+        // Hooks follow what you do in Claude Code: a prompt, an answered permission, a closed session.
+        inner.sleep_cause = SleepCause::User;
         let outcome = inner.store.apply(ev, now_ms());
         if let Outcome::Attention {
             project_name,
@@ -215,12 +234,14 @@ pub fn apply_hook_event(app: &AppHandle, ev: &HookEvent) {
 pub fn expire_stale(app: &AppHandle) {
     let state = app.state::<AppState>();
     let stale_after = state.settings.lock().unwrap().stale_after_ms;
-    let changed = state
-        .inner
-        .lock()
-        .unwrap()
-        .store
-        .expire(now_ms(), stale_after);
+    let changed = {
+        let mut inner = state.inner.lock().unwrap();
+        let changed = inner.store.expire(now_ms(), stale_after);
+        if changed {
+            inner.sleep_cause = SleepCause::Auto;
+        }
+        changed
+    };
     if changed {
         publish_state(app);
     }
@@ -256,10 +277,43 @@ pub fn update_settings(app: &AppHandle, change: impl FnOnce(&mut Settings)) -> S
     if let Err(e) = settings::save(&state.settings_path, &next) {
         log::warn(format!("could not save settings: {e}"));
     }
+    // A settings change that puts the cat to sleep is Pause: nobody to throw anything.
+    state.inner.lock().unwrap().sleep_cause = SleepCause::Auto;
     crate::tray::sync_settings(app, &next);
     crate::settings_window::sync_title(app, next.ui_language);
     let _ = app.emit(EVENT_SETTINGS, next.clone());
     // Pausing or resuming notifications changes whether the cat is awake.
     publish_state(app);
     next
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sleep_cause_uses_the_names_the_overlay_reads() {
+        assert_eq!(serde_json::to_value(SleepCause::User).unwrap(), "user");
+        assert_eq!(serde_json::to_value(SleepCause::Auto).unwrap(), "auto");
+    }
+
+    #[test]
+    fn the_snapshot_carries_the_cause() {
+        let state = AppState {
+            settings: Mutex::new(Settings::default()),
+            settings_path: PathBuf::new(),
+            inner: Mutex::new(Inner {
+                store: SessionStore::default(),
+                test_wake: None,
+                attention: None,
+                ready_since: None,
+                sleep_cause: SleepCause::User,
+            }),
+            hitboxes: Mutex::new(Vec::new()),
+            awake: AtomicBool::new(false),
+        };
+        let json = serde_json::to_value(state.snapshot()).unwrap();
+        assert_eq!(json["sleepCause"], "user");
+        assert_eq!(json["awake"], false);
+    }
 }

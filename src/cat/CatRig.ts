@@ -1,7 +1,7 @@
 // The cat's meshes (spec §5), ported 1:1 from docs/prototype/cat-prototype.html.
 // No state logic here: applyPose() maps a CatPose onto transforms each frame, allocation-free.
 import * as THREE from 'three';
-import type { CatPose } from './CatController';
+import { KNOCKOUT_IMPACT_S, type CatPose } from './CatController';
 import { createOutlineMaterial, createToonGradient } from './materials';
 import { AMBER, BLUSH, CREAM, FUR, FUR2, INK, MOUTH, PINK, PUPIL } from './palette';
 import { TailTube } from './tail';
@@ -163,6 +163,41 @@ const ZZZ: readonly { glyph: string; size: number; dx: number; dy: number; delay
 const ANGER_POS: V3 = [0.86, 0.55, 1.0];
 const ANGER_SIZE = 0.46;
 
+/**
+ * Knockout (you answered, so something hits the cat): the four objects, drawn from primitives in the cat's toon
+ * style. World units; the cat's head is about 2.6 wide.
+ */
+const WOOD = 0x9c6b3e;
+const WOOD_DARK = 0x6e4524;
+const SLIPPER_SOLE = 0xf1eee6;
+const SLIPPER_CELL = 0xd8d2c4;
+const SLIPPER_STRAP = 0x3d8bfd;
+const DURIAN = 0xa9c24b;
+const DURIAN_SPIKE = 0x7e9937;
+const PAN = 0x3b3f4c;
+const PAN_INSIDE = 0x596071;
+const PAN_HANDLE = 0x23252e;
+/** Where things land on the head, in head-local units (the top, a little towards the viewer). */
+const HIT_LOCAL: V3 = [0.05, 0.95, 0.25];
+/** How far each object's centre sits above the hit point when it lands, so it rests on the head, not in it
+ * (stick, slipper, durian, pan). */
+const REST_LIFT: readonly number[] = [0.12, 0.1, 0.55, 0.12];
+/** Thrown objects come from the left (where the bubble was), the durian drops from above. */
+const THROW_FROM: V3 = [-3.8, 2.2, 1.2];
+const DROP_FROM: V3 = [0.15, 4.6, 0];
+const THROW_ARC = 1.0;
+/** After the hit: bounce velocity (world units/s) and gravity. */
+const BOUNCE: V3 = [1.7, 3.2, 0.7];
+const BOUNCE_DURIAN: V3 = [1.1, 3.4, 0.6];
+const BOUNCE_GRAVITY = 13;
+const BURST_S = 0.32;
+/** Stars circling the knocked-out head (head-local). */
+const STARS = 3;
+const STAR_ORBIT: V3 = [0.95, 1.12, 0.55];
+const STAR_SIZE = 0.3;
+const BUMP_POS: V3 = [0.18, 0.9, 0.38];
+const BUMP_SIZE = 0.32;
+
 interface Eye {
   s: number;
   iris: THREE.Group;
@@ -170,6 +205,8 @@ interface Eye {
   sleepArc: THREE.Mesh;
   happyArc: THREE.Mesh;
   brow: THREE.Mesh;
+  /** Knocked out: ✕ eyes. */
+  cross: THREE.Group;
 }
 
 interface Ear {
@@ -207,6 +244,14 @@ export class CatRig {
   private readonly eyes: Eye[] = [];
   private readonly ears: Ear[] = [];
   private readonly headWorld = new THREE.Vector3();
+  /** One group per KNOCKOUT_OBJECTS entry, in world space; at most one is visible. */
+  private readonly projectiles: THREE.Group[] = [];
+  private readonly bonkTarget = new THREE.Vector3();
+  private readonly bonkHit = new THREE.Vector3();
+  private bonkHitSet = false;
+  private burst: THREE.Sprite | undefined;
+  private readonly stars: THREE.Sprite[] = [];
+  private readonly bump: THREE.Mesh;
 
   constructor() {
     this.sphere = this.geo(new THREE.SphereGeometry(1, 40, 28));
@@ -299,7 +344,17 @@ export class CatRig {
       const brow = new THREE.Mesh(capsule, this.inkMat);
       brow.position.z = 0.06;
       eg.add(brow);
-      this.eyes.push({ s, iris, pupil, sleepArc, happyArc, brow });
+      const cross = new THREE.Group();
+      cross.position.z = 0.1;
+      cross.visible = false;
+      for (const r of [Math.PI / 4, -Math.PI / 4]) {
+        const bar = new THREE.Mesh(capsule, this.inkMat);
+        bar.rotation.z = r;
+        bar.scale.set(1.3, 1.25, 1);
+        cross.add(bar);
+      }
+      eg.add(cross);
+      this.eyes.push({ s, iris, pupil, sleepArc, happyArc, brow, cross });
 
       const pivot = new THREE.Group();
       pivot.position.set(s * 0.72, 0.68, 0);
@@ -316,6 +371,13 @@ export class CatRig {
 
     this.buildZzz();
     this.buildAnger();
+
+    // Knockout: the bump (child of the head), the objects, the impact burst and the stars.
+    this.bump = this.mk(SPH, FUR, headG, { p: BUMP_POS, s: [0, 0, 0], ol: 1.1 });
+    this.mk(SPH, 0xffffff, this.bump, { p: [-0.3, 0.35, 0.55], s: [0.25, 0.2, 0.15], ol: 0 });
+    this.bump.visible = false;
+    this.buildProjectiles();
+    this.buildKnockoutSprites();
 
     // Aura, behind the cat; drawn first among the transparent objects so the shadow disc lands on top.
     const auraMat = this.mat(
@@ -367,10 +429,12 @@ export class CatRig {
     const ev = pose.eye;
     const happy = pose.happy > 0.5;
     const closed = ev < 0.18 && !happy;
+    const knockedOut = pose.dizzy > 0.5;
     for (const e of this.eyes) {
-      e.iris.visible = !happy && !closed;
-      e.sleepArc.visible = closed;
-      e.happyArc.visible = happy;
+      e.cross.visible = knockedOut;
+      e.iris.visible = !happy && !closed && !knockedOut;
+      e.sleepArc.visible = closed && !knockedOut;
+      e.happyArc.visible = happy && !knockedOut;
       e.iris.scale.set(1 + Math.max(0, ev - 1) * 0.6, Math.max(0.04, Math.min(1.35, ev)), 1);
       e.pupil.position.set(pose.lx * 0.08 * awake, -pose.ly * 0.06 * awake, 0);
       e.brow.rotation.z = Math.PI / 2 + e.s * (pose.grumpy * 0.45 - 0.12);
@@ -427,6 +491,8 @@ export class CatRig {
       }
     }
 
+    this.applyKnockout(pose, t);
+
     // Zzz: port of the prototype's CSS keyframes (fade in over 20%, drift up-right, grow .6 → 1.1, fade out).
     for (let i = 0; i < this.zzz.length; i++) {
       const sprite = this.zzz[i];
@@ -438,6 +504,157 @@ export class CatRig {
       sprite.position.set(ZZZ_ANCHOR[0] + z.dx + ZZZ_DRIFT[0] * p, ZZZ_ANCHOR[1] + z.dy + ZZZ_DRIFT[1] * p, ZZZ_ANCHOR[2]);
       sprite.scale.setScalar(z.size * (0.6 + 0.5 * p));
     }
+  }
+
+  /** Flying object, impact burst, stars and bump. Allocation-free. */
+  private applyKnockout(pose: CatPose, t: number): void {
+    const kind = pose.bonkKind;
+    const flying = kind >= 0 && pose.bonkT >= 0;
+    for (let i = 0; i < this.projectiles.length; i++) this.projectiles[i].visible = flying && i === kind;
+    if (!flying) this.bonkHitSet = false;
+
+    if (flying) {
+      const obj = this.projectiles[kind];
+      const durian = kind === 2;
+      this.headG.localToWorld(this.bonkTarget.set(HIT_LOCAL[0], HIT_LOCAL[1] + REST_LIFT[kind], HIT_LOCAL[2]));
+      const bt = pose.bonkT;
+      if (bt < KNOCKOUT_IMPACT_S) {
+        const u = bt / KNOCKOUT_IMPACT_S;
+        const from = durian ? DROP_FROM : THROW_FROM;
+        if (durian) {
+          // Dropped: falls faster and faster onto the head.
+          const k = 1 - u * u;
+          obj.position.set(this.bonkTarget.x + from[0] * k, this.bonkTarget.y + from[1] * k, this.bonkTarget.z + from[2] * k);
+          obj.rotation.set(0.3, u * 2.4, 0.2);
+        } else {
+          // Thrown: an arc from the left, tumbling end over end.
+          const k = 1 - u;
+          obj.position.set(
+            this.bonkTarget.x + from[0] * k,
+            this.bonkTarget.y + from[1] * k + Math.sin(Math.PI * u) * THROW_ARC,
+            this.bonkTarget.z + from[2] * k,
+          );
+          obj.rotation.set(0.25, 0.4, 1.2 - u * Math.PI * 3.5);
+        }
+      } else {
+        if (!this.bonkHitSet) {
+          this.bonkHit.copy(this.bonkTarget);
+          this.bonkHitSet = true;
+        }
+        const v = bt - KNOCKOUT_IMPACT_S;
+        const b = durian ? BOUNCE_DURIAN : BOUNCE;
+        obj.position.set(
+          this.bonkHit.x + b[0] * v,
+          this.bonkHit.y + b[1] * v - 0.5 * BOUNCE_GRAVITY * v * v,
+          this.bonkHit.z + b[2] * v,
+        );
+        obj.rotation.z -= durian ? 0.05 : 0.22;
+        obj.rotation.x += 0.08;
+      }
+    }
+
+    const burst = this.burst;
+    if (burst) {
+      const v = flying ? pose.bonkT - KNOCKOUT_IMPACT_S : -1;
+      burst.visible = v >= 0 && v < BURST_S;
+      if (burst.visible) {
+        burst.position.copy(this.bonkHit);
+        burst.scale.setScalar(0.5 + v * 4.5);
+        (burst.material as THREE.SpriteMaterial).opacity = 1 - v / BURST_S;
+      }
+    }
+
+    // Stars orbit the head while it is dizzy (they hold still under reduceMotion).
+    const d = pose.dizzy;
+    for (let i = 0; i < this.stars.length; i++) {
+      const star = this.stars[i];
+      star.visible = d > 0.05;
+      if (!star.visible) continue;
+      const a = (pose.auraFlicker ? t * 5 : 0.6) + (i * Math.PI * 2) / STARS;
+      star.position.set(Math.cos(a) * STAR_ORBIT[0], STAR_ORBIT[1] + Math.sin(a) * 0.12, Math.sin(a) * STAR_ORBIT[2]);
+      star.scale.setScalar(STAR_SIZE * Math.min(1, d));
+      star.material.rotation = pose.auraFlicker ? t * 3 + i : 0;
+    }
+
+    const bump = Math.max(0, pose.bump);
+    this.bump.visible = bump > 0.02;
+    if (this.bump.visible) this.bump.scale.set(BUMP_SIZE * bump, BUMP_SIZE * 1.1 * bump, BUMP_SIZE * bump);
+  }
+
+  private buildProjectiles(): void {
+    const SPH = this.sphere;
+    const add = (g: THREE.Group) => {
+      g.visible = false;
+      this.object.add(g);
+      this.projectiles.push(g);
+    };
+
+    // Stick: a knotted branch.
+    const stick = new THREE.Group();
+    this.mk(this.geo(new THREE.CylinderGeometry(0.075, 0.095, 1.7, 10)), WOOD, stick, { r: [0, 0, Math.PI / 2] });
+    this.mk(SPH, WOOD_DARK, stick, { p: [0.35, 0.06, 0.02], s: [0.06, 0.05, 0.05], ol: 0 });
+    this.mk(SPH, WOOD_DARK, stick, { p: [-0.45, -0.05, 0.03], s: [0.05, 0.045, 0.05], ol: 0 });
+    this.mk(this.geo(new THREE.CylinderGeometry(0.03, 0.04, 0.32, 6)), WOOD, stick, { p: [0.25, 0.18, 0], r: [0, 0, -0.6] });
+    add(stick);
+
+    // Slipper (dép tổ ong): an oval sole with honeycomb cells and a blue strap over the toes.
+    const slipper = new THREE.Group();
+    this.mk(SPH, SLIPPER_SOLE, slipper, { s: [0.36, 0.07, 0.86] });
+    for (const [x, z] of [[-0.14, -0.45], [0.14, -0.45], [0, -0.2], [-0.15, 0.05], [0.15, 0.05], [0, 0.3]]) {
+      this.mk(SPH, SLIPPER_CELL, slipper, { p: [x, 0.055, z], s: [0.075, 0.02, 0.075], ol: 0 });
+    }
+    this.mk(this.geo(new THREE.TorusGeometry(0.3, 0.07, 8, 18, Math.PI)), SLIPPER_STRAP, slipper, {
+      p: [0, 0.02, 0.4],
+      s: [1.15, 0.85, 1],
+    });
+    add(slipper);
+
+    // Durian: a spiky green ball with a stem.
+    const durian = new THREE.Group();
+    this.mk(SPH, DURIAN, durian, { s: [0.45, 0.5, 0.45] });
+    const spike = this.geo(new THREE.ConeGeometry(0.07, 0.18, 6));
+    const up = new THREE.Vector3(0, 1, 0);
+    const n = new THREE.Vector3();
+    const SPIKES = 46;
+    for (let i = 0; i < SPIKES; i++) {
+      // Fibonacci sphere: evenly spread directions.
+      const y = 1 - (2 * (i + 0.5)) / SPIKES;
+      const r = Math.sqrt(1 - y * y);
+      const a = i * Math.PI * (3 - Math.sqrt(5));
+      n.set(Math.cos(a) * r, y, Math.sin(a) * r);
+      const m = this.mk(spike, DURIAN_SPIKE, durian, { p: [n.x * 0.45, n.y * 0.5, n.z * 0.45], ol: 0 });
+      m.quaternion.setFromUnitVectors(up, n);
+    }
+    this.mk(this.geo(new THREE.CylinderGeometry(0.04, 0.06, 0.22, 6)), WOOD_DARK, durian, { p: [0, 0.6, 0] });
+    add(durian);
+
+    // Non-stick pan: a dark dish with a lighter inside and a long handle.
+    const pan = new THREE.Group();
+    this.mk(this.geo(new THREE.CylinderGeometry(0.55, 0.46, 0.13, 28)), PAN, pan);
+    this.mk(this.geo(new THREE.CylinderGeometry(0.48, 0.48, 0.02, 28)), PAN_INSIDE, pan, { p: [0, 0.07, 0], ol: 0 });
+    this.mk(this.geo(new THREE.CylinderGeometry(0.05, 0.065, 0.8, 8)), PAN_HANDLE, pan, {
+      p: [0.92, 0.03, 0],
+      r: [0, 0, Math.PI / 2],
+    });
+    add(pan);
+  }
+
+  /** Needs a DOM canvas; skipped outside the browser (unit tests). */
+  private buildKnockoutSprites(): void {
+    if (typeof document === 'undefined') return;
+    const sprite = (map: THREE.Texture, parent: THREE.Object3D) => {
+      const s = new THREE.Sprite(this.mat(new THREE.SpriteMaterial({ map, transparent: true, depthTest: false, depthWrite: false })));
+      s.renderOrder = 10;
+      s.visible = false;
+      parent.add(s);
+      return s;
+    };
+    const burstMap = burstTexture();
+    this.textures.push(burstMap);
+    this.burst = sprite(burstMap, this.object);
+    const starMap = starTexture();
+    this.textures.push(starMap);
+    for (let i = 0; i < STARS; i++) this.stars.push(sprite(starMap, this.headG));
   }
 
   /** Head centre in CSS px relative to the canvas. Writes into `out`. */
@@ -568,6 +785,63 @@ function angerTexture(): THREE.CanvasTexture {
   ctx.lineWidth = 13;
   ctx.strokeStyle = '#e5383b';
   ctx.stroke();
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/** A five-pointed star in amber with an ink rim: the "seeing stars" after a hit. */
+function starTexture(): THREE.CanvasTexture {
+  const size = 96;
+  const c = size / 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 === 0 ? 40 : 17;
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    ctx.lineTo(c + Math.cos(a) * r, c + Math.sin(a) * r);
+  }
+  ctx.closePath();
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 7;
+  ctx.strokeStyle = `#${INK.toString(16).padStart(6, '0')}`;
+  ctx.stroke();
+  ctx.fillStyle = `#${AMBER.toString(16).padStart(6, '0')}`;
+  ctx.fill();
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/** The comic impact burst at the point of the hit: a white jagged star with an amber core. */
+function burstTexture(): THREE.CanvasTexture {
+  const size = 128;
+  const c = size / 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  const spikes = 12;
+  const shape = (outer: number, inner: number) => {
+    ctx.beginPath();
+    for (let i = 0; i < spikes * 2; i++) {
+      const r = i % 2 === 0 ? outer : inner;
+      const a = (i * Math.PI) / spikes;
+      ctx.lineTo(c + Math.cos(a) * r, c + Math.sin(a) * r);
+    }
+    ctx.closePath();
+  };
+  shape(60, 30);
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = `#${INK.toString(16).padStart(6, '0')}`;
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  shape(34, 18);
+  ctx.fillStyle = `#${AMBER.toString(16).padStart(6, '0')}`;
+  ctx.fill();
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;

@@ -26,6 +26,10 @@ export const SPRINGS = {
   annoyed: [0, 260, 13],
   /** Poked while asleep: extra tail swish on top of the sleepy sway. */
   swish: [0, 50, 10],
+  /** Knocked out: X eyes and stars circling the head (0 = off, 1 = seeing stars). */
+  dizzy: [0, 160, 12],
+  /** Knocked out: the bump on the head (impulse makes it pop). */
+  bump: [0, 220, 9],
 } as const satisfies Record<string, SpringSpec>;
 
 export type ParamName = keyof typeof SPRINGS;
@@ -39,7 +43,29 @@ export type CatPose = Record<ParamName, number> & {
   zzz: boolean;
   /** Animate the aura flames (off under reduceMotion: a steady glow instead). */
   auraFlicker: boolean;
+  /** The object thrown at the cat (index into KNOCKOUT_OBJECTS), or -1 when nothing is flying. */
+  bonkKind: number;
+  /** Seconds since the throw started; the rig draws the flight and the bounce from it. */
+  bonkT: number;
 };
+
+/** What can fly at the cat's head, in the order the rig builds them. */
+export const KNOCKOUT_OBJECTS = ['stick', 'slipper', 'durian', 'pan'] as const;
+export type KnockoutObject = (typeof KNOCKOUT_OBJECTS)[number];
+
+/** How the cat falls asleep: a yawn, or knocked out by a flying object (when you did something). */
+export type SleepStyle = 'yawn' | 'knockout';
+
+/** Knockout timeline, in ms from the throw. The rig uses KNOCKOUT_IMPACT_S for the hit point. */
+export const KNOCKOUT_IMPACT_MS = 380;
+export const KNOCKOUT_IMPACT_S = KNOCKOUT_IMPACT_MS / 1000;
+/** After the hit the object bounces away; it is hidden once it has left the frame. */
+export const KNOCKOUT_FLIGHT_END_S = KNOCKOUT_IMPACT_S + 1.1;
+const KNOCKOUT_COLLAPSE_MS = 1050;
+const KNOCKOUT_SETTLED_MS = 2100;
+const KNOCKOUT_BUMP_MS = 4200;
+/** reduceMotion: no object, a short dizzy look, then sleep. */
+const KNOCKOUT_STILL_MS = 1000;
 
 export interface YellRequest {
   first: boolean;
@@ -90,6 +116,9 @@ export class CatController {
   private settledAsleep = true;
   /** Ready is armed (shown while asleep as a perked ear). */
   private ready = false;
+  /** Knockout: index into KNOCKOUT_OBJECTS of what is flying, and seconds since the throw (-1 = none). */
+  private bonkKind = -1;
+  private bonkT = -1;
 
   private seqTimers: ReturnType<typeof setTimeout>[] = [];
   private yellTimer: ReturnType<typeof setTimeout> | undefined;
@@ -111,8 +140,9 @@ export class CatController {
     this.pose = {
       sleepy: p.sleepy.v, eye: p.eye.v, ear: p.ear.v, earTw: p.earTw.v, mouth: p.mouth.v, puff: p.puff.v,
       squash: p.squash.v, lx: p.lx.v, ly: p.ly.v, yawn: p.yawn.v, happy: p.happy.v, grumpy: p.grumpy.v,
-      tailUp: p.tailUp.v, aura: p.aura.v, annoyed: p.annoyed.v, swish: p.swish.v, jumpY: 0, tapping: false, purring: false, zzz: !opts.reduceMotion,
-      auraFlicker: !opts.reduceMotion,
+      tailUp: p.tailUp.v, aura: p.aura.v, annoyed: p.annoyed.v, swish: p.swish.v, dizzy: p.dizzy.v, bump: p.bump.v,
+      jumpY: 0, tapping: false, purring: false, zzz: !opts.reduceMotion, auraFlicker: !opts.reduceMotion,
+      bonkKind: -1, bonkT: -1,
     };
     this.scheduleBlink();
     this.scheduleTwitch();
@@ -136,6 +166,7 @@ export class CatController {
   wake(reason: WakeReason = 'done'): void {
     if (this.state === 'active') return;
     this.clearSequence();
+    this.endKnockout();
     this.state = 'active';
     this.settledAsleep = false;
     this.reason = reason;
@@ -171,7 +202,11 @@ export class CatController {
     this.scheduleNextYell();
   }
 
-  sleep(): void {
+  /**
+   * Back to sleep. 'yawn' when nobody did anything (a session expired, notifications paused); 'knockout' when you
+   * did: a random object flies at the cat's head and knocks it out.
+   */
+  sleep(style: SleepStyle = 'yawn'): void {
     if (this.state !== 'active') return;
     this.clearSequence();
     this.state = 'sleep';
@@ -183,23 +218,91 @@ export class CatController {
     p.happy.t = 0;
     p.puff.t = 0;
     p.aura.t = 0;
+    p.tailUp.t = 0;
+    if (style === 'knockout') {
+      this.knockout();
+      return;
+    }
     p.mouth.t = 0.85; // yawn
     p.yawn.t = 1;
     this.eyeBase = 0.1;
     p.eye.t = 0.1;
-    p.tailUp.t = 0;
 
-    this.later(1000, () => {
-      p.mouth.t = 0;
-      p.yawn.t = 0;
-      p.sleepy.t = 1;
-      p.ear.t = this.ready ? EAR_READY : EAR_ASLEEP;
+    this.later(1000, () => this.settleAsleep());
+  }
+
+  /** The object being thrown right now, if any (for tests and the dev page). */
+  get knockoutObject(): KnockoutObject | null {
+    return this.bonkKind < 0 ? null : KNOCKOUT_OBJECTS[this.bonkKind];
+  }
+
+  private knockout(): void {
+    const p = this.springs.p;
+    p.yawn.t = 0;
+    p.grumpy.t = 0;
+    if (this.opts.reduceMotion) {
+      // No flying object: a moment of X eyes, then sleep.
+      p.dizzy.t = 1;
+      p.mouth.t = 0.3;
       this.eyeBase = EYE_ASLEEP;
       p.eye.t = EYE_ASLEEP;
-      p.grumpy.t = 0.3;
-      this.settledAsleep = true;
-      this.onPhase('asleep');
+      this.later(KNOCKOUT_STILL_MS, () => this.settleAsleep());
+      return;
+    }
+    this.bonkKind = Math.min(KNOCKOUT_OBJECTS.length - 1, Math.floor(this.random() * KNOCKOUT_OBJECTS.length));
+    this.bonkT = 0;
+    // It sees it coming.
+    this.eyeBase = EYE_WIDE;
+    p.eye.t = EYE_WIDE;
+    p.eye.vel += 8;
+    p.mouth.t = 0.25;
+    p.ear.vel += 6;
+    this.setLookTarget(-0.35, -0.35);
+
+    this.later(KNOCKOUT_IMPACT_MS, () => {
+      // BONK: squashed, ears flat, X eyes, stars, a bump.
+      p.squash.vel += 6;
+      p.squash.t = 0;
+      p.dizzy.t = 1;
+      p.dizzy.vel += 6;
+      p.bump.t = 1;
+      p.bump.vel += 12;
+      p.ear.t = 0;
+      p.earTw.vel -= 9;
+      p.mouth.t = 0.45;
+      this.eyeBase = EYE_ASLEEP;
+      p.eye.t = EYE_ASLEEP;
+      this.setLookTarget(0, 0);
     });
+    this.later(KNOCKOUT_COLLAPSE_MS, () => {
+      p.sleepy.t = 1; // slumps over
+      p.mouth.t = 0.15;
+    });
+    this.later(KNOCKOUT_SETTLED_MS, () => this.settleAsleep());
+    this.later(KNOCKOUT_BUMP_MS, () => (p.bump.t = 0));
+  }
+
+  /** The end of both sleep sequences: curled up, eyes shut, Zzz. */
+  private settleAsleep(): void {
+    const p = this.springs.p;
+    p.mouth.t = 0;
+    p.yawn.t = 0;
+    p.dizzy.t = 0;
+    p.sleepy.t = 1;
+    p.ear.t = this.ready ? EAR_READY : EAR_ASLEEP;
+    this.eyeBase = EYE_ASLEEP;
+    p.eye.t = EYE_ASLEEP;
+    p.grumpy.t = 0.3;
+    this.settledAsleep = true;
+    this.onPhase('asleep');
+  }
+
+  private endKnockout(): void {
+    this.bonkKind = -1;
+    this.bonkT = -1;
+    const p = this.springs.p;
+    p.dizzy.t = 0;
+    p.bump.t = 0;
   }
 
   /**
@@ -276,6 +379,13 @@ export class CatController {
     const impact = this.jump.step(dt);
     if (impact > LANDING_SQUASH_MIN && !this.opts.reduceMotion) p.squash.vel += impact * 1.3;
     if (this.purrLeft > 0) this.purrLeft = Math.max(0, this.purrLeft - dt);
+    if (this.bonkT >= 0) {
+      this.bonkT += dt;
+      if (this.bonkT > KNOCKOUT_FLIGHT_END_S) {
+        this.bonkT = -1;
+        this.bonkKind = -1;
+      }
+    }
 
     const o = this.pose;
     o.sleepy = p.sleepy.v;
@@ -294,6 +404,10 @@ export class CatController {
     o.aura = p.aura.v;
     o.annoyed = p.annoyed.v;
     o.swish = p.swish.v;
+    o.dizzy = p.dizzy.v;
+    o.bump = p.bump.v;
+    o.bonkKind = this.bonkKind;
+    o.bonkT = this.bonkT;
     o.auraFlicker = !this.opts.reduceMotion;
     o.jumpY = this.jump.y;
     o.tapping = this.tapping;
