@@ -129,7 +129,7 @@ If you uninstall the app first, the hook entries stay in `settings.json`. They a
 - Space only starts a drag while the pointer is over the cat, and only without Shift/Ctrl/Alt/Win. A plain tap of Space there is given back to the app you are typing in, but holding Space there (auto-repeat) types a single space.
 - Windows only. The cat lives in the bottom-right corner of the **primary** monitor's work area. With the cursor on another monitor, the cat looks at its bubble instead of following.
 - Tested at 100% and 125% display scaling. 150% and multi-monitor setups are covered only by unit tests so far.
-- **Memory:** ~185 MB private (release build, 7 processes; about 90 MB of it is the WebView2 GPU process). That is over the spec's ~150 MB goal; WebView2 flags saved only ~10 MB (see [Performance](#performance)).
+- **Memory:** Task Manager shows ~25–50 MB while the cat sleeps, but the memory WebView2 has committed stays at ~175 MB (6 processes; ~90 MB of it is the GPU process). Getting that under the spec's ~150 MB would mean software rendering, which costs 5× the CPU (see [Performance](#performance)).
 - A `PermissionDenied` hook exists only in auto mode. If you deny a permission by hand, the cat stays awake until your next prompt.
 - `claude -p` (print mode) ends its session at once, so the cat wakes and falls asleep again within milliseconds.
 - Right after you use the tray menu, clicking the bubble can give focus to the overlay (Windows hands focus over from the closing tray window). With your terminal focused, it never takes focus.
@@ -150,6 +150,19 @@ Release build, Windows 11, 2560×1440 at 100%, 165Hz display, 20 logical cores (
 Asleep, the page wakes 20 times a second (it does not wake on every vsync), with ~48 draw calls per frame. The cursor poller costs ~0.3% of one core while awake. The installer is 2.1 MB; the app exe is 9.2 MB and the hook 247 KB.
 
 Memory by process (private): WebView2 GPU 89 MB, renderer 36, browser 34, utility 18, crashpad 3, `klat.exe` 6. WebView2 flags tried: `--in-process-gpu` saved ~10 MB at the cost of coupling GPU crashes to the browser process; `--renderer-process-limit=1` and disabling the GPU shader cache saved nothing. The defaults were kept.
+
+Memory after ClauCat-gwd (release, 2026-10-14). "Task Manager" is its Memory column (private working set); "committed" is private bytes:
+
+| | Task Manager | Committed |
+|---|---|---|
+| Before: asleep | ~117 MB | ~183 MB |
+| Asleep, after start-up | ~26 MB | ~175 MB |
+| Awake | ~52 MB | ~173 MB |
+| Asleep again | ~50 MB | ~178 MB |
+
+Two changes, both in `webview_memory.rs`. The network service runs inside the browser process (`NetworkServiceInProcess2`; the page only talks to the app over IPC), which removes a ~11 MB process. And 3 s after the cat falls asleep, the overlay sets WebView2's memory target to low, which trims the working sets of all its processes; it goes back to normal when the cat wakes. CPU is unchanged (asleep ~3–7% of one core, awake ~11%).
+
+Also measured and not used: the GPU process is ~81 MB even without WebGL (`--disable-webgl`), so it is Chromium's compositor, not the cat. `--disable-gpu` brings the total down to ~141 MB committed, but WebGL then runs on WARP and the sleeping cat costs ~20% of one core instead of ~4%. Turning off antialiasing saves ~5 MB and makes the cat jagged.
 
 ## Development
 
@@ -342,6 +355,7 @@ Small decisions made during implementation, as the spec asks (§11).
   - **Ready stays on** (2026-10-12): it no longer switches itself off after waking you. Every finished turn wakes the cat until you click the bell again.
   - **Poking the sleeping cat** (2026-10-12): instead of peeking one eye open, it keeps its eyes shut, knits its brows, an anime angry mark (red, white rim, a canvas-drawn sprite on the head) pops up on the head's top-right corner, between the ear and the brow, and throbs, and the tail swishes on top of the sleepy sway for 1.4s. Poking again restarts it; waking clears it. Under reduceMotion the mark shows without the pop, throb or swish. A first version floated beside the head on the left; the user wanted it on the head itself.
 - **Knockout** (2026-10-14, owner request): when you answer or dismiss, the cat no longer just yawns. Rust sends `sleepCause` (`user` for hooks, dismiss and Ready; `auto` for stale expiry and Pause) with `cat://state`, and the overlay picks the sequence. A random object (stick, dép tổ ong, durian, non-stick pan, built from primitives in the toon style) flies in from the left (the durian drops from above), hits the top of the head at 380 ms with a comic burst, then bounces away; the cat gets X eyes, stars circling its head and a bump, slumps over at ~1 s and is settled asleep at ~2.1 s. Under reduce motion nothing flies: a moment of X eyes, then sleep. Frames of each object are in `docs/images/knockout/`.
+- **Memory** (2026-10-14, ClauCat-gwd): the 150 MB goal is met for what Task Manager shows, not for committed memory. The network service moved into the browser process, and the overlay asks WebView2 for its low memory target while the cat sleeps. Both webviews pass the same `BROWSER_ARGS` (wry's defaults plus the feature flag): WebView2 refuses a second webview in the same data folder with different arguments. Software rendering would get committed memory under 150 MB but was rejected for its CPU cost. Numbers under [Performance](#performance).
 - **Drag and drop** (2026-10-12): hold Space, click the cat and drag; releasing Space drops it.
   - The overlay never takes focus, so it cannot see the keyboard. A low-level keyboard hook (`drag.rs`) looks at Space only, and only takes it from the focused app while the pointer is over the cat (or its bubble or Ready button) with no modifier held. Anywhere else Space passes through untouched. A tap with no click is replayed to the focused app with `SendInput`, so typing with the pointer resting on the cat is not lost.
   - Grab plus the primary mouse button starts the drag. The window follows the cursor at ~120Hz until Space is released. The grip is kept in logical px, so crossing to a monitor with another DPI keeps the cat in hand, and the DPI re-place is skipped while dragging.

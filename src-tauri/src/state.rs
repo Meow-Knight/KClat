@@ -259,7 +259,9 @@ fn bump_attention(inner: &mut Inner, project_name: String, reason: WakeReason) {
 pub fn publish_state(app: &AppHandle) {
     let state = app.state::<AppState>();
     let snapshot = state.snapshot();
-    state.awake.store(snapshot.awake, Ordering::Relaxed);
+    if state.awake.swap(snapshot.awake, Ordering::Relaxed) != snapshot.awake {
+        crate::webview_memory::awake_changed(app, snapshot.awake);
+    }
     crate::tray::set_waiting(app, snapshot.sessions.len());
     crate::tray::set_ready_checked(snapshot.ready);
     let _ = app.emit(EVENT_STATE, snapshot);

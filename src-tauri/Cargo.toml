@@ -23,6 +23,9 @@ core-foundation = "=0.10.1"
 core-graphics = "=0.25.0"
 
 [target.'cfg(windows)'.dependencies]
+# The webview's memory target (webview_memory.rs). Same versions Tauri already pulls in.
+webview2-com = "=0.39.1"
+windows-core = "=0.62.2"
 windows-sys = { version = "0.61.2", features = [
   "Win32_Foundation",
   "Win32_System_LibraryLoader",

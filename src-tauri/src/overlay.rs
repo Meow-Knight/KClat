@@ -29,6 +29,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         // Not focused on creation, and WS_EX_NOACTIVATE so clicking the cat never takes focus from the terminal.
         .focused(false)
         .focusable(false)
+        .additional_browser_args(crate::webview_memory::BROWSER_ARGS)
         .visible(true);
     // macOS: stay on every desktop (Space), as the overlay does on Windows virtual desktops.
     #[cfg(target_os = "macos")]

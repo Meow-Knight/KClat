@@ -24,6 +24,7 @@ pub fn open(app: &AppHandle) -> tauri::Result<()> {
         .min_inner_size(MIN_WIDTH, MIN_HEIGHT)
         .resizable(true)
         .center()
+        .additional_browser_args(crate::webview_memory::BROWSER_ARGS)
         .focused(true)
         .visible(true)
         .build()?;

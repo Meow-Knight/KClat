@@ -19,6 +19,7 @@ mod settings;
 mod settings_window;
 mod state;
 mod tray;
+mod webview_memory;
 
 use std::thread;
 use std::time::Duration;
@@ -70,6 +71,7 @@ fn main() {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             overlay::create(app.handle())?;
+            webview_memory::awake_changed(app.handle(), false);
             autostart::reconcile(app.handle());
             tray::create(app.handle())?;
             cursor::start(app.handle().clone());
