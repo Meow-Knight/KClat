@@ -6,6 +6,7 @@ import type { AppSettings } from '../settings';
 import { mockApi, tauriApi } from './api';
 import type { Ctx, SectionView } from './context';
 import { h, svg } from './controls';
+import klatIcon from '../assets/klat-icon.png';
 import { advancedSection } from './sections/advanced';
 import { generalSection } from './sections/general';
 import { hooksSection } from './sections/hooks';
@@ -13,17 +14,6 @@ import { languageSection } from './sections/language';
 import '../assets/fonts/fonts.css';
 import './settings.css';
 import { SECTIONS, nextSection, sectionFromHash, type SectionId } from './viewModel';
-
-const CAT = `<svg class="brand-cat" viewBox="0 0 40 40" aria-hidden="true">
-  <path d="M8.5 17 7 5.5l9 6.2M31.5 17 33 5.5l-9 6.2" fill="#9aa6bd" stroke="#2b2d42" stroke-width="1.6" stroke-linejoin="round"/>
-  <path d="M9.6 13.2 9 8.6l3.6 2.6M30.4 13.2 31 8.6l-3.6 2.6" fill="#f29bb0"/>
-  <ellipse cx="20" cy="22.5" rx="13.2" ry="11" fill="#9aa6bd" stroke="#2b2d42" stroke-width="1.6"/>
-  <path d="M12.4 21.4q2.6 2.1 5.2 0M22.4 21.4q2.6 2.1 5.2 0" fill="none" stroke="#2b2d42" stroke-width="1.5" stroke-linecap="round"/>
-  <path d="M12.6 17.6l4.4 1.4M27.4 17.6 23 19" stroke="#2b2d42" stroke-width="1.5" stroke-linecap="round"/>
-  <path d="M18.6 25h2.8l-1.4 1.6z" fill="#f29bb0" stroke="#2b2d42" stroke-width="0.9" stroke-linejoin="round"/>
-  <ellipse cx="12" cy="26" rx="2" ry="1.2" fill="#f7a9bc" opacity=".7"/>
-  <ellipse cx="28" cy="26" rx="2" ry="1.2" fill="#f7a9bc" opacity=".7"/>
-</svg>`;
 
 const ICONS: Record<SectionId, string> = {
   general: '<path d="M3 5h6M13 5h4M3 15h2M9 15h8M9 3v4M5 13v4" />',
@@ -147,7 +137,7 @@ function renderAll(): void {
     h(
       'div',
       { class: 'brand' },
-      h('div', { class: 'brand-badge' }, svg(CAT)),
+      h('div', { class: 'brand-badge' }, h('img', { class: 'brand-icon', attrs: { src: klatIcon, alt: '' } })),
       h('div', {}, h('div', { class: 'brand-name', text: 'Klat' }), h('div', { class: 'brand-version', text: version ? t('settings.version', { version }) : '' })),
     ),
     nav,
