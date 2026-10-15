@@ -146,7 +146,7 @@ impl AppState {
 
     /// Clickable regions in logical px relative to the overlay's top-left corner.
     pub fn hitboxes(&self) -> Vec<Rect> {
-        let zoom = self.settings.lock().unwrap().zoom();
+        let zoom = crate::overlay::zoom();
         let rects = self.page_hitboxes.lock().unwrap();
         rects.iter().map(|r| r.scaled(zoom)).collect()
     }

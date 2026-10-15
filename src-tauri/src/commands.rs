@@ -31,7 +31,8 @@ pub fn get_settings(state: State<'_, AppState>) -> Settings {
 pub fn set_settings(app: AppHandle, patch: Map<String, Value>) -> Settings {
     let scale_before = app.state::<AppState>().settings().cat_scale;
     let next = state::update_settings(&app, |s| *s = settings::apply_patch(s, &patch));
-    if next.cat_scale == scale_before {
+    // After a slider drag the overlay resizes itself (with the cat hidden) through `overlay_preview_zoom`.
+    if overlay::end_preview(&app) || next.cat_scale == scale_before {
         return next;
     }
     match overlay::rescale(&app, next.zoom()) {
@@ -39,6 +40,24 @@ pub fn set_settings(app: AppHandle, patch: Map<String, Value>) -> Settings {
         Some(pos) => state::update_settings(&app, |s| s.position = Some(pos)),
         None => next,
     }
+}
+
+/// The size slider is being dragged: show `scale` (percent) in the overlay; nothing is saved until
+/// `set_settings`.
+#[tauri::command]
+pub fn preview_cat_scale(app: AppHandle, scale: u32) {
+    overlay::preview(&app, scale);
+}
+
+/// The overlay page, with the cat hidden, switches its window to the preview size (`preview`) or back to the
+/// cat scale. See `overlay::preview_zoom`.
+#[tauri::command]
+pub fn overlay_preview_zoom(app: AppHandle, preview: bool) -> overlay::ZoomChange {
+    let (change, saved) = overlay::preview_zoom(&app, preview);
+    if let Some(pos) = saved {
+        state::update_settings(&app, |s| s.position = Some(pos));
+    }
+    change
 }
 
 /// Returns the state that is now in effect; on failure the setting is unchanged and the error is the OS reason.

@@ -3,15 +3,24 @@
 //!
 //! Cat size (`catScale`): the window is WIDTH×HEIGHT times the scale and its webview is zoomed by the same
 //! factor, so the page always lays out at WIDTH×HEIGHT CSS px and everything in it grows together. Hitboxes
-//! and cursor points are converted between the two in `AppState::hitboxes` and the cursor poller.
+//! and cursor points are converted between the two (with `zoom()`) in `AppState::hitboxes` and the cursor poller.
+//!
+//! Dragging the size slider (ClauCat-jds): resizing, moving and zooming the window are separate asynchronous
+//! steps, and doing them on every step of a drag made the cat flicker and jump. While the slider is dragged the
+//! window is set once to the largest size (`PREVIEW_ZOOM`) and the page scales the cat with a CSS transform
+//! (`cat://scale-preview`); on release it is set once to the chosen size. The page hides the cat around both
+//! switches (`preview_zoom`).
 
 use crate::drag::{self, WindowPos};
+use crate::settings::CAT_SCALE;
 use crate::state::AppState;
+use serde::Serialize;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread;
 use std::time::Duration;
 use tauri::{
-    AppHandle, LogicalPosition, LogicalSize, Manager, PhysicalPosition, PhysicalSize, WebviewUrl,
-    WebviewWindow, WebviewWindowBuilder,
+    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, PhysicalPosition, PhysicalSize,
+    WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 };
 
 pub const LABEL: &str = "overlay";
@@ -19,6 +28,22 @@ const WIDTH: f64 = 360.0;
 // 330 = the cat's 280px framing plus 50px of headroom above it for the aura spikes.
 const HEIGHT: f64 = 330.0;
 const MARGIN: f64 = 16.0;
+
+/// Size slider being dragged: the scale to show, as a factor of the page's size at `PREVIEW_ZOOM`; null when
+/// the drag ends.
+pub const EVENT_SCALE_PREVIEW: &str = "cat://scale-preview";
+/// The window's zoom while the size slider is dragged: the largest cat size, so every preview is a shrink.
+const PREVIEW_ZOOM: f64 = CAT_SCALE.1 as f64 / 100.0;
+
+/// The webview zoom in effect (f64 bits): the cat scale, or `PREVIEW_ZOOM` during a preview.
+static ZOOM: AtomicU64 = AtomicU64::new(0x3FF0_0000_0000_0000); // 1.0
+/// The size slider is being dragged (set by `preview`, cleared by `end_preview`).
+static PREVIEWING: AtomicBool = AtomicBool::new(false);
+
+/// The webview zoom in effect, for converting between the page's CSS px and the window's logical px.
+pub fn zoom() -> f64 {
+    f64::from_bits(ZOOM.load(Ordering::Relaxed))
+}
 
 pub fn create(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     let zoom = app.state::<AppState>().settings().zoom();
@@ -49,6 +74,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     }
     let win = builder.build()?;
     win.set_zoom(zoom)?;
+    ZOOM.store(zoom.to_bits(), Ordering::Relaxed);
     place(&win, app.state::<AppState>().settings().position)?;
     // Click-through by default; the cursor poller turns it off over the cat and the bubble.
     win.set_ignore_cursor_events(true)?;
@@ -68,6 +94,13 @@ fn logical_size(zoom: f64) -> LogicalSize<f64> {
 /// is, so the cat (on the right, standing on the bottom) stays put and the window grows up and to the left.
 /// Returns the new top-left when the cat had been dragged somewhere, for the caller to save.
 pub fn rescale(app: &AppHandle, zoom: f64) -> Option<WindowPos> {
+    let (x, y) = resize(app, zoom)?;
+    let dragged = app.state::<AppState>().settings().position.is_some();
+    dragged.then_some(WindowPos { x, y })
+}
+
+/// Sets the window's size and zoom for `zoom`, keeping its bottom-right corner. Returns the new top-left.
+fn resize(app: &AppHandle, zoom: f64) -> Option<(i32, i32)> {
     let win = get(app)?;
     let (pos, old, scale) = (
         win.outer_position().ok()?,
@@ -77,6 +110,7 @@ pub fn rescale(app: &AppHandle, zoom: f64) -> Option<WindowPos> {
     let size = logical_size(zoom);
     let new = size.to_physical::<u32>(scale);
     let _ = win.set_zoom(zoom);
+    ZOOM.store(zoom.to_bits(), Ordering::Relaxed);
     let _ = win.set_size(size);
     let (x, y) = keep_bottom_right(
         (pos.x, pos.y),
@@ -84,8 +118,55 @@ pub fn rescale(app: &AppHandle, zoom: f64) -> Option<WindowPos> {
         (new.width, new.height),
     );
     let _ = win.set_position(PhysicalPosition::new(x, y));
-    let dragged = app.state::<AppState>().settings().position.is_some();
-    dragged.then_some(WindowPos { x, y })
+    Some((x, y))
+}
+
+/// The size slider moved to `scale` percent: show it in the overlay without touching the window.
+pub fn preview(app: &AppHandle, scale: u32) {
+    PREVIEWING.store(true, Ordering::SeqCst);
+    let factor = f64::from(scale.clamp(CAT_SCALE.0, CAT_SCALE.1)) / 100.0 / PREVIEW_ZOOM;
+    let _ = app.emit_to(LABEL, EVENT_SCALE_PREVIEW, Some(factor));
+}
+
+/// The drag is over (the value was saved, or the Settings window went away): the overlay hides the cat and asks
+/// for its real size through `preview_zoom(false)`. Returns false when no preview was running.
+pub fn end_preview(app: &AppHandle) -> bool {
+    if !PREVIEWING.swap(false, Ordering::SeqCst) {
+        return false;
+    }
+    let _ = app.emit_to(LABEL, EVENT_SCALE_PREVIEW, None::<f64>);
+    true
+}
+
+/// What `preview_zoom` did, for the page to know when the switch has landed.
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct ZoomChange {
+    pub from: f64,
+    pub to: f64,
+    /// The page's size in CSS px, the same at every zoom.
+    pub width: f64,
+    pub height: f64,
+}
+
+/// Called by the overlay page with the cat hidden: `true` sets the window to `PREVIEW_ZOOM` for a preview,
+/// `false` back to the cat scale (saving the spot of a dragged cat). The second returns the new settings to
+/// save, if any.
+pub fn preview_zoom(app: &AppHandle, preview: bool) -> (ZoomChange, Option<WindowPos>) {
+    let from = zoom();
+    let (to, saved) = if preview {
+        resize(app, PREVIEW_ZOOM);
+        (PREVIEW_ZOOM, None)
+    } else {
+        let to = app.state::<AppState>().settings().zoom();
+        (to, rescale(app, to))
+    };
+    let change = ZoomChange {
+        from,
+        to,
+        width: WIDTH,
+        height: HEIGHT,
+    };
+    (change, saved)
 }
 
 /// Top-left that keeps a window's bottom-right corner in place when it goes from `old` to `new` size.

@@ -294,7 +294,10 @@ export class CatStage {
 
     this.probe.copy(READY_ANCHOR).project(this.camera);
     this.readyButton.placeAt(((this.probe.x + 1) / 2) * this.width, ((1 - this.probe.y) / 2) * this.height);
-    if (notify) this.callbacks.onLayoutChange?.();
+    if (notify) {
+      this.redraw();
+      this.callbacks.onLayoutChange?.();
+    }
   }
 
   /**
@@ -309,8 +312,14 @@ export class CatStage {
 
   private readonly onPixelRatioChange = (): void => {
     this.renderer.setPixelRatio(pixelRatio());
+    this.redraw();
     this.watchPixelRatio();
   };
+
+  /** Resizing the canvas clears it: draw the current pose now rather than at the next frame (20fps asleep). */
+  private redraw(): void {
+    this.renderer.render(this.scene, this.camera);
+  }
 
   /** The button is only offered while the cat is asleep and shown; Ready is meaningless once it is awake. */
   private syncReadyButton(): void {

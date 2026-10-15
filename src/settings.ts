@@ -50,8 +50,8 @@ export const DEFAULT_SETTINGS: Readonly<AppSettings> = {
   position: null,
 };
 
-/** Cat size slider: percent range and step (Rust clamps to the same range). */
-export const CAT_SCALE = { min: 50, max: 200, step: 5 } as const;
+/** Cat size slider: percent range and step (Rust clamps to the same range). Step 1 so a drag moves smoothly. */
+export const CAT_SCALE = { min: 50, max: 200, step: 1 } as const;
 
 /** The phrase languages the cat may use for a Klat Language. */
 export function phraseLanguages(klat: KlatLanguage): PhraseLang[] {

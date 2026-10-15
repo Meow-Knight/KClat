@@ -42,6 +42,7 @@ export function generalSection(ctx: Ctx): SectionView {
     value: s.catScale,
     ...CAT_SCALE,
     format: (v) => `${v}%`,
+    onPreview: (v) => void ctx.api.previewCatScale(v),
     onChange: (v) => ctx.patch({ catScale: v }),
   });
 

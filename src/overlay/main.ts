@@ -1,5 +1,5 @@
 // Overlay window entry: wires Tauri state/settings events to the cat, and reports hitboxes for click-through.
-import { bridge, type CatStatePayload } from '../bridge/tauriBridge';
+import { bridge, type CatStatePayload, type ZoomChange } from '../bridge/tauriBridge';
 import { CatStage } from '../cat/CatStage';
 import type { CatPhase } from '../cat/CatController';
 import type { AppSettings } from '../settings';
@@ -57,12 +57,73 @@ function applySettings(next: AppSettings): void {
   syncHidden();
 }
 
+/**
+ * Size slider (src-tauri/src/overlay.rs): while it is dragged the window sits at the largest size and the cat is
+ * scaled with a transform, which the compositor does every frame. Switching the window between that and the
+ * real size takes a few frames to land (size, position and zoom separately), so the cat is hidden meanwhile.
+ */
+let previewing = false;
+let switchToken = 0;
+/** Give up waiting for a switch after this long and show the cat anyway. */
+const SWITCH_TIMEOUT_MS = 600;
+
+async function switchWindow(preview: boolean): Promise<void> {
+  const token = ++switchToken;
+  const dpr = window.devicePixelRatio;
+  stageEl.style.visibility = 'hidden';
+  let change: ZoomChange;
+  try {
+    change = await bridge.overlayPreviewZoom(preview);
+  } catch {
+    stageEl.style.visibility = '';
+    return;
+  }
+  const dprAfter = (dpr * change.to) / change.from;
+  const deadline = performance.now() + SWITCH_TIMEOUT_MS;
+  const landed = () =>
+    Math.abs(window.devicePixelRatio - dprAfter) < 0.01 &&
+    Math.abs(window.innerWidth - change.width) < 2 &&
+    Math.abs(window.innerHeight - change.height) < 2;
+  // One more frame once it has landed, for the stage to draw at the new size.
+  const check = (settledFrames: number) => {
+    if (token !== switchToken) return;
+    if (settledFrames >= 2 || performance.now() > deadline) {
+      stageEl.style.visibility = '';
+      return;
+    }
+    requestAnimationFrame(() => check(landed() ? settledFrames + 1 : 0));
+  };
+  check(0);
+}
+
+function applyScalePreview(factor: number | null): void {
+  if (factor !== null) {
+    stageEl.style.transform = `scale(${factor})`;
+    if (!previewing) {
+      previewing = true;
+      void switchWindow(true);
+    }
+    return;
+  }
+  // The drag is over. Asked even if this page missed the start, so the window always ends at the saved size.
+  const wasPreviewing = previewing;
+  previewing = false;
+  if (!wasPreviewing) {
+    void bridge.overlayPreviewZoom(false);
+    return;
+  }
+  stageEl.style.visibility = 'hidden';
+  stageEl.style.transform = '';
+  void switchWindow(false);
+}
+
 // Subscribe before reading the current state so no change can slip in between.
 await bridge.onState(applyState);
 await bridge.onSettings(applySettings);
 // Same coordinate space as the stage: the stage fills the window. null = cursor on another monitor.
 await bridge.onCursor((p) => stage.lookAt(p));
 await bridge.onGrab((mode) => stage.setGrab(mode));
+await bridge.onScalePreview(applyScalePreview);
 ready = true;
 stage.setUiLanguage(settings.uiLanguage);
 applyState(await bridge.getState());

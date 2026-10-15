@@ -48,6 +48,8 @@ fn main() {
             commands::set_hitboxes,
             commands::set_ready,
             commands::set_settings,
+            commands::preview_cat_scale,
+            commands::overlay_preview_zoom,
             commands::set_start_at_login,
             commands::wake_test,
             commands::sleep,
@@ -57,12 +59,17 @@ fn main() {
             commands::drag_permission,
             commands::open_drag_permission,
         ])
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::ScaleFactorChanged { .. } = event {
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::ScaleFactorChanged { .. } => {
                 if let Some(win) = overlay::get(window.app_handle()) {
                     overlay::on_scale_changed(&win);
                 }
             }
+            // Closed in the middle of a size slider drag: put the cat back at its saved size.
+            tauri::WindowEvent::Destroyed if window.label() == settings_window::LABEL => {
+                overlay::end_preview(window.app_handle());
+            }
+            _ => {}
         })
         .setup(|app| {
             // Logged here, not before the builder: a second launch exits inside the single-instance plugin.

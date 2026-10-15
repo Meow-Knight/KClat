@@ -163,7 +163,7 @@ pub fn start(app: AppHandle) {
 
                 if let Some(payload) = tracker.update(awake, point) {
                     // The page works in CSS px: logical px divided by the webview zoom.
-                    let zoom = state.settings.lock().unwrap().zoom();
+                    let zoom = crate::overlay::zoom();
                     let _ = app.emit(
                         EVENT_CURSOR,
                         payload.map(|(x, y)| CursorPoint {

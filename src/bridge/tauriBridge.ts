@@ -61,6 +61,15 @@ export interface HooksResult {
 /** Whether dragging the cat needs a permission first (macOS: Accessibility). See src-tauri/src/drag.rs. */
 export type DragPermission = 'not-needed' | 'granted' | 'missing';
 
+/** What `overlayPreviewZoom` did (src-tauri/src/overlay.rs `ZoomChange`): the webview zoom before and after, and
+ * the page's size in CSS px, which is the same at every zoom. */
+export interface ZoomChange {
+  from: number;
+  to: number;
+  width: number;
+  height: number;
+}
+
 /** What the Settings window may change (src-tauri/src/settings.rs `PATCHABLE`); Rust validates it again. */
 export type SettingsPatch = Partial<
   Pick<
@@ -87,6 +96,10 @@ export const bridge = {
   setHitboxes: (rects: HitRect[]): Promise<void> => invoke('set_hitboxes', { rects }),
   /** Returns the settings now in effect (out-of-range values clamped). */
   setSettings: (patch: SettingsPatch): Promise<AppSettings> => invoke('set_settings', { patch }),
+  /** Size slider being dragged: shows `scale` (percent) on the overlay without saving it. */
+  previewCatScale: (scale: number): Promise<void> => invoke('preview_cat_scale', { scale }),
+  /** Overlay only, with the cat hidden: window to the preview size (true) or back to the cat size (false). */
+  overlayPreviewZoom: (preview: boolean): Promise<ZoomChange> => invoke('overlay_preview_zoom', { preview }),
   /** Resolves to the new state; rejects with the OS reason, leaving the setting unchanged. */
   setStartAtLogin: (on: boolean): Promise<boolean> => invoke('set_start_at_login', { on }),
   wakeTest: (): Promise<void> => invoke('wake_test'),
@@ -101,5 +114,8 @@ export const bridge = {
   onSettings: (cb: (s: AppSettings) => void): Promise<UnlistenFn> => listen<AppSettings>('cat://settings', (e) => cb(e.payload)),
   /** 30Hz while the cat is awake, only when the cursor moved (see src-tauri/src/cursor.rs). */
   onCursor: (cb: (p: CursorPayload) => void): Promise<UnlistenFn> => listen<CursorPayload>('cat://cursor', (e) => cb(e.payload)),
+  /** Size slider preview: the cat's scale relative to the page, or null when the drag is over. */
+  onScalePreview: (cb: (factor: number | null) => void): Promise<UnlistenFn> =>
+    listen<number | null>('cat://scale-preview', (e) => cb(e.payload)),
   onGrab: (cb: (mode: GrabMode) => void): Promise<UnlistenFn> => listen<GrabMode>('cat://grab', (e) => cb(e.payload)),
 };

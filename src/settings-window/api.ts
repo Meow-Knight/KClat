@@ -15,6 +15,8 @@ import { DEFAULT_SETTINGS, type AppSettings, type UiLanguage } from '../settings
 export interface SettingsApi {
   getSettings(): Promise<AppSettings>;
   setSettings(patch: SettingsPatch): Promise<AppSettings>;
+  /** Size slider being dragged: show the size on the cat without saving it; `setSettings` ends the preview. */
+  previewCatScale(scale: number): Promise<void>;
   setStartAtLogin(on: boolean): Promise<boolean>;
   wakeTest(): Promise<void>;
   sleep(): Promise<void>;
@@ -32,6 +34,7 @@ export function tauriApi(): SettingsApi {
   return {
     getSettings: bridge.getSettings,
     setSettings: bridge.setSettings,
+    previewCatScale: bridge.previewCatScale,
     setStartAtLogin: bridge.setStartAtLogin,
     wakeTest: bridge.wakeTest,
     sleep: bridge.sleep,
@@ -65,6 +68,7 @@ export function mockApi(params: URLSearchParams): SettingsApi {
       publish();
       return { ...settings };
     },
+    previewCatScale: async () => {},
     setStartAtLogin: async (on) => {
       await wait(250);
       if (fail === 'autostart') throw new Error('Access is denied. (os error 5)');

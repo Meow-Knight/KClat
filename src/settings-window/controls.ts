@@ -273,12 +273,17 @@ export interface SliderParts {
   step: number;
   /** The value as shown next to the track and read by screen readers ("120%"). */
   format(value: number): string;
-  /** While dragging (at most every SLIDER_LIVE_MS) and once more on release; arrow keys send each step. */
+  /**
+   * Every move, at most once per frame: show the value without saving it. Optional; without it the value is
+   * only sent through onChange.
+   */
+  onPreview?(value: number): void;
+  /** The value to keep: on release after a drag, or once the keys have rested for SLIDER_KEYS_REST_MS. */
   onChange(value: number): void;
 }
 
-/** How often a dragged slider sends its value, so the result follows the hand without flooding Rust. */
-const SLIDER_LIVE_MS = 50;
+/** Arrow keys preview each step and save once they have been left alone this long (a held key repeats). */
+const SLIDER_KEYS_REST_MS = 400;
 
 /** A horizontal range slider with its value beside it. Native keyboard: arrows, Page Up/Down, Home/End. */
 export function slider(p: SliderParts): Control<number> {
@@ -287,10 +292,10 @@ export function slider(p: SliderParts): Control<number> {
     attrs: { type: 'range', min: String(p.min), max: String(p.max), step: String(p.step), 'data-focus-key': p.focusKey },
   });
   const label = h('span', { class: 'slider-value', attrs: { 'aria-hidden': 'true' } });
-  let value = p.value;
   let sent = p.value;
   let dragging = false;
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let frame: number | undefined;
+  let rest: ReturnType<typeof setTimeout> | undefined;
 
   const render = (v: number) => {
     input.value = String(v);
@@ -298,11 +303,18 @@ export function slider(p: SliderParts): Control<number> {
     input.style.setProperty('--fill', `${((v - p.min) / (p.max - p.min)) * 100}%`);
     label.textContent = p.format(v);
   };
-  const send = () => {
-    clearTimeout(timer);
-    timer = undefined;
+  const preview = () => {
+    frame = undefined;
+    p.onPreview?.(Number(input.value));
+  };
+  /** Saves the value; a preview still waiting for its frame is dropped, so none can follow the save. */
+  const commit = () => {
+    if (frame !== undefined) cancelAnimationFrame(frame);
+    frame = undefined;
+    clearTimeout(rest);
+    rest = undefined;
     const v = Number(input.value);
-    if (v !== sent) {
+    if (v !== sent || p.onPreview) {
       sent = v;
       p.onChange(v);
     }
@@ -311,26 +323,37 @@ export function slider(p: SliderParts): Control<number> {
   input.addEventListener('pointerdown', () => (dragging = true));
   input.addEventListener('input', () => {
     render(Number(input.value));
-    if (!dragging) send(); // keyboard: every step counts
-    else timer ??= setTimeout(send, SLIDER_LIVE_MS);
+    if (!p.onPreview) {
+      if (!dragging) commit();
+      return;
+    }
+    frame ??= requestAnimationFrame(preview);
+    if (!dragging) {
+      clearTimeout(rest);
+      rest = setTimeout(commit, SLIDER_KEYS_REST_MS);
+    }
   });
   const release = () => {
     if (!dragging) return;
     dragging = false;
-    send(); // Rust's answer to the final value comes back through set()
+    commit(); // Rust's answer to the final value comes back through set()
   };
   input.addEventListener('change', release);
   input.addEventListener('pointerup', release);
   input.addEventListener('pointercancel', release);
-  render(value);
+  // Leaving the window in the middle of a drag or before the keys have rested still keeps the value.
+  window.addEventListener('blur', () => {
+    if (dragging) release();
+    else if (rest !== undefined) commit();
+  });
+  render(p.value);
 
   return {
     el: h('div', { class: 'slider' }, input, label),
     set(next) {
-      value = next;
       sent = next;
       // Replies to earlier values arrive while dragging; moving the thumb under the hand would fight it.
-      if (!dragging) render(next);
+      if (!dragging && rest === undefined) render(next);
     },
   };
 }
