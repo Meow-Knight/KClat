@@ -214,14 +214,37 @@ input {
 
 /* Content */
 
+/* The gutter is always reserved, so switching between a long and a short page does not shift the column. */
 .main {
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 28px 32px 40px;
 }
 
+/* Centered, so a wide window splits its spare room on both sides instead of leaving it all on the right. */
 .content {
-  max-width: 560px;
+  max-width: 600px;
+  margin-inline: auto;
   animation: content-in 0.12s ease-out;
+}
+
+/* Thin rounded thumb on a clear track, inset from the window edge by the transparent border. */
+.main::-webkit-scrollbar {
+  width: 12px;
+}
+
+.main::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.main::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 6px;
+  background: var(--line-strong) padding-box;
+}
+
+.main::-webkit-scrollbar-thumb:hover {
+  background-color: var(--muted);
 }
 
 @keyframes content-in {

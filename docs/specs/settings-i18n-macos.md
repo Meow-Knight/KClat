@@ -137,7 +137,7 @@ Settings. **Không dịch:** log file, câu thoại (thuộc Klat Language), tê
 | Thuộc tính | Giá trị |
 |---|---|
 | Label / trang | `settings` / `settings.html` (Vite multi-page: thêm input trong `vite.config.ts`) |
-| Kích thước | 780×540 logical, min 680×480, resizable, có viền + thanh tiêu đề của hệ điều hành |
+| Kích thước | 780×540 logical, min 680×480, rộng tối đa 960 (cao tự do), resizable, không có nút phóng to, có viền + thanh tiêu đề của hệ điều hành |
 | Tiêu đề | `Klat Settings` / `Cài đặt Klat` theo `uiLanguage` (đổi khi đổi ngôn ngữ) |
 | Mở | Tray "Settings…" (Windows: cả double-click icon tray). Đã mở thì `unminimize` + `show` + `set_focus`, không tạo cửa sổ thứ hai |
 | Đóng | Huỷ webview (không ẩn) để trả RAM; mục tiêu RAM toàn app 150 MB (ClauCat-gwd) chỉ tính lúc Settings đóng |
@@ -160,7 +160,7 @@ Settings. **Không dịch:** log file, câu thoại (thuộc Klat Language), tê
 │ │               │ │ └────────────────────────────────────────┘ │ │
 │ └───────────────┘ └────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────────────┘
-  sidebar 208px          nội dung: max-width 560px, cuộn dọc
+  sidebar 208px          nội dung: max-width 600px, căn giữa, cuộn dọc
 ```
 
 - **Sidebar:** header là mèo nhỏ (SVG tĩnh vẽ đầu mèo theo palette §5.2, không dùng Three.js để giữ RAM thấp) +
