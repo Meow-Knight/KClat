@@ -66,6 +66,20 @@ struct Inner {
     sleep_cause: SleepCause,
 }
 
+impl Inner {
+    /// Ready starts armed: by default the cat wakes when Claude finishes. It is not saved, so turning it off lasts
+    /// until the next launch.
+    fn at_launch() -> Self {
+        Self {
+            store: SessionStore::default(),
+            test_wake: None,
+            attention: None,
+            ready_since: Some(now_ms()),
+            sleep_cause: SleepCause::Auto,
+        }
+    }
+}
+
 pub struct AppState {
     pub settings: Mutex<Settings>,
     pub settings_path: PathBuf,
@@ -101,13 +115,7 @@ impl AppState {
         Self {
             settings: Mutex::new(settings),
             settings_path,
-            inner: Mutex::new(Inner {
-                store: SessionStore::default(),
-                test_wake: None,
-                attention: None,
-                ready_since: None,
-                sleep_cause: SleepCause::Auto,
-            }),
+            inner: Mutex::new(Inner::at_launch()),
             page_hitboxes: Mutex::new(Vec::new()),
             awake: AtomicBool::new(false),
         }
@@ -324,5 +332,10 @@ mod tests {
         let json = serde_json::to_value(state.snapshot()).unwrap();
         assert_eq!(json["sleepCause"], "user");
         assert_eq!(json["awake"], false);
+    }
+
+    #[test]
+    fn ready_is_armed_at_launch() {
+        assert!(Inner::at_launch().ready_since.is_some());
     }
 }

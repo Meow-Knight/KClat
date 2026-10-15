@@ -47,14 +47,15 @@ impl Items {
 }
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
-    let s = app.state::<AppState>().settings();
+    let state = app.state::<AppState>();
+    let s = state.settings();
     let lang = s.ui_language;
     let check = |id: &str, key: &str, on: bool| {
         CheckMenuItem::with_id(app, id, t(lang, key), true, on, None::<&str>)
     };
     let plain = |id: &str, key: &str| MenuItem::with_id(app, id, t(lang, key), true, None::<&str>);
     let items = Items {
-        ready: check(READY, "tray.ready", false)?,
+        ready: check(READY, "tray.ready", state.snapshot().ready)?,
         pause: check(PAUSE, "tray.pause", !s.notifications_enabled)?,
         dismiss: plain(DISMISS_ALL, "tray.dismissAll")?,
         settings: plain(SETTINGS, "tray.settings")?,

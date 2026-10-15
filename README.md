@@ -14,7 +14,7 @@ Everything runs locally: no telemetry, no cloud. The hooks only report to the ap
 1. Run `Klat_<version>_x64-setup.exe`. It is a per-user install into `%LOCALAPPDATA%\Klat`, so no admin rights are needed. The installer contains `klat.exe` and the hook program `klat-hook.exe`.
 2. Start **Klat**. A sleeping cat appears in the bottom-right corner, and a cat icon appears in the tray (it may be under the **^** hidden-icons arrow).
 3. Tray → **Settings…** → **Hooks** → **Install**. This adds Klat's hooks to `%USERPROFILE%\.claude\settings.json`, after saving a backup. Your other hooks and settings stay as they are.
-4. Restart any open Claude Code sessions. From now on the cat wakes when Claude asks for permission or input. Before you look away from a long task, click the **bell button** to the right of the cat (Ready) to be woken when Claude finishes.
+4. Restart any open Claude Code sessions. From now on the cat wakes when Claude asks for permission or input, and when Claude finishes a turn: Ready, the **bell button** to the right of the cat, is on when Klat starts. Click the bell to turn it off if you only want to be woken for permission and input.
 
 You need Windows 10/11 with the WebView2 runtime, which comes with Windows 11 and recent Windows 10.
 
@@ -119,7 +119,7 @@ If you uninstall the app first, the hook entries stay in `settings.json`. They a
 
 | Problem | Try |
 |---|---|
-| The cat doesn't wake when Claude finishes | That is the default. Click the bell button (Ready) before you look away. If it still doesn't wake, open Settings → **Hooks**: does it say **Installed**? If not, click Install or Repair. Then restart the Claude Code session. See [docs/hooks-troubleshooting.md](docs/hooks-troubleshooting.md) for step-by-step checks and how to read the log |
+| The cat doesn't wake when Claude finishes | Check that the bell button (Ready) is on; clicking it toggles it. If it still doesn't wake, open Settings → **Hooks**: does it say **Installed**? If not, click Install or Repair. Then restart the Claude Code session. See [docs/hooks-troubleshooting.md](docs/hooks-troubleshooting.md) for step-by-step checks and how to read the log |
 | "Hooks (needs repair)" | The entries point at another copy of `klat-hook.exe` (moved or reinstalled app, dev vs installed): run **Repair** |
 | Install says settings.json is invalid | Fix the JSON, or restore a `settings.json.bak.*` backup; nothing was changed |
 | The cat stays awake | Send a prompt or click the bubble. A session waiting longer than 30 minutes is dropped automatically |
@@ -136,7 +136,7 @@ If you uninstall the app first, the hook entries stay in `settings.json`. They a
 - `claude -p` (print mode) ends its session at once, so the cat wakes and falls asleep again within milliseconds.
 - Right after you use the tray menu, clicking the bubble can give focus to the overlay (Windows hands focus over from the closing tray window). With your terminal focused, it never takes focus.
 - The hitbox is a generous box around the cat rather than its exact outline, so clicks just next to the cat can land on it.
-- Ready is one global switch, not per session. Any session that finishes after you arm it wakes the cat. Ready is not saved across restarts.
+- Ready is one global switch, not per session. Any session that finishes after you arm it wakes the cat. Ready is not saved: it is on at every launch, even if you turned it off before quitting.
 - The Windows uninstaller does not remove the hooks from `settings.json`; use **Hooks → Uninstall** first.
 
 ## Performance
