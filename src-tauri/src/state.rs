@@ -8,9 +8,10 @@
 //! off with the bell button or the tray item. Permission and input waits always wake.
 
 use crate::log;
-use crate::settings::{self, Settings};
+use crate::settings;
 use klat_core::geometry::{Css, Logical, Rect};
 pub use klat_core::session::{Gate, Outcome, SessionStore, SessionView, WakeReason};
+use klat_core::settings::Settings;
 use klat_core::time::{DurationMs, UnixMs};
 use klat_protocol::HookEvent;
 use serde::Serialize;

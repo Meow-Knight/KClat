@@ -2,7 +2,7 @@
 //! destroyed when closed, so its webview costs no memory while it is not open.
 
 use crate::i18n;
-use crate::settings::UiLanguage;
+use klat_core::settings::UiLanguage;
 use tauri::{
     AppHandle, LogicalUnit, Manager, PixelUnit, WebviewUrl, WebviewWindowBuilder,
     WindowSizeConstraints,

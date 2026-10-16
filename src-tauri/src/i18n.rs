@@ -4,8 +4,8 @@
 //! missing in Vietnamese falls back to English, and a key missing in both shows the key itself (the tests
 //! make sure neither happens). `{name}` in a text is replaced by the matching variable.
 
-use crate::settings::UiLanguage;
 use crate::state::AppState;
+use klat_core::settings::UiLanguage;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 use tauri::{AppHandle, Manager};

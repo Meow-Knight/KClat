@@ -13,9 +13,9 @@
 
 use crate::drag;
 use crate::log;
-use crate::settings::CAT_SCALE;
 use crate::state::{self, AppState};
 use klat_core::geometry::{self, Physical, Point, Rect, WindowPos};
+use klat_core::settings::CAT_SCALE;
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread;

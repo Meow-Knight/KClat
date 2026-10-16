@@ -2,8 +2,8 @@
 //! window. Labels and tooltip follow the Platform Language and change as soon as it does.
 
 use crate::i18n::{self, t, tf};
-use crate::settings::{Settings, UiLanguage};
 use crate::state::{self, AppState};
+use klat_core::settings::{Settings, UiLanguage};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 use tauri::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};

@@ -5,4 +5,5 @@
 pub mod geometry;
 pub mod ratelimit;
 pub mod session;
+pub mod settings;
 pub mod time;

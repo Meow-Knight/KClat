@@ -5,9 +5,9 @@ use crate::hooks_installer::{Action, Status};
 use crate::hooks_ui;
 use crate::i18n;
 use crate::overlay;
-use crate::settings::{self, Settings};
 use crate::state::{self, AppState, CatState};
 use klat_core::geometry::{Css, Rect};
+use klat_core::settings::{self, Settings};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use tauri::{AppHandle, Manager, State};
@@ -25,7 +25,7 @@ pub fn get_settings(state: State<'_, AppState>) -> Settings {
     state.settings()
 }
 
-/// Settings window edits. Only the fields in `settings::PATCHABLE` are taken, and they are validated like a
+/// Settings window edits. Only the fields in `klat_core::settings::PATCHABLE` are taken, and they are validated like a
 /// loaded file. Returns the settings now in effect.
 #[tauri::command]
 pub fn set_settings(app: AppHandle, patch: Map<String, Value>) -> Settings {
