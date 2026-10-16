@@ -148,10 +148,6 @@ impl CatService {
         self.state.borrow().clone()
     }
 
-    pub fn awake(&self) -> bool {
-        self.state.borrow().awake
-    }
-
     pub fn settings(&self) -> Settings {
         self.settings.borrow().clone()
     }
@@ -232,7 +228,7 @@ mod tests {
         let s = seen(&mut rx).expect("published");
         assert!(s.awake);
         assert_eq!(s.reason, Some(WakeReason::Done));
-        assert!(f.svc.awake());
+        assert!(f.svc.snapshot().awake);
 
         f.at(3_000)
             .dispatch(Command::Hook(&hook("PermissionRequest", "b")));
@@ -277,7 +273,7 @@ mod tests {
         let f = Fixture::new(Settings::default());
         f.at(2_000)
             .dispatch(Command::Hook(&hook("PermissionRequest", "a")));
-        assert!(f.svc.awake());
+        assert!(f.svc.snapshot().awake);
         let mut state = f.svc.subscribe();
         let mut settings = f.svc.subscribe_settings();
 

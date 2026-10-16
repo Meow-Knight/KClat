@@ -9,11 +9,13 @@
 //!
 //! Measurements are in README.md (Performance).
 
+use klat_core::cat::CatState;
 #[cfg(windows)]
 use std::sync::atomic::{AtomicU64, Ordering};
 #[cfg(windows)]
 use std::time::Duration;
 use tauri::AppHandle;
+use tokio::sync::watch::Receiver;
 
 /// Browser arguments for every webview: wry's defaults (it drops them when you pass your own) plus the
 /// in-process network service. All webviews must use the same arguments, or WebView2 refuses to create the
@@ -46,6 +48,25 @@ const SETTLE: Duration = Duration::from_millis(3000);
 /// Bumped on every awake change, so a trim scheduled before the cat woke up again is dropped.
 #[cfg(windows)]
 static GENERATION: AtomicU64 = AtomicU64::new(0);
+
+/// Follows the cat: normal memory while it is awake, low once it has settled asleep.
+#[cfg(windows)]
+pub fn follow(app: &AppHandle, mut state: Receiver<CatState>) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let mut awake = state.borrow().awake;
+        while state.changed().await.is_ok() {
+            let now = state.borrow_and_update().awake;
+            if now != awake {
+                awake = now;
+                awake_changed(&app, awake);
+            }
+        }
+    });
+}
+
+#[cfg(not(windows))]
+pub fn follow(_app: &AppHandle, _state: Receiver<CatState>) {}
 
 /// Called when the cat wakes up or falls asleep (and once at startup, asleep).
 #[cfg(windows)]

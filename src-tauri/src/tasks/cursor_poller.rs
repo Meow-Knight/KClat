@@ -10,19 +10,20 @@
 
 use crate::ipc::events::EVENT_CURSOR;
 use crate::platform;
-use crate::services::cat_service::CatService;
 use crate::tasks::drag_loop;
 use crate::ui::overlay::{self, OverlayState};
+use klat_core::cat::CatState;
 use klat_core::geometry::{hit_test, to_overlay, LookTracker, OverlayFrame, Point, Rect};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
+use tokio::sync::watch::Receiver;
 
 const AWAKE_PERIOD: Duration = Duration::from_millis(33);
 const ASLEEP_PERIOD: Duration = Duration::from_millis(200);
 
-pub fn start(app: AppHandle, cat: Arc<CatService>, overlay_state: Arc<OverlayState>) {
+pub fn start(app: AppHandle, state: Receiver<CatState>, overlay_state: Arc<OverlayState>) {
     thread::Builder::new()
         .name("cursor-poller".into())
         .spawn(move || {
@@ -30,13 +31,13 @@ pub fn start(app: AppHandle, cat: Arc<CatService>, overlay_state: Arc<OverlaySta
             let mut interactive = false;
             let mut tracker = LookTracker::default();
             loop {
-                let period = if cat.awake() {
+                let period = if state.borrow().awake {
                     AWAKE_PERIOD
                 } else {
                     ASLEEP_PERIOD
                 };
                 thread::sleep(period);
-                let awake = cat.awake();
+                let awake = state.borrow().awake;
 
                 let Some(win) = overlay::get(&app) else {
                     continue;

@@ -2,8 +2,9 @@
 //! destroyed when closed, so its webview costs no memory while it is not open.
 
 use crate::platform;
+use crate::services;
 use klat_core::i18n::t;
-use klat_core::settings::UiLanguage;
+use klat_core::settings::{Settings, UiLanguage};
 use tauri::{
     AppHandle, LogicalUnit, Manager, PixelUnit, WebviewUrl, WebviewWindowBuilder,
     WindowSizeConstraints,
@@ -48,7 +49,12 @@ fn logical(px: f64) -> PixelUnit {
 }
 
 /// The window title follows the Platform Language (the page sets its own text).
-pub fn sync_title(app: &AppHandle, lang: UiLanguage) {
+pub fn follow(app: &AppHandle, settings: tokio::sync::watch::Receiver<Settings>) {
+    let handle = app.clone();
+    services::on_each(settings, move |s| sync_title(&handle, s.ui_language));
+}
+
+fn sync_title(app: &AppHandle, lang: UiLanguage) {
     if let Some(win) = app.get_webview_window(LABEL) {
         let _ = win.set_title(&t(lang, "settings.windowTitle"));
     }

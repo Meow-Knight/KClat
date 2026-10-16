@@ -1,8 +1,6 @@
 //! Composition root: the Tauri builder, plugins, managed state, setup and shutdown (docs/ARCHITECTURE.md §5.4).
 
-mod fanout;
-
-use crate::ipc::commands;
+use crate::ipc::{commands, events};
 use crate::platform;
 use crate::services::cat_service::{self, CatService};
 use crate::services::settings_service;
@@ -79,12 +77,17 @@ pub fn run() {
             // Logged here, not before the builder: a second launch exits inside the single-instance plugin.
             log::info!("Klat {} starting", env!("CARGO_PKG_VERSION"));
             platform::menu_bar_app(app);
-            fanout::start(app.handle(), &cat);
+            // Subscribed before anything can change the state (the event server starts below).
+            let handle = app.handle();
+            events::forward(handle, cat.subscribe(), cat.subscribe_settings());
+            platform::webview_memory::follow(handle, cat.subscribe());
+            tray::follow(handle, cat.subscribe(), cat.subscribe_settings());
+            settings_window::follow(handle, cat.subscribe_settings());
             overlay::create(app.handle(), &cat)?;
             platform::webview_memory::awake_changed(app.handle(), false);
             settings_service::reconcile_start_at_login(app.handle(), &cat);
             tray::create(app.handle(), cat.clone())?;
-            cursor_poller::start(app.handle().clone(), cat.clone(), overlay_state.clone());
+            cursor_poller::start(app.handle().clone(), cat.subscribe(), overlay_state.clone());
             drag_loop::start(app.handle().clone(), cat.clone(), overlay_state);
             start_event_server(cat.clone())?;
             stale_ticker::start(cat);

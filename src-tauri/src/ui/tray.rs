@@ -2,8 +2,8 @@
 //! window. Labels and tooltip follow the Platform Language and change as soon as it does.
 
 use crate::platform;
-use crate::services::cat_service::CatService;
-use klat_core::cat::Command;
+use crate::services::{self, cat_service::CatService};
+use klat_core::cat::{CatState, Command};
 use klat_core::i18n::{t, tf};
 use klat_core::settings::{Settings, UiLanguage};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -12,6 +12,7 @@ use tauri::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Wry};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+use tokio::sync::watch::Receiver;
 
 const READY: &str = "ready";
 const PAUSE: &str = "pause";
@@ -105,15 +106,27 @@ fn set_checked(item: &CheckMenuItem<Wry>, on: bool) {
     }
 }
 
+/// Keeps the tray in step with the cat (sessions waiting in the tooltip, the Ready tick) and the settings (the
+/// Pause tick, the language).
+pub fn follow(app: &AppHandle, state: Receiver<CatState>, settings: Receiver<Settings>) {
+    let handle = app.clone();
+    services::on_each(state, move |s| {
+        set_waiting(&handle, s.sessions.len());
+        set_ready_checked(s.ready);
+    });
+    let handle = app.clone();
+    services::on_each(settings, move |s| sync_settings(&handle, &s));
+}
+
 /// Keeps the tray tick in step with the Ready state.
-pub fn set_ready_checked(on: bool) {
+fn set_ready_checked(on: bool) {
     if let Some(items) = ITEMS.get() {
         set_checked(&items.ready, on);
     }
 }
 
 /// Keeps the Pause tick and the labels in step with settings changed elsewhere (the Settings window).
-pub fn sync_settings(app: &AppHandle, s: &Settings) {
+fn sync_settings(app: &AppHandle, s: &Settings) {
     let Some(items) = ITEMS.get() else {
         return;
     };
@@ -135,7 +148,7 @@ fn tooltip(lang: UiLanguage, count: usize) -> String {
 }
 
 /// Tooltip shows how many sessions are waiting.
-pub fn set_waiting(app: &AppHandle, count: usize) {
+fn set_waiting(app: &AppHandle, count: usize) {
     WAITING.store(count, Ordering::Relaxed);
     // The items are made before the tray icon: without them there is no tooltip to set yet.
     let Some(items) = ITEMS.get() else {
