@@ -467,7 +467,7 @@ design, acceptance và OUTPUT cụ thể; quy trình chất lượng bắt buộ
 | 2 | `ClauCat-dv6.3` | `klat-core`: `session`, `geometry` (newtype đơn vị), `settings` (phần thuần), `claude_hooks`, `i18n`, `CatModel` | `cargo test -p klat-core` không compile Tauri | Xong 2026-10-16 |
 | 3 | `ClauCat-dv6.4` | `klat-infra`: facade `log`, `event_server`, `runtime_file`, `settings_repo`, `claude_settings` | Không còn `crate::` trong event server; test socket xanh | Xong 2026-10-16 |
 | 4 | `ClauCat-dv6.5` | `klat`: `CatService` + `watch`, subscriber, xoá `static`, chia `ipc/ui/tasks/platform` | Không còn `crate::tray::` trong service; hồi quy Windows pass, macOS do owner | Phần agent xong 2026-10-16 (4.1–4.4, `pnpm regress` 18/18); chờ owner chạy O1–O10 trên Windows và O7 trên Mac |
-| 5 | `ClauCat-dv6.6` | Type TS sinh tự động, `IpcError`; frontend: `CatPose` sang `kit/`, phá vòng `cat` ↔ `characters`, gộp `settings-window/api.ts` vào `bridge/`, ESLint ép tầng | `tauriBridge.ts` dùng type sinh; `pnpm check` kiểm drift | Chưa bắt đầu |
+| 5 | `ClauCat-dv6.6` | Type TS sinh tự động, `IpcError`; frontend: `CatPose` sang `kit/`, phá vòng `cat` ↔ `characters`, gộp `settings-window/api.ts` vào `bridge/`, ESLint ép tầng | `tauriBridge.ts` dùng type sinh; `pnpm check` kiểm drift | Xong 2026-10-16 |
 
 Mỗi phase = một chuỗi commit **không đổi hành vi**, test xanh ở mọi commit. Cập nhật cột "Trạng thái" khi phase xong.
 
@@ -477,7 +477,9 @@ Sau Phase 4 còn lại, có chủ ý:
 - `services::settings_service` nhận `AppHandle` vì plugin autostart cần nó; `CatService` thì không.
 - Event giờ do subscriber gửi, sau khi command trả về; snapshot hoặc settings giống hệt không bị gửi lại.
 
-### 11.2 Ánh xạ file hiện tại → vị trí đích
+### 11.2 Ánh xạ file cũ → vị trí mới (lịch sử)
+
+Các file bên trái không còn; bảng giữ lại để đọc commit và bead cũ.
 
 | Hiện tại (`src-tauri/src/`) | Đích |
 |---|---|
@@ -498,9 +500,10 @@ Sau Phase 4 còn lại, có chủ ý:
 | `main.rs` | `bootstrap/` (`main.rs` còn ≤ 10 dòng) |
 | `crates/klat-hook/src/data_dir.rs` | `klat-protocol::data_dir` |
 
-### 11.3 Quy tắc trong giai đoạn chuyển tiếp
+### 11.3 Quy tắc trong giai đoạn chuyển tiếp (hết hiệu lực)
 
-Khi tầng đích của tính năng **chưa tồn tại**:
+Hết hiệu lực từ 2026-10-16: mọi tầng đích đã tồn tại, code mới đặt thẳng vào tầng của nó theo §8 và không còn dấu
+`// target:`. Giữ lại để đọc lịch sử. Trước đó, khi tầng đích của tính năng **chưa tồn tại**:
 
 1. Viết code mới **như thể** nó đã ở tầng đích: logic thuần trong hàm/struct không chạm `AppHandle`, I/O, đồng hồ; thời gian truyền vào; type thay chuỗi.
 2. Đặt nó trong module hiện tại gần nhất theo §11.2, kèm comment `// target: klat-core::<module>` để phase migrate nhặt ra.
@@ -542,4 +545,5 @@ pnpm check --skip audit # khi offline (cargo audit cần tải advisory DB); c�
 | Ngày | Quyết định | Lý do |
 |---|---|---|
 | 2026-10-16 | Áp dụng kiến trúc phân tầng protocol / core / infra / app | Tách logic khỏi Tauri để test và mở rộng; một nguồn sự thật cho giao thức hook; xoá phụ thuộc vòng và global state |
+| 2026-10-16 | Migrate xong (Phase 0–5, epic `ClauCat-dv6`) | So với baseline: `klat-hook` nhỏ hơn 2.2%, vòng sửa-test nhanh 5.3×, test Rust 124 → 176, TS 108 → 121 (docs/verification.md). Phase 4 còn chờ owner kiểm tay trên Windows và Mac |
 | 2026-10-16 | Type TS sinh bằng `ts-rs` 12 (chỉ lúc test), không dùng `tauri-specta` | ts-rs đã ổn định (12.0.1) và không đổi cách gọi `invoke`; tauri-specta vẫn là bản RC (2.0.0-rc.25) cho Tauri 2. Đổi khi tauri-specta ổn định và ta muốn sinh luôn wrapper command |

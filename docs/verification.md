@@ -54,6 +54,22 @@ tests 173: app 12 (CatService 5, TrayAction 2). `pnpm check --mac` green (shown 
 subscribers), and the size slider preview (its state is now `OverlayState`). Each new check was seen failing on a
 deliberate regression (state emit removed; preview emit removed). Owner rows for Phase 4 below: not run yet.
 
+**After Phase 5, end of the refactor** (typed IPC and frontend layers, ClauCat-dv6.6, at `ba59c45`): `pnpm check`
+now also fails when src/bridge/generated.ts is out of date and when a frontend import crosses a layer. The
+character sheet (`characters.html`, 10 fixed poses) gave the same 60 tile hashes before and after moving the
+frontend files (cat, snake, dragon; light and dark), rendered by headless Edge.
+
+| What | Baseline (`563b20e`+) | End (`ba59c45`) | |
+|---|---|---|---|
+| klat-hook release binary | 245.0 KB | 239.5 KB | −2.2% |
+| klat-hook, app not running (median / p95) | 3.0 / 3.5 ms | 3.0 / 3.3 ms | same |
+| klat-hook, closed port (median / p95) | 167.7 / 176.2 ms | 168.9 / 179.5 ms | the 150 ms connect timeout; within run-to-run noise |
+| klat-hook, app answers 204 (median / p95) | 5.1 / 6.8 ms | 3.9 / 4.1 ms | −24% |
+| Edit-test loop after touching the session logic | 2881 ms (`cargo test -p klat`) | 544 ms (`cargo test -p klat-core`) | 5.3× faster |
+| Rust tests | 124 | 176 | +52 |
+| TypeScript tests | 108 | 121 | +13 |
+| `pnpm regress` checks | 16 | 18 | all pass |
+
 ### Regression script
 
 **Automated: `pnpm regress`** (Windows, ~5 s after a warm build). Starts the debug app with `APPDATA` in a temp
