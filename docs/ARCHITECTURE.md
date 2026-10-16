@@ -62,7 +62,7 @@
  ┌──────────────────────────────── klat (src-tauri) ─────────────────────────────────┐
  │  bootstrap/  composition root: Builder, plugins, .manage(), setup, lifecycle        │
  │  ipc/        #[tauri::command] mỏng + events (tên + payload có type)                │
- │  services/   CatService, SettingsService, HooksService: chủ duy nhất của state      │
+ │  services/   CatService (mèo + settings, một lock), settings_service, hooks_service │
  │  ui/         overlay, settings_window, tray: subscribe state, gửi Command          │
  │  tasks/      cursor_poller, drag_loop, stale_ticker                                 │
  │  platform/   windows.rs | macos.rs | fallback.rs, webview_memory: mọi unsafe/FFI   │
@@ -267,12 +267,16 @@ Frontend click / tray menu
 ### 6.3 Đổi settings
 
 ```
-Settings window ─invoke set_settings(patch: SettingsPatch)─▶ ipc → SettingsService
+Settings window ─invoke set_settings(patch: SettingsPatch)─▶ ipc → CatService::update_settings
+  │   (một lock cho cả mèo và settings: không ai thấy settings mới với sleep_cause cũ)
   ├─ core::settings::Settings::apply (đọc khoan dung + clamp)
   ├─ infra::settings_repo::save (atomic)
-  ├─ CatService::dispatch(Command::SettingsChanged)   // cùng transaction với sleep_cause
+  ├─ core::CatModel::handle(Command::SettingsChanged)
   └─ watch<Settings> → tray (nhãn, ngôn ngữ), settings_window (tiêu đề), emit cat://settings
 ```
+
+`services/settings_service.rs` giữ phần quanh model: thư mục dữ liệu, đọc file lúc khởi động, Start at login (sự thật
+là entry của OS).
 
 **Quy tắc:** mọi thay đổi state đi qua `dispatch`. Không có đường tắt "sửa field rồi gọi publish".
 
@@ -300,7 +304,7 @@ Settings window ─invoke set_settings(patch: SettingsPatch)─▶ ipc → Setti
 ### 7.2 State và `static`
 
 - State nghiệp vụ: trong service, đăng ký bằng `app.manage()`.
-- State UI/OS (zoom overlay, đang preview, vùng kéo, menu tray): struct riêng (`OverlayState`, `DragState`, `TrayHandles`) trong `app.manage()`.
+- State UI/OS (zoom overlay, đang preview, đang kéo, hitbox, menu tray): struct riêng (`ui::overlay::OverlayState`, `ui::tray::TrayHandles`), tạo trong `bootstrap`, `app.manage()` cho command và truyền `Arc` vào task.
 - `static` mutable **chỉ** được dùng trong `platform/`, khi callback OS không nhận con trỏ user data (Windows `WH_KEYBOARD_LL`, macOS `CGEventTap`). Bắt buộc có comment nêu lý do. Dạng cho phép: `OnceLock<Sender<…>>`, atomic.
 - Một service = một `Mutex`. Không giữ hai lock cùng lúc; nếu buộc phải giữ, ghi thứ tự lock trong doc comment của struct.
 
@@ -404,8 +408,9 @@ Luôn theo thứ tự trong → ngoài; mỗi bước có test ở tầng của 
 
 ### 9.4 Thêm một phản ứng khi state đổi (âm thanh, notification hệ thống…)
 
-1. File mới `src-tauri/src/ui/<tên>.rs` với `pub fn spawn(rx: watch::Receiver<CatState>, …)`.
-2. Gọi `spawn` trong `bootstrap`.
+1. File mới `src-tauri/src/ui/<tên>.rs` với `pub fn follow(app: &AppHandle, rx: watch::Receiver<CatState>)`, chạy
+   vòng lặp bằng `services::on_each(rx, |state| …)`.
+2. Gọi `follow(…, cat.subscribe())` trong `bootstrap`, trước khi event server khởi động.
 3. Không sửa `services/` hay `klat-core`. Nếu thấy phải sửa, phản ứng đó đang cần dữ liệu chưa có trong snapshot: thêm vào `CatState` trước (bước riêng, có test).
 
 ### 9.5 Thêm một nhân vật
@@ -458,10 +463,16 @@ design, acceptance và OUTPUT cụ thể; quy trình chất lượng bắt buộ
 | 1 | `ClauCat-dv6.2` | `klat-protocol`; bỏ `#[path]`; `HookName` | Hook và app dùng chung type; hook không tăng > 10% | Xong 2026-10-16 |
 | 2 | `ClauCat-dv6.3` | `klat-core`: `session`, `geometry` (newtype đơn vị), `settings` (phần thuần), `claude_hooks`, `i18n`, `CatModel` | `cargo test -p klat-core` không compile Tauri | Xong 2026-10-16 |
 | 3 | `ClauCat-dv6.4` | `klat-infra`: facade `log`, `event_server`, `runtime_file`, `settings_repo`, `claude_settings` | Không còn `crate::` trong event server; test socket xanh | Xong 2026-10-16 |
-| 4 | `ClauCat-dv6.5` | `klat`: `CatService` + `watch`, subscriber, xoá `static`, chia `ipc/ui/tasks/platform` | Không còn `crate::tray::` trong service; hồi quy Windows pass, macOS do owner | Chưa bắt đầu |
+| 4 | `ClauCat-dv6.5` | `klat`: `CatService` + `watch`, subscriber, xoá `static`, chia `ipc/ui/tasks/platform` | Không còn `crate::tray::` trong service; hồi quy Windows pass, macOS do owner | Phần agent xong 2026-10-16 (4.1–4.4, `pnpm regress` 18/18); chờ owner chạy O1–O10 trên Windows và O7 trên Mac |
 | 5 | `ClauCat-dv6.6` | Type TS sinh tự động, `IpcError`; frontend: `CatPose` sang `kit/`, phá vòng `cat` ↔ `characters`, gộp `settings-window/api.ts` vào `bridge/`, ESLint ép tầng | `tauriBridge.ts` dùng type sinh; `pnpm check` kiểm drift | Chưa bắt đầu |
 
 Mỗi phase = một chuỗi commit **không đổi hành vi**, test xanh ở mọi commit. Cập nhật cột "Trạng thái" khi phase xong.
+
+Sau Phase 4 còn lại, có chủ ý:
+- `tasks/` vẫn dùng `ui::overlay` (`get`, `work_area`, `OverlayState`): cursor poller và drag loop làm việc trực
+  tiếp trên cửa sổ overlay.
+- `services::settings_service` nhận `AppHandle` vì plugin autostart cần nó; `CatService` thì không.
+- Event giờ do subscriber gửi, sau khi command trả về; snapshot hoặc settings giống hệt không bị gửi lại.
 
 ### 11.2 Ánh xạ file hiện tại → vị trí đích
 

@@ -47,6 +47,13 @@ seeded junk requests, runtime_file, settings_repo, claude_settings), app 5. `pnp
 fails on any line that is not one of Klat's messages, and `pnpm regress --hold 300` (five more minutes of the debug
 app running) left 17 lines, none from Tauri, wry or tao.
 
+**After Phase 4, agent part** (the app shell, ClauCat-dv6.5, at `d1ee3e2`; debug build, Windows 11 Pro 22621):
+klat-hook unchanged at 239.5 KB; medians 3.0 / 166.1 / 3.9 ms (p95 3.5 / 178.6 / 5.0); edit-test loop 546 ms. Rust
+tests 173: app 12 (CatService 5, TrayAction 2). `pnpm check --mac` green (shown to compile `platform/macos.rs`).
+`pnpm regress`: 18/18, with two new checks for what Phase 4 moved: events reach the overlay page (now sent by
+subscribers), and the size slider preview (its state is now `OverlayState`). Each new check was seen failing on a
+deliberate regression (state emit removed; preview emit removed). Owner rows for Phase 4 below: not run yet.
+
 ### Regression script
 
 **Automated: `pnpm regress`** (Windows, ~5 s after a warm build). Starts the debug app with `APPDATA` in a temp
@@ -72,6 +79,8 @@ Quit). It checked, all ✅ on the code above:
 | `set_settings` | patch saved to settings.json; `position` and `startAtLogin` in a patch are ignored |
 | Cat size 150% | overlay `devicePixelRatio` ×1.5, back to ×1 at 100% |
 | Event server | wrong token 401, `Origin` 403, GET 405, unknown hook 422; the state does not change |
+| Events | `cat://state` (wake test, sleep) and `cat://settings` reach a listener in the overlay page |
+| Size slider | `preview_cat_scale` puts the overlay at the preview zoom (×2); `set_settings` releases it at the chosen size |
 | Log | hook lines carry names only (no tool input), rejections are logged |
 
 The script was checked against a deliberate regression (`DEDUPE_MS` set to 0, now `klat_core::session::DEDUPE_WINDOW`): it failed the duplicate check and
@@ -90,6 +99,11 @@ phase touched:
 | O6 | Settings > Language > Tiếng Việt: tray labels and the Settings window title switch without a restart | 4, 5 |
 | O7 | macOS (on a Mac): overlay, menu bar icon, Space-drag after granting Accessibility | 4 (ClauCat-dv6.5.6) |
 | O8 | Release build only, when a phase touches hooks or autostart: Settings > Hooks Install/Repair/Uninstall; Start at login on/off | 3, 4 |
+| O9 | While awake the cat turns its head after the pointer; clicks pass through the overlay everywhere but the cat and bubble | 4 |
+| O10 | Task Manager: Klat's memory drops a few seconds after the cat falls asleep and goes back up when it wakes | 4 |
+
+Phase 4 (ClauCat-dv6.5.5) needs O1–O6 and O8–O10 on Windows, O7 on a Mac (ClauCat-dv6.5.6). Results go here, with the
+date, the build and who ran them.
 
 Stale expiry (`staleAfterMs`, at least 5 minutes) is too slow for the script; the session-store unit tests cover it.
 
