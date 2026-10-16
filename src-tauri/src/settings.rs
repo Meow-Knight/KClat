@@ -464,6 +464,164 @@ mod tests {
         assert_eq!(next.max_yells_per_wake, 3);
     }
 
+    /// A patch key, a value for it, and what it must change.
+    type PatchCase = (&'static str, Value, fn(&mut Settings));
+    /// A patch key, and how to put its field back to the default.
+    type FieldReset = (&'static str, fn(&mut Settings, &Settings));
+
+    /// Settings with every patchable field away from its default, so a reset to the default shows.
+    fn far_from_defaults() -> Settings {
+        Settings {
+            character: Character::Snake,
+            notifications_enabled: false,
+            hide_while_sleeping: true,
+            sfw_mode: true,
+            ui_language: UiLanguage::Vi,
+            klat_language: KlatLanguage::Vi,
+            yell_interval_ms: 60_000,
+            max_yells_per_wake: 3,
+            stale_after_ms: 600_000,
+            reduce_motion: true,
+            cat_scale: 150,
+            start_at_login: true,
+            corner: "bottom-right".into(),
+            position: Some(WindowPos::new(-40, 70)),
+        }
+    }
+
+    #[test]
+    fn spec_keys_the_settings_window_may_not_change_are_ignored() {
+        let current = far_from_defaults();
+        for patch in [
+            json!({ "position": { "x": 1, "y": 2 } }),
+            json!({ "position": null }),
+            json!({ "startAtLogin": false }),
+            json!({ "corner": "top-left" }),
+            json!({ "languages": ["en"] }),
+            json!({ "bogus": 1, "": true }),
+            // Keys are case-sensitive, as in the file.
+            json!({ "SfwMode": false, "sfw_mode": false, "CATSCALE": 50 }),
+            json!({}),
+        ] {
+            let next = apply_patch(&current, patch.as_object().unwrap());
+            assert_eq!(next, current, "{patch}");
+        }
+    }
+
+    #[test]
+    fn spec_each_patchable_key_changes_only_its_field() {
+        let current = far_from_defaults();
+        let cases: [PatchCase; 11] = [
+            ("character", json!("dragon"), |s| {
+                s.character = Character::Dragon
+            }),
+            ("notificationsEnabled", json!(true), |s| {
+                s.notifications_enabled = true
+            }),
+            ("hideWhileSleeping", json!(false), |s| {
+                s.hide_while_sleeping = false
+            }),
+            ("sfwMode", json!(false), |s| s.sfw_mode = false),
+            ("uiLanguage", json!("en"), |s| {
+                s.ui_language = UiLanguage::En
+            }),
+            ("klatLanguage", json!("auto"), |s| {
+                s.klat_language = KlatLanguage::Auto
+            }),
+            ("yellIntervalMs", json!(45_000), |s| {
+                s.yell_interval_ms = 45_000
+            }),
+            ("maxYellsPerWake", json!(20), |s| s.max_yells_per_wake = 20),
+            ("staleAfterMs", json!(900_000), |s| {
+                s.stale_after_ms = 900_000
+            }),
+            ("reduceMotion", json!(false), |s| s.reduce_motion = false),
+            ("catScale", json!(75), |s| s.cat_scale = 75),
+        ];
+        assert_eq!(cases.len(), PATCHABLE.len());
+        for (key, value, expect) in cases {
+            let mut expected = current.clone();
+            expect(&mut expected);
+            let next = apply_patch(&current, json!({ key: value }).as_object().unwrap());
+            assert_eq!(next, expected, "{key}");
+        }
+    }
+
+    /// Records today's behaviour, not a goal: a value of the wrong type (or null) resets the field to its
+    /// default, not to its current value, because the patch is validated like a hand-edited file.
+    #[test]
+    fn spec_a_mistyped_or_null_patch_value_resets_its_field_to_the_default() {
+        let current = far_from_defaults();
+        let d = Settings::default();
+        let bad = [
+            json!(null),
+            json!("x"),
+            json!([1]),
+            json!({ "a": 1 }),
+            json!(-1),
+        ];
+        // Copies the default into one field.
+        let fields: [FieldReset; 11] = [
+            ("character", |s, d| s.character = d.character),
+            ("notificationsEnabled", |s, d| {
+                s.notifications_enabled = d.notifications_enabled
+            }),
+            ("hideWhileSleeping", |s, d| {
+                s.hide_while_sleeping = d.hide_while_sleeping
+            }),
+            ("sfwMode", |s, d| s.sfw_mode = d.sfw_mode),
+            ("uiLanguage", |s, d| s.ui_language = d.ui_language),
+            ("klatLanguage", |s, d| s.klat_language = d.klat_language),
+            ("yellIntervalMs", |s, d| {
+                s.yell_interval_ms = d.yell_interval_ms
+            }),
+            ("maxYellsPerWake", |s, d| {
+                s.max_yells_per_wake = d.max_yells_per_wake
+            }),
+            ("staleAfterMs", |s, d| s.stale_after_ms = d.stale_after_ms),
+            ("reduceMotion", |s, d| s.reduce_motion = d.reduce_motion),
+            ("catScale", |s, d| s.cat_scale = d.cat_scale),
+        ];
+        assert_eq!(fields.len(), PATCHABLE.len());
+        for (key, reset) in fields {
+            let mut expected = current.clone();
+            reset(&mut expected, &d);
+            for value in &bad {
+                let next = apply_patch(&current, json!({ key: value }).as_object().unwrap());
+                // That field is back to its default; every other field keeps its current value.
+                assert_eq!(next, expected, "{key}: {value}");
+            }
+        }
+        // An unknown enum value counts as mistyped.
+        let next = apply_patch(
+            &current,
+            json!({ "character": "unicorn" }).as_object().unwrap(),
+        );
+        assert_eq!(next.character, Character::Cat);
+        assert_eq!(next.sfw_mode, current.sfw_mode);
+    }
+
+    #[test]
+    fn spec_patched_numbers_are_clamped_not_reset() {
+        let current = far_from_defaults();
+        let patch = json!({ "yellIntervalMs": 1, "maxYellsPerWake": 1000, "staleAfterMs": u64::MAX, "catScale": 5 });
+        let next = apply_patch(&current, patch.as_object().unwrap());
+        assert_eq!(
+            (
+                next.yell_interval_ms,
+                next.max_yells_per_wake,
+                next.stale_after_ms,
+                next.cat_scale
+            ),
+            (
+                YELL_INTERVAL_MS.0,
+                MAX_YELLS_PER_WAKE.1,
+                STALE_AFTER_MS.1,
+                CAT_SCALE.0
+            )
+        );
+    }
+
     #[test]
     fn corrupt_file_is_moved_aside_and_replaced() {
         for broken in ["{ not json", "[1, 2]", "", "\"text\""] {
