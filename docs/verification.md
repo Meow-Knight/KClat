@@ -34,6 +34,13 @@ binary 239.5 KB (−2.2%); medians 2.9 ms / 166.0 ms / 3.8 ms for the three case
 Rust tests 129 (the five data-folder tests no longer run twice; klat-protocol adds 15). `pnpm regress`: 16/16
 through the new hook.
 
+**After Phase 2** (klat-core, ClauCat-dv6.3, at `9e925a7`): the edit-test loop now touches
+`crates/klat-core/src/session.rs` and runs `cargo test -p klat-core`, which compiles no Tauri: median 544 ms, 5.3×
+faster than the 2881 ms baseline. klat-hook unchanged at 239.5 KB; medians 3.1 / 168.4 / 3.9 ms (p95 3.4 / 180.1 /
+4.7). Rust tests 160: klat-core 95 (session, time, geometry, settings, claude_hooks, i18n, cat), app 35. `pnpm
+regress`: 16/16. Not covered by the script, left for the owner: dragging the cat with Space, and a DPI change with
+a dragged cat (the coordinates got types, ClauCat-dv6.3.2).
+
 ### Regression script
 
 **Automated: `pnpm regress`** (Windows, ~5 s after a warm build). Starts the debug app with `APPDATA` in a temp

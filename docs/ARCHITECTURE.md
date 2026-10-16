@@ -166,17 +166,17 @@ Thứ tự tầng, trong ra ngoài. Một thư mục chỉ được import từ 
 | `session` | `SessionStore`, `classify`, `Signal`, `Gate`, dedupe, `MAX_SESSIONS` |
 | `cat` | `CatModel` (reducer), `Command`, `Ctx`, `CatState`, `Attention`, `SleepCause` |
 | `settings` | `Settings` + enum, đọc khoan dung (`from_object`), `SettingsPatch`, clamp, migrate legacy |
-| `geometry` | Newtype toạ độ (§7.5), `Rect`, `WindowPos`, `to_overlay`, `hit_test`, `clamp_window`, `is_on_screen`, `LookTracker` |
-| `claude_hooks` | `status` / `install_into` / `uninstall_from` trên `serde_json::Value` (không đọc ghi file) |
+| `geometry` | `Point<U, N>` / `Rect<U, N>` với đơn vị `Css` / `Logical` / `Physical` (§7.5), `WindowPos`, `OverlayFrame`, `to_overlay`, `hit_test`, `clamp_window`, `is_on_screen`, `keep_bottom_right`, `bottom_right`, `LookTracker` |
+| `claude_hooks` | `status` / `install_into` / `uninstall_from` trên `serde_json::Value` (không đọc ghi file), lỗi `UnexpectedShape`; golden test trong `testdata/claude_settings/` |
 | `i18n` | Catalog + `t(lang, key)`, `tf(...)`; không phụ thuộc `AppHandle` |
 | `ratelimit` | `RejectLog` |
-| `time` | `UnixMs` |
+| `time` | `UnixMs`, `DurationMs` |
 
 Hình dạng chuẩn của state machine:
 
 ```rust
-pub enum Command {
-    Hook(HookEvent),
+pub enum Command<'a> {
+    Hook(&'a HookEvent),
     SetReady(bool),
     DismissAll,
     WakeTest,
@@ -186,10 +186,13 @@ pub enum Command {
 
 pub struct Ctx { pub now: UnixMs, pub paused: bool }
 
+/// Core không log: trả đủ để tầng ngoài log và quyết định publish.
+pub struct Handled { pub publish: bool, pub hook: Option<Outcome> }
+
 impl CatModel {
-    /// true nếu snapshot có thể đã đổi.
-    pub fn handle(&mut self, cmd: Command, ctx: Ctx) -> bool;
-    pub fn snapshot(&self, ctx: Ctx) -> CatState;
+    pub fn handle(&mut self, cmd: Command<'_>, ctx: Ctx) -> Handled;
+    /// Snapshot chỉ cần Pause, không cần thời gian.
+    pub fn snapshot(&self, paused: bool) -> CatState;
 }
 ```
 
@@ -453,7 +456,7 @@ design, acceptance và OUTPUT cụ thể; quy trình chất lượng bắt buộ
 |---|---|---|---|---|
 | 0 | `ClauCat-dv6.1` | Baseline: chốt thay đổi đang dở, gate một lệnh `pnpm check` (§12), đo `klat-hook` + số test, kịch bản hồi quy | Test xanh, có số liệu baseline và kịch bản hồi quy | Xong 2026-10-16 |
 | 1 | `ClauCat-dv6.2` | `klat-protocol`; bỏ `#[path]`; `HookName` | Hook và app dùng chung type; hook không tăng > 10% | Xong 2026-10-16 |
-| 2 | `ClauCat-dv6.3` | `klat-core`: `session`, `geometry` (newtype đơn vị), `settings` (phần thuần), `claude_hooks`, `i18n`, `CatModel` | `cargo test -p klat-core` không compile Tauri | Chưa bắt đầu |
+| 2 | `ClauCat-dv6.3` | `klat-core`: `session`, `geometry` (newtype đơn vị), `settings` (phần thuần), `claude_hooks`, `i18n`, `CatModel` | `cargo test -p klat-core` không compile Tauri | Xong 2026-10-16 |
 | 3 | `ClauCat-dv6.4` | `klat-infra`: facade `log`, `event_server`, `runtime_file`, `settings_repo`, `claude_settings` | Không còn `crate::` trong event server; test socket xanh | Chưa bắt đầu |
 | 4 | `ClauCat-dv6.5` | `klat`: `CatService` + `watch`, subscriber, xoá `static`, chia `ipc/ui/tasks/platform` | Không còn `crate::tray::` trong service; hồi quy Windows pass, macOS do owner | Chưa bắt đầu |
 | 5 | `ClauCat-dv6.6` | Type TS sinh tự động, `IpcError`; frontend: `CatPose` sang `kit/`, phá vòng `cat` ↔ `characters`, gộp `settings-window/api.ts` vào `bridge/`, ESLint ép tầng | `tauriBridge.ts` dùng type sinh; `pnpm check` kiểm drift | Chưa bắt đầu |
