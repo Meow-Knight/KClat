@@ -451,7 +451,7 @@ design, acceptance và OUTPUT cụ thể; quy trình chất lượng bắt buộ
 
 | Phase | Bead | Nội dung | Tiêu chí xong | Trạng thái |
 |---|---|---|---|---|
-| 0 | `ClauCat-dv6.1` | Baseline: chốt thay đổi đang dở, gate một lệnh `pnpm check` (§12), đo `klat-hook` + số test, kịch bản hồi quy | Test xanh, có số liệu baseline và kịch bản hồi quy | Chưa bắt đầu |
+| 0 | `ClauCat-dv6.1` | Baseline: chốt thay đổi đang dở, gate một lệnh `pnpm check` (§12), đo `klat-hook` + số test, kịch bản hồi quy | Test xanh, có số liệu baseline và kịch bản hồi quy | Xong 2026-10-16 |
 | 1 | `ClauCat-dv6.2` | `klat-protocol`; bỏ `#[path]`; `HookName` | Hook và app dùng chung type; hook không tăng > 10% | Chưa bắt đầu |
 | 2 | `ClauCat-dv6.3` | `klat-core`: `session`, `geometry` (newtype đơn vị), `settings` (phần thuần), `claude_hooks`, `i18n`, `CatModel` | `cargo test -p klat-core` không compile Tauri | Chưa bắt đầu |
 | 3 | `ClauCat-dv6.4` | `klat-infra`: facade `log`, `event_server`, `runtime_file`, `settings_repo`, `claude_settings` | Không còn `crate::` trong event server; test socket xanh | Chưa bắt đầu |
@@ -502,16 +502,16 @@ Khi tầng đích của tính năng **chưa tồn tại**:
 - [ ] Payload IPC/hook thay đổi: type TS sinh lại; field hook mới là `Option`.
 - [ ] Log không chứa prompt, lệnh, tool input, token, đường dẫn đầy đủ.
 - [ ] Đổi `klat-hook`: đo lại kích thước + thời gian khởi động.
-- [ ] Gate chất lượng xanh:
+- [ ] Gate chất lượng xanh (`scripts/check.mjs`):
 
 ```bash
-pnpm lint:rust          # cargo fmt --check + clippy -D warnings
-pnpm test:rust          # cargo test --workspace
-pnpm lint && pnpm typecheck && pnpm test
-cargo audit             # cấu hình bỏ qua ở .cargo/audit.toml
+pnpm check              # fmt, clippy -D warnings, cargo test, eslint, tsc, vitest, cargo audit; bảng kết quả, exit 1 nếu fail
+pnpm check --mac        # thêm type-check cho macOS khi chạm code #[cfg(target_os = "macos")]
+pnpm check --skip audit # khi offline (cargo audit cần tải advisory DB); cấu hình bỏ qua ở .cargo/audit.toml
 ```
 
-- [ ] Hành vi người dùng thấy được: kiểm tay theo `docs/verification.md`.
+- [ ] Hành vi người dùng thấy được: `pnpm regress` xanh (Windows, tắt Klat đã cài trước) + các dòng owner (O1–O8) mà thay đổi chạm tới, theo `docs/verification.md` ("Regression script").
+- [ ] Đổi `klat-hook` hoặc hứa hẹn về hiệu năng: `pnpm measure`, so với bảng baseline trong `docs/verification.md`.
 - [ ] Spec/doc liên quan đã cập nhật (`KLAT_SPEC.md`, `docs/specs/`, file này nếu đổi cấu trúc).
 
 ---

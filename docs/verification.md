@@ -2,6 +2,79 @@
 
 What was checked at the end of each phase, how, and on what machine. Newest first. The decisions behind these results are in the README's decisions log.
 
+## Architecture refactor: baseline and regression script (2026-10-16, Windows 11 Pro 22621)
+
+Epic ClauCat-dv6 (plan: [ARCHITECTURE.md](ARCHITECTURE.md) §11). Every phase of the refactor is compared with the
+numbers below and must pass the regression script. Tools: `pnpm check` (every gate), `pnpm measure` (the table
+below), `pnpm regress` (the automated part of the regression script).
+
+### Baseline
+
+Measured at `563b20e` plus the Phase 0 scripts and the ClauCat-dfd fix (one test added, klat-hook unchanged),
+win32-x64, rustc 1.99.0, 50 hook runs per case (wall time including process start).
+
+| What | Median | p95 |
+|---|---|---|
+| klat-hook, app not running (no runtime.json) | 3.0 ms | 3.5 ms |
+| klat-hook, runtime.json points at a closed port | 167.7 ms | 176.2 ms |
+| klat-hook, app answers 204 | 5.1 ms | 6.8 ms |
+| Edit-test loop: touch `src-tauri/src/session_store.rs`, `cargo test -p klat` | 2881.0 ms | (3 runs) |
+
+| What | Value |
+|---|---|
+| klat-hook release binary | 245.0 KB (250880 bytes) |
+| Rust tests passed (`cargo test --workspace`) | 124 (1 ignored) |
+| TypeScript tests passed (`pnpm test`) | 108 |
+
+A phase may not make klat-hook more than 10% larger or slower, nor lower the test counts (a removed test needs a
+replacement named in the bead's notes).
+
+### Regression script
+
+**Automated: `pnpm regress`** (Windows, ~5 s after a warm build). Starts the debug app with `APPDATA` in a temp
+folder (your settings, log and token are untouched, and your installed Claude Code hooks cannot reach it), sends
+hook events through the real `klat-hook`, and reads the app's decisions over its own commands through WebView2
+remote debugging. It never presses Install/Uninstall hooks or Start at login. Quit an installed Klat first (tray >
+Quit). It checked, all ✅ on the code above:
+
+| Check | Expected |
+|---|---|
+| At launch | asleep, Ready armed |
+| Wire format | `cat://state` has exactly 6 keys, settings exactly 14 (catches serde renames) |
+| Stop with Ready armed | wakes, reason `done`, project name from the cwd folder |
+| Same Stop within 2 s | duplicate: no new yell (`attention.seq` unchanged) |
+| UserPromptSubmit | asleep, `sleepCause` `user` |
+| Ready off, then Stop | stays asleep |
+| PermissionRequest | always wakes, reason `permission` |
+| Notification `permission_prompt` on a waiting session | ignored (fallback only) |
+| PostToolUse of that tool | clears the wait |
+| Notification `idle_prompt`, then SessionEnd | wakes with `input`, then asleep with no sessions |
+| Pause, PermissionRequest, resume, Dismiss | held asleep; wakes on resume with `sleepCause` `auto`; Dismiss sleeps with `user` |
+| Wake test, Sleep | wakes with `done`, then asleep |
+| `set_settings` | patch saved to settings.json; `position` and `startAtLogin` in a patch are ignored |
+| Cat size 150% | overlay `devicePixelRatio` ×1.5, back to ×1 at 100% |
+| Event server | wrong token 401, `Origin` 403, GET 405, unknown hook 422; the state does not change |
+| Log | hook lines carry names only (no tool input), rejections are logged |
+
+The script was checked against a deliberate regression (`DEDUPE_MS` set to 0): it failed the duplicate check and
+exited 1.
+
+**Owner, by hand** (what the script cannot see; nothing clicks the tray or taskbar automatically). Run the rows the
+phase touched:
+
+| # | Check | Phases |
+|---|---|---|
+| O1 | Tray: tooltip counts waiting sessions; Ready and Pause ticks follow the bell and Settings; Dismiss all, Settings…, Quit work | 4 |
+| O2 | Space-drag the cat, release: it stays; after a restart it comes back to the same spot | 2, 4 |
+| O3 | Move a dragged cat to a monitor with another scale, or change the display scale: it keeps its corner and stays on screen | 2, 4 |
+| O4 | Settings > size slider: smooth while dragging, the cat lands at the chosen size on release | 2, 4, 5 |
+| O5 | Animations: wake with aura and yelling bubble; answering or Dismiss knocks the cat out (`user`); Pause makes it yawn (`auto`) | 2, 4, 5 |
+| O6 | Settings > Language > Tiếng Việt: tray labels and the Settings window title switch without a restart | 4, 5 |
+| O7 | macOS (on a Mac): overlay, menu bar icon, Space-drag after granting Accessibility | 4 (ClauCat-dv6.5.6) |
+| O8 | Release build only, when a phase touches hooks or autostart: Settings > Hooks Install/Repair/Uninstall; Start at login on/off | 3, 4 |
+
+Stale expiry (`staleAfterMs`, at least 5 minutes) is too slow for the script; the session-store unit tests cover it.
+
 ## Security hardening (2026-10-16, release build `pnpm release`, Windows 11 Pro 22621)
 
 Issue: ClauCat-fw3 (decisions in the README's decisions log, "Security hardening").

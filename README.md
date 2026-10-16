@@ -180,6 +180,9 @@ Requirements: Node.js ≥ 20.19, pnpm 10.34.6+ (`corepack enable` picks the pinn
 | `pnpm build` | Typecheck and build the frontend into `dist/` |
 | `pnpm release:mac` | macOS only: universal `klat-hook` (lipo), then the universal app and `.dmg` → `target/universal-apple-darwin/release/bundle/dmg/` ([details](docs/macos-build.md#building-the-dmg)) |
 | `pnpm build:hook` | Build `klat-hook` (release) for the target being built and copy it to `src-tauri/binaries/` |
+| `pnpm check` | Every gate below plus `cargo audit`, then a pass/fail table; exits 1 if any fails. `--mac` adds `check:mac`, `--skip audit` for offline, `--fail-fast`, `--verbose` |
+| `pnpm regress` | Windows: starts the debug app in a temp data folder and checks its behaviour end to end through the real hook (quit an installed Klat first); see [docs/verification.md](docs/verification.md) |
+| `pnpm measure` | klat-hook size and start time, test counts, edit-test loop time: the refactor baseline |
 | `pnpm lint` / `pnpm typecheck` / `pnpm test` | ESLint / `tsc --noEmit` / Vitest |
 | `pnpm lint:rust` / `pnpm test:rust` | `cargo fmt --check` + `clippy -D warnings` / `cargo test --workspace` |
 | `cargo build -p klat-hook` | Debug build of the hook (`target/debug/klat-hook.exe`, next to the dev app) |

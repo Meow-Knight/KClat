@@ -60,13 +60,14 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
 ## Build & Test
 
-_Add your build and test commands here_
-
 ```bash
-# Example:
-# npm install
-# npm test
+pnpm install            # JS dependencies (pnpm pinned in package.json; `corepack enable`)
+pnpm tauri dev          # run the app with hot reload
+pnpm check              # every quality gate (fmt, clippy, cargo test, eslint, tsc, vitest, cargo audit); must pass before a change is done
+pnpm check --mac        # also type-check for macOS when touching #[cfg(target_os = "macos")] code
 ```
+
+More commands (release builds, dev page, macOS): README.md "Development".
 
 ## Architecture Overview
 
