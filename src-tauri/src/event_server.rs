@@ -1,9 +1,13 @@
 //! Loopback HTTP endpoint for the hook adapter (spec §8.3–8.4).
 //!
 //! - Binds 127.0.0.1 on a random port; a fresh 256-bit bearer token per app run.
-//! - `{port, token}` goes to `%APPDATA%\Klat\runtime.json`, deleted when the app quits.
+//! - `{port, token}` goes to `%APPDATA%\Klat\runtime.json`, deleted when the app quits. Readable by this user only
+//!   (0600 on Unix), never placed in the temp folder, and created fresh so a planted file or link is not followed.
 //! - Accepts only `POST /event` with the right token, no `Origin` header (no browser pages), a body of at
 //!   most 64 KB, valid JSON, and an allowlisted `hookEventName`. Everything else gets a 4xx and is dropped.
+//! - Each request must arrive whole within `REQUEST_DEADLINE`, so nobody can hold a connection slot open by
+//!   sending a byte now and then, and rejections are logged in short bursts, so a flood cannot rotate the
+//!   real entries out of the capped log.
 
 use crate::session_store::{HookEvent, ALLOWED_HOOKS};
 use serde::{Deserialize, Serialize};
@@ -12,14 +16,21 @@ use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub const MAX_BODY: usize = 64 * 1024;
 const MAX_HEADER_BYTES: usize = 8 * 1024;
 const MAX_CONNECTIONS: usize = 16;
+/// For writing the answer.
 const IO_TIMEOUT: Duration = Duration::from_secs(1);
+/// The whole request (head and body) must arrive within this. The adapter sends it in one write and gives up
+/// after 300ms itself; a per-read timeout alone let one byte a second keep a connection open for hours.
+const REQUEST_DEADLINE: Duration = Duration::from_millis(500);
+/// At most this many rejected requests are logged per window; the rest are only counted.
+const REJECT_LOG_BURST: u32 = 5;
+const REJECT_LOG_WINDOW_MS: u64 = 60_000;
 const MAX_FIELD: usize = 200;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -29,8 +40,9 @@ pub struct RuntimeInfo {
     pub pid: u32,
 }
 
-/// `runtime.json` in the data folder; the hook adapter reads the same path (data_dir.rs is shared).
-pub fn runtime_path() -> PathBuf {
+/// `runtime.json` in the data folder; the hook adapter reads the same path (data_dir.rs is shared). None when
+/// there is no data folder.
+pub fn runtime_path() -> Option<PathBuf> {
     crate::data_dir::runtime_path()
 }
 
@@ -41,8 +53,21 @@ pub fn write_runtime(path: &Path, info: &RuntimeInfo) -> io::Result<()> {
     let mut tmp = path.as_os_str().to_owned();
     tmp.push(".tmp");
     let tmp = PathBuf::from(tmp);
-    fs::write(&tmp, serde_json::to_vec(info).map_err(io::Error::other)?)?;
+    let _ = fs::remove_file(&tmp);
+    let mut file = private_file().create_new(true).open(&tmp)?;
+    file.write_all(&serde_json::to_vec(info).map_err(io::Error::other)?)?;
+    drop(file);
     fs::rename(&tmp, path)
+}
+
+/// Options for a file only this user can read: 0600 on Unix. On Windows the data folder (`%APPDATA%`) is
+/// already private to the user.
+fn private_file() -> fs::OpenOptions {
+    let mut options = fs::OpenOptions::new();
+    options.write(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    options
 }
 
 pub fn remove_runtime(path: &Path) {
@@ -88,19 +113,91 @@ where
     Ok(port)
 }
 
+/// Reads from the connection until `until`, however the bytes are spread out.
+struct Deadline {
+    stream: TcpStream,
+    until: Instant,
+}
+
+impl Read for Deadline {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let left = self
+            .until
+            .checked_duration_since(Instant::now())
+            .filter(|d| !d.is_zero())
+            .ok_or_else(|| io::Error::from(io::ErrorKind::TimedOut))?;
+        self.stream.set_read_timeout(Some(left))?;
+        self.stream.read(buf)
+    }
+}
+
+/// Rate limit for the rejection warnings (`REJECT_LOG_BURST` per `REJECT_LOG_WINDOW_MS`).
+#[derive(Debug, Default)]
+struct RejectLog {
+    window_start: u64,
+    logged: u32,
+    suppressed: u32,
+}
+
+impl RejectLog {
+    const fn new() -> Self {
+        Self {
+            window_start: 0,
+            logged: 0,
+            suppressed: 0,
+        }
+    }
+
+    /// The log lines for a rejection at `now` (unix ms): none once the burst is used up.
+    fn on_reject(&mut self, status: u16, now: u64) -> Vec<String> {
+        let mut lines = Vec::new();
+        if now.saturating_sub(self.window_start) >= REJECT_LOG_WINDOW_MS {
+            if self.suppressed > 0 {
+                lines.push(format!(
+                    "{} more rejected requests to the event endpoint were not logged",
+                    self.suppressed
+                ));
+            }
+            *self = Self {
+                window_start: now,
+                ..Self::new()
+            };
+        }
+        if self.logged < REJECT_LOG_BURST {
+            self.logged += 1;
+            let mut line = format!("rejected a request to the event endpoint: HTTP {status}");
+            if self.logged == REJECT_LOG_BURST {
+                line.push_str(" (more this minute are counted, not logged)");
+            }
+            lines.push(line);
+        } else {
+            self.suppressed += 1;
+        }
+        lines
+    }
+}
+
+static REJECTS: Mutex<RejectLog> = Mutex::new(RejectLog::new());
+
 fn serve(stream: TcpStream, token: &str, on_event: &dyn Fn(HookEvent)) -> io::Result<()> {
-    stream.set_read_timeout(Some(IO_TIMEOUT))?;
     stream.set_write_timeout(Some(IO_TIMEOUT))?;
-    let mut reader = BufReader::new(stream.try_clone()?);
+    let mut reader = BufReader::new(Deadline {
+        stream: stream.try_clone()?,
+        until: Instant::now() + REQUEST_DEADLINE,
+    });
     let status = match handle(&mut reader, token) {
         Ok(ev) => {
             on_event(ev);
             204
         }
         Err(status) => {
-            crate::log::warn(format!(
-                "rejected a request to the event endpoint: HTTP {status}"
-            ));
+            let lines = match REJECTS.lock() {
+                Ok(mut log) => log.on_reject(status, crate::state::now_ms()),
+                Err(_) => Vec::new(),
+            };
+            for line in lines {
+                crate::log::warn(line);
+            }
             status
         }
     };
@@ -410,6 +507,39 @@ mod tests {
     }
 
     #[test]
+    fn runtime_file_replaces_a_leftover_temp_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("runtime.json");
+        fs::write(dir.path().join("runtime.json.tmp"), "planted").unwrap();
+        let info = RuntimeInfo {
+            port: 1,
+            token: "t".into(),
+            pid: 2,
+        };
+        write_runtime(&path, &info).unwrap();
+        let back: RuntimeInfo = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(back, info);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn runtime_file_is_private_to_the_user() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("runtime.json");
+        let info = RuntimeInfo {
+            port: 1,
+            token: "t".into(),
+            pid: 2,
+        };
+        write_runtime(&path, &info).unwrap();
+        assert_eq!(
+            fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    }
+
+    #[test]
     fn serves_over_real_loopback_sockets() {
         let (tx, rx) = mpsc::channel();
         let port = start(TOKEN.into(), move |ev| tx.send(ev).unwrap()).unwrap();
@@ -435,5 +565,46 @@ mod tests {
         ))
         .starts_with("HTTP/1.1 401"));
         assert!(rx.recv_timeout(Duration::from_millis(200)).is_err());
+    }
+
+    #[test]
+    fn a_slow_drip_is_cut_off_at_the_request_deadline() {
+        let port = start(TOKEN.into(), |_| {}).unwrap();
+        let mut conn = TcpStream::connect((Ipv4Addr::LOCALHOST, port)).unwrap();
+        conn.write_all(b"POST /event HTTP/1.1\r\n").unwrap();
+        // One header byte every 100ms: each read finishes well inside a per-read timeout.
+        let mut drip = conn.try_clone().unwrap();
+        thread::spawn(move || {
+            for _ in 0..40 {
+                thread::sleep(Duration::from_millis(100));
+                if drip.write_all(b"a").is_err() {
+                    return;
+                }
+            }
+        });
+        let started = std::time::Instant::now();
+        conn.set_read_timeout(Some(Duration::from_secs(4))).unwrap();
+        let mut resp = String::new();
+        let _ = conn.read_to_string(&mut resp);
+        assert!(resp.starts_with("HTTP/1.1 400"), "{resp:?}");
+        assert!(
+            started.elapsed() < REQUEST_DEADLINE + Duration::from_millis(500),
+            "{:?}",
+            started.elapsed()
+        );
+    }
+
+    #[test]
+    fn rejections_are_logged_in_bursts_and_the_rest_counted() {
+        let mut log = RejectLog::default();
+        let t0 = 1_000_000;
+        let lines: Vec<_> = (0..20).flat_map(|i| log.on_reject(401, t0 + i)).collect();
+        assert_eq!(lines.len(), REJECT_LOG_BURST as usize);
+        assert!(lines.last().unwrap().contains("not logged"), "{lines:?}");
+        // Next window: one line for what was dropped, then logging resumes.
+        let next = log.on_reject(404, t0 + REJECT_LOG_WINDOW_MS);
+        assert_eq!(next.len(), 2, "{next:?}");
+        assert!(next[0].contains("15 more"), "{next:?}");
+        assert!(next[1].contains("HTTP 404"), "{next:?}");
     }
 }

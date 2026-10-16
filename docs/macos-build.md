@@ -16,7 +16,7 @@ other people ([Building the .dmg](#building-the-dmg)). People who only install t
 | Xcode Command Line Tools | `xcode-select --install` |
 | Rust (stable) | https://rustup.rs, then `rustup default stable` |
 | Node.js 20.19 or later | https://nodejs.org or `brew install node@20` |
-| pnpm 8 | `corepack enable && corepack prepare pnpm@8.13.1 --activate` |
+| pnpm 10 | `corepack enable` (uses the version pinned in `package.json`; pnpm 8 and 9 have known install-time CVEs) |
 | Claude Code | To see the cat react to real sessions |
 
 ## Run it

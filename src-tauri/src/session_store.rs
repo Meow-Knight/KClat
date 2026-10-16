@@ -104,7 +104,13 @@ pub struct Session {
     pub tool_name: Option<String>,
     pub dismissed: bool,
     last_attention: Option<(WakeReason, u64)>,
+    /// The last event for it, or when its wait expired (unix ms). Quiet sessions are forgotten by `expire`.
+    last_seen: u64,
 }
+
+/// Sessions the store keeps at most. Room for a new one is made from sessions that are not waiting; when all of
+/// them are waiting, a new session is ignored until one of them clears.
+pub const MAX_SESSIONS: usize = 256;
 
 /// What an applied event did, for the caller to publish.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -162,6 +168,12 @@ impl SessionStore {
         let project = ev.project_name.clone().filter(|p| !p.is_empty());
         match signal {
             Signal::AttentionNeeded { reason, fallback } => {
+                if !self.sessions.contains_key(&ev.session_id)
+                    && self.sessions.len() >= MAX_SESSIONS
+                    && !self.make_room()
+                {
+                    return Outcome::Unchanged;
+                }
                 let s = self
                     .sessions
                     .entry(ev.session_id.clone())
@@ -173,7 +185,9 @@ impl SessionStore {
                         tool_name: None,
                         dismissed: false,
                         last_attention: None,
+                        last_seen: now,
                     });
+                s.last_seen = now;
                 if fallback && s.pending {
                     return Outcome::Unchanged;
                 }
@@ -206,6 +220,7 @@ impl SessionStore {
                 let Some(s) = self.sessions.get_mut(&ev.session_id) else {
                     return Outcome::Unchanged;
                 };
+                s.last_seen = now;
                 if !s.pending {
                     return Outcome::Unchanged;
                 }
@@ -252,11 +267,27 @@ impl SessionStore {
         changed
     }
 
-    /// Clears sessions that have been waiting longer than `stale_after_ms`. Returns whether anything changed.
+    /// Drops the quietest session that is not waiting. Returns false when every session is waiting.
+    fn make_room(&mut self) -> bool {
+        let quiet = self
+            .sessions
+            .iter()
+            .filter(|(_, s)| !s.pending)
+            .min_by_key(|(_, s)| s.last_seen)
+            .map(|(id, _)| id.clone());
+        quiet.and_then(|id| self.sessions.remove(&id)).is_some()
+    }
+
+    /// Clears sessions that have been waiting longer than `stale_after_ms`, and forgets sessions that have not
+    /// been waiting nor heard from for that long (SessionEnd does not always come). Returns whether anything
+    /// visible changed.
     pub fn expire(&mut self, now: u64, stale_after_ms: u64) -> bool {
+        self.sessions
+            .retain(|_, s| s.pending || now.saturating_sub(s.last_seen) < stale_after_ms);
         let mut changed = false;
         for s in self.sessions.values_mut() {
             if s.pending && now.saturating_sub(s.since) >= stale_after_ms {
+                s.last_seen = now;
                 s.pending = false;
                 s.dismissed = false;
                 s.tool_name = None;
@@ -669,6 +700,40 @@ mod tests {
         assert!(st.expire(1_800_000, 1_800_000));
         assert!(!st.get("a").unwrap().pending);
         assert!(st.get("b").unwrap().pending);
+    }
+
+    #[test]
+    fn quiet_sessions_are_forgotten() {
+        let mut st = SessionStore::default();
+        st.apply(&ev("Stop", "a"), 0);
+        st.apply(&ev("UserPromptSubmit", "a"), 10);
+        st.apply(&ev("Stop", "b"), 0);
+        st.expire(1_800_009, 1_800_000);
+        assert!(st.get("a").is_some(), "quiet for less than the stale time");
+        assert!(!st.get("b").unwrap().pending);
+        st.expire(1_800_010, 1_800_000);
+        assert!(st.get("a").is_none());
+        // b's wait expired just now: it is forgotten one stale time later.
+        assert!(st.get("b").is_some());
+        st.expire(3_600_009, 1_800_000);
+        assert!(st.get("b").is_none());
+    }
+
+    #[test]
+    fn the_store_is_capped_and_makes_room_from_quiet_sessions() {
+        let mut st = SessionStore::default();
+        for i in 0..MAX_SESSIONS {
+            st.apply(&ev("Stop", &format!("s{i}")), 0);
+        }
+        assert_eq!(st.apply(&ev("Stop", "new"), 5_000), Outcome::Unchanged);
+        assert!(st.get("new").is_none());
+        st.apply(&ev("UserPromptSubmit", "s7"), 6_000);
+        assert_eq!(
+            st.apply(&ev("Stop", "new"), 7_000),
+            attention("proj-new", WakeReason::Done)
+        );
+        assert!(st.get("s7").is_none());
+        assert_eq!(st.sessions.len(), MAX_SESSIONS);
     }
 
     #[test]

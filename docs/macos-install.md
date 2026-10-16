@@ -12,6 +12,16 @@ Klat is not signed with a paid Apple Developer ID and has not been checked ("not
 not mean anything is wrong with it, only that macOS cannot vouch for it, so the first time you open it macOS
 stops it and asks you to confirm. You only do this once per install.
 
+Because macOS cannot vouch for Klat, check the download yourself first. Each release comes with a
+`SHA256SUMS.txt`. In **Terminal**, run:
+
+```bash
+shasum -a 256 ~/Downloads/Klat_<version>_universal.dmg
+```
+
+The long code it prints must be exactly the one next to the `.dmg` in `SHA256SUMS.txt`. If it differs, do not
+open the file: it is not the Klat that was released.
+
 ## 1. Copy Klat to Applications
 
 1. Open `Klat_<version>_universal.dmg`.
@@ -36,17 +46,21 @@ of the screen. There is no Dock icon; Klat lives in the menu bar.
 
 ### If macOS says Klat "is damaged and can't be opened"
 
-Klat is not damaged. When a file is downloaded, macOS marks it as "from the internet", and for apps without a
-Developer ID it sometimes words its refusal this way. Remove that mark and open Klat again:
+When a file is downloaded, macOS marks it as "from the internet", and for apps without a Developer ID it
+sometimes words its refusal this way. Try **Open Anyway** above first. Only if that does not work, and only
+for a `.dmg` whose checksum matched `SHA256SUMS.txt` (see [Why macOS warns you](#why-macos-warns-you)), remove
+that one mark from Klat:
 
 1. Open **Terminal** (Applications → Utilities → Terminal).
 2. Copy this line, paste it into Terminal and press Return:
 
    ```bash
-   xattr -cr /Applications/Klat.app
+   xattr -dr com.apple.quarantine /Applications/Klat.app
    ```
 
-   It prints nothing when it works. It only changes Klat, nothing else on your Mac.
+   It prints nothing when it works. It removes only the "from the internet" mark, and only from Klat; it turns
+   off macOS's first-launch check for this app, which is why the checksum must match first. Never run it on an
+   app you have not checked.
 3. Open Klat again from Applications.
 
 ## 3. Let Klat see the Space key (to drag the cat)

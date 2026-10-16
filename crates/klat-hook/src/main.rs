@@ -98,7 +98,7 @@ fn basename(path: &str) -> Option<String> {
 }
 
 fn read_runtime() -> Option<(u16, String)> {
-    let v: Value = serde_json::from_slice(&std::fs::read(runtime_path()).ok()?).ok()?;
+    let v: Value = serde_json::from_slice(&std::fs::read(runtime_path()?).ok()?).ok()?;
     let port = u16::try_from(v.get("port")?.as_u64()?).ok()?;
     let token = v.get("token")?.as_str()?;
     let valid = token.len() == 64 && token.bytes().all(|b| b.is_ascii_hexdigit());

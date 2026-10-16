@@ -2,6 +2,20 @@
 
 What was checked at the end of each phase, how, and on what machine. Newest first. The decisions behind these results are in the README's decisions log.
 
+## Security hardening (2026-10-16, release build `pnpm release`, Windows 11 Pro 22621)
+
+Issue: ClauCat-fw3 (decisions in the README's decisions log, "Security hardening").
+
+| Check | Result | How |
+|---|---|---|
+| Gates | ✅ | `pnpm lint`, `pnpm typecheck`, `pnpm test` (108), `pnpm lint:rust`, `pnpm test:rust` (103 + 14 + 6), `pnpm release` |
+| Known vulnerabilities | ✅ | `pnpm audit`: none. `cargo audit` (cargo-audit 0.22.2, 1329 advisories): none; without `.cargo/audit.toml` it lists only the two Linux-only GTK advisories it ignores |
+| pnpm | ✅ | 10.34.6 pinned with sha512; OSV lists no advisory for it. Lockfile v6 → v9 with the same 185 package versions |
+| Slow-drip client cut off | ✅ | Test `a_slow_drip_is_cut_off_at_the_request_deadline` (real socket, one byte per 100ms): HTTP 400 within the 500ms deadline; it failed before the fix |
+| No token in the temp folder | ✅ | Test `never_takes_the_runtime_file_from_the_temp_folder` runs the real hook with `APPDATA` empty; it failed before the fix |
+| Release ignores `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` | ✅ | Launched with `--remote-debugging-port`: the debug exe listened on the port, the release exe did not |
+| Checksums | ✅ | `SHA256SUMS.txt` next to the installer matches `certutil -hashfile … SHA256` |
+
 ## Settings window and languages (2026-10-13, debug build under `pnpm tauri dev`, Windows 11 Pro 22621)
 
 Spec: [docs/specs/settings-i18n-macos.md](specs/settings-i18n-macos.md). Driven through WebView2 remote debugging (`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222`) and by the owner on the tray; nothing clicked the tray or taskbar automatically.

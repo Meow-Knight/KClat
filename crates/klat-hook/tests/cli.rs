@@ -17,10 +17,14 @@ struct Run {
 }
 
 fn run_hook(appdata: &Path, stdin: &str, arg: &str) -> Run {
+    run_hook_with(&[("APPDATA", appdata)], stdin, arg)
+}
+
+fn run_hook_with(envs: &[(&str, &Path)], stdin: &str, arg: &str) -> Run {
     let started = Instant::now();
     let mut child = Command::new(env!("CARGO_BIN_EXE_klat-hook"))
         .arg(arg)
-        .env("APPDATA", appdata)
+        .envs(envs.iter().copied())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -142,4 +146,29 @@ fn delivers_to_a_listening_app() {
     assert!(req.contains(r#""hookEventName":"Stop""#));
     assert!(req.contains(r#""projectName":"ClauCat""#));
     assert!(!req.contains("D:\\\\work"));
+}
+
+/// With no data folder there is no runtime.json to read: a copy in the temp folder (which other users may be
+/// able to write on some systems) is never trusted.
+#[cfg(windows)]
+#[test]
+fn never_takes_the_runtime_file_from_the_temp_folder() {
+    let tmp = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+    write_runtime(tmp.path(), listener.local_addr().unwrap().port());
+    listener.set_nonblocking(true).unwrap();
+    let r = run_hook_with(
+        &[
+            ("APPDATA", Path::new("")),
+            ("TMP", tmp.path()),
+            ("TEMP", tmp.path()),
+        ],
+        STOP,
+        "Stop",
+    );
+    assert_silent_success(&r);
+    assert_eq!(
+        listener.accept().map(|_| ()).unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
 }

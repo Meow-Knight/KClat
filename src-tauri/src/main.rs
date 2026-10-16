@@ -29,6 +29,7 @@ use tauri::{AppHandle, Manager, RunEvent};
 const STALE_CHECK: Duration = Duration::from_secs(30);
 
 fn main() {
+    webview_memory::scrub_env();
     settings::migrate_legacy_dir();
     log::init(&state::data_dir());
 
@@ -92,13 +93,20 @@ fn main() {
 
     app.run(|_app, event| {
         if let RunEvent::Exit = event {
-            event_server::remove_runtime(&event_server::runtime_path());
+            if let Some(path) = event_server::runtime_path() {
+                event_server::remove_runtime(&path);
+            }
             log::info("exiting");
         }
     });
 }
 
 fn start_event_server(app: &AppHandle) -> std::io::Result<()> {
+    // Without a data folder there is nowhere private to hand the token to the hooks.
+    let Some(runtime) = event_server::runtime_path() else {
+        log::warn("no data folder (APPDATA / HOME unset): hook events are off");
+        return Ok(());
+    };
     let token = event_server::new_token()?;
     let handle = app.clone();
     let port = event_server::start(token.clone(), move |ev| {
@@ -106,7 +114,7 @@ fn start_event_server(app: &AppHandle) -> std::io::Result<()> {
     })?;
     log::info(format!("event server listening on 127.0.0.1:{port}"));
     event_server::write_runtime(
-        &event_server::runtime_path(),
+        &runtime,
         &event_server::RuntimeInfo {
             port,
             token,

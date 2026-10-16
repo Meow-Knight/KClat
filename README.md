@@ -11,6 +11,7 @@ Everything runs locally: no telemetry, no cloud. The hooks only report to the ap
 
 ## Install
 
+0. Klat is not code-signed yet, so Windows SmartScreen warns about the installer. Check the download first: in PowerShell, `Get-FileHash Klat_<version>_x64-setup.exe -Algorithm SHA256` must print the same hash as `SHA256SUMS.txt` from the release. If it differs, do not run it.
 1. Run `Klat_<version>_x64-setup.exe`. It is a per-user install into `%LOCALAPPDATA%\Klat`, so no admin rights are needed. The installer contains `klat.exe` and the hook program `klat-hook.exe`.
 2. Start **Klat**. A sleeping cat appears in the bottom-right corner, and a cat icon appears in the tray (it may be under the **^** hidden-icons arrow).
 3. Tray → **Settings…** → **Hooks** → **Install**. This adds Klat's hooks to `%USERPROFILE%\.claude\settings.json`, after saving a backup. Your other hooks and settings stay as they are.
@@ -168,13 +169,13 @@ Also measured and not used: the GPU process is ~81 MB even without WebGL (`--dis
 
 ## Development
 
-Requirements: Node.js ≥ 20.19, pnpm 8+, Rust stable (MSVC) with the Visual Studio C++ Build Tools. On macOS: see [docs/macos-build.md](docs/macos-build.md).
+Requirements: Node.js ≥ 20.19, pnpm 10.34.6+ (`corepack enable` picks the pinned version; older pnpm has known CVEs), Rust stable (MSVC) with the Visual Studio C++ Build Tools. On macOS: see [docs/macos-build.md](docs/macos-build.md).
 
 | Command | What it does |
 |---|---|
 | `pnpm install` | Install JS dependencies |
 | `pnpm tauri dev` | Run the app (Vite dev server and Tauri, hot reload) |
-| `pnpm release` | Build the hook (release), stage it as a sidecar, build the app and the NSIS installer → `target/release/bundle/nsis/` |
+| `pnpm release` | Build the hook (release), stage it as a sidecar, build the app and the NSIS installer → `target/release/bundle/nsis/`, plus `SHA256SUMS.txt` to publish with it |
 | `pnpm dev` | Vite only; the dev page is at http://localhost:1420/dev.html |
 | `pnpm build` | Typecheck and build the frontend into `dist/` |
 | `pnpm release:mac` | macOS only: universal `klat-hook` (lipo), then the universal app and `.dmg` → `target/universal-apple-darwin/release/bundle/dmg/` ([details](docs/macos-build.md#building-the-dmg)) |
@@ -186,6 +187,13 @@ Requirements: Node.js ≥ 20.19, pnpm 8+, Rust stable (MSVC) with the Visual Stu
 | `pnpm check:mac` | Type-check (clippy `-D warnings`) the workspace for macOS. From Windows it uses `scripts/fake-cc` in place of Apple's clang, so it proves the Rust compiles but not that it runs |
 
 `pnpm tauri build` without the release config builds the app without the bundled hook. Use `pnpm release`, which adds `src-tauri/tauri.release.conf.json` (sidecar plus `build:hook`).
+
+### Signing a release
+
+Releases are not signed yet; `SHA256SUMS.txt` is the stopgap. Once certificates exist, Tauri signs during `pnpm release` without code changes:
+
+- Windows: add the certificate to the build machine's store and pass its thumbprint, e.g. `pnpm tauri build --config src-tauri/tauri.release.conf.json --config '{"bundle":{"windows":{"certificateThumbprint":"<thumbprint>","digestAlgorithm":"sha256","timestampUrl":"http://timestamp.digicert.com"}}}'` (or `bundle.windows.signCommand` for a cloud HSM).
+- macOS: set `APPLE_SIGNING_IDENTITY` (a "Developer ID Application" identity; it overrides the ad-hoc `"-"` in `tauri.macos.conf.json`) and, for notarization, `APPLE_ID`, `APPLE_PASSWORD` (an app-specific password) and `APPLE_TEAM_ID`. Then drop the "Open Anyway" and quarantine steps from [docs/macos-install.md](docs/macos-install.md).
 
 ### Dev page (no Tauri needed)
 
@@ -360,6 +368,16 @@ Small decisions made during implementation, as the spec asks (§11).
 - **Knockout** (2026-10-14, owner request): when you answer or dismiss, the cat no longer just yawns. Rust sends `sleepCause` (`user` for hooks, dismiss and Ready; `auto` for stale expiry and Pause) with `cat://state`, and the overlay picks the sequence. A random object (stick, dép tổ ong, durian, non-stick pan, built from primitives in the toon style) flies in from the left (the durian drops from above), hits the top of the head at 380 ms with a comic burst, then bounces away; the cat gets X eyes, stars circling its head and a bump, slumps over at ~1 s and is settled asleep at ~2.1 s. Under reduce motion nothing flies: a moment of X eyes, then sleep. Frames of each object are in `docs/images/knockout/`.
 - **Cat size** (2026-10-14, owner request, ClauCat-gra): a slider in Settings → General, 50–200% in steps of 1, stored as `catScale`. The overlay window becomes 360×330 times the scale and its webview is zoomed by the same factor, so the page keeps laying out at 360×330 CSS px and the cat, bubble and Ready button grow together, sharp because `devicePixelRatio` includes the zoom. Rust converts between the two: hitboxes arrive in CSS px and are scaled up on read, cursor points are scaled down before they are sent. Resizing keeps the window's bottom-right corner, so the cat stays where it is; a dragged cat's new top-left is saved. While you drag, the slider ignores late replies, so the thumb never jumps under your hand. **Smooth dragging** (2026-10-15, ClauCat-jds): resizing the window on every step was jerky (size, position and zoom land separately, about 6–8 visible steps a second). Now a drag (or arrow keys) only previews: Rust sets the window once to the 200% size and the page scales the cat with a CSS transform anchored bottom-right, one step per frame; on release (keys: 400 ms after the last press) the value is saved and the window set once to the real size. The page hides the cat while each of those two switches lands (one frame in a screen capture), and the stage redraws right after a resize so the canvas is never blank. The stage now also follows `devicePixelRatio` changes (zoom, or a monitor with another DPI) instead of only CSS resizes.
 - **Memory** (2026-10-14, ClauCat-gwd): the 150 MB goal is met for what Task Manager shows, not for committed memory. The network service moved into the browser process, and the overlay asks WebView2 for its low memory target while the cat sleeps. Both webviews pass the same `BROWSER_ARGS` (wry's defaults plus the feature flag): WebView2 refuses a second webview in the same data folder with different arguments. Software rendering would get committed memory under 150 MB but was rejected for its CPU cost. Numbers under [Performance](#performance).
+- **Security hardening** (2026-10-16, ClauCat-fw3, after a security audit):
+  - pnpm is pinned to 10.34.6 with its sha512 (`packageManager`); pnpm 8.13.1 had 26 advisories, 12 of them high (install-time path traversal, lockfile integrity bypass, command injection). The lockfile moved to v9 with every resolved version unchanged.
+  - The event server gives each request 500ms in total (the adapter's own budget is 300ms), so a client dripping a byte at a time can no longer hold one of the 16 slots for hours. Rejected requests are logged 5 per minute at most, then counted, so a flood cannot rotate real entries out of the capped log.
+  - `runtime.json` (the token) is never written to the temp folder: without `APPDATA` / `HOME` the hook events are off. It is created fresh (a planted temp file or link is not followed) and is 0600 on Unix.
+  - Hook entries are ours only when the program's file name is `klat-hook` / `claude-cat-hook`; a command that merely contains the name is someone else's. Only the newest three `settings.json.bak.*` are kept, since the file can hold secrets.
+  - The session map forgets sessions quiet for `staleAfterMs` and holds 256 at most.
+  - Release builds on Windows clear `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` (and the browser-folder and script-debugger variables) at start, so no other program can open DevTools on the app. Debug builds keep them for driving the app in checks.
+  - Not code-signed yet (needs a Windows code-signing certificate and an Apple Developer ID). Until then every release publishes `SHA256SUMS.txt`, and the macOS guide only removes the quarantine mark after the checksum matched.
+  - **Per-user install kept** (owner decision): `klat-hook.exe` sits in `%LOCALAPPDATA%\Klat`, which the user can write, and Claude Code runs it on every hook with the hook's full input. Malware already running as the user could replace it. A per-machine install would close this but needs admin rights to install and update; the owner chose to keep installs admin-free.
+  - Not applicable: RustSec advisories for `glib` 0.18.5 (RUSTSEC-2024-0429) and `proc-macro-error` (RUSTSEC-2024-0370, unmaintained) come only through Tauri's GTK stack on Linux, which Klat does not build; they are ignored in `.cargo/audit.toml`.
 - **Drag and drop** (2026-10-12): hold Space, click the cat and drag; releasing Space drops it.
   - The overlay never takes focus, so it cannot see the keyboard. A low-level keyboard hook (`drag.rs`) looks at Space only, and only takes it from the focused app while the pointer is over the cat (or its bubble or Ready button) with no modifier held. Anywhere else Space passes through untouched. A tap with no click is replayed to the focused app with `SendInput`, so typing with the pointer resting on the cat is not lost.
   - Grab plus the primary mouse button starts the drag. The window follows the cursor at ~120Hz until Space is released. The grip is kept in logical px, so crossing to a monitor with another DPI keeps the cat in hand, and the DPI re-place is skipped while dragging.

@@ -21,6 +21,24 @@ use tauri::AppHandle;
 pub const BROWSER_ARGS: &str =
     "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --enable-features=NetworkServiceInProcess2";
 
+/// Environment variables WebView2 reads its command line, browser and debugger from. Any program the user runs
+/// can set them, and `--remote-debugging-port` would let it drive the app and its commands over DevTools.
+/// Release builds clear them before any webview starts; debug builds keep them for driving the app in checks.
+pub const WEBVIEW2_ENV: [&str; 3] = [
+    "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+    "WEBVIEW2_BROWSER_EXECUTABLE_FOLDER",
+    "WEBVIEW2_PIPE_FOR_SCRIPT_DEBUGGER",
+];
+
+/// Call first thing in `main`, before any thread or webview exists.
+pub fn scrub_env() {
+    if cfg!(all(windows, not(debug_assertions))) {
+        for key in WEBVIEW2_ENV {
+            std::env::remove_var(key);
+        }
+    }
+}
+
 /// Wait this long after the cat falls asleep before trimming, so the yawn or the knockout (2.1 s) plays out first.
 #[cfg(windows)]
 const SETTLE: Duration = Duration::from_millis(3000);

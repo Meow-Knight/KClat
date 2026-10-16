@@ -2,10 +2,10 @@
 //!
 //! - User-level settings only; project settings are never touched.
 //! - Broken JSON (or a non-object) aborts before anything is written.
-//! - Before any write: a copy to `settings.json.bak.<unix-seconds>`. Writes are atomic, and refused if the
+//! - Before any write: a copy to `settings.json.bak.<unix-seconds>` (the newest three are kept). Writes are atomic, and refused if the
 //!   file changed on disk while we were working (Claude Code edits it too).
-//! - Our entries are recognised by a command containing `klat-hook` (`klat-hook.exe` on Windows; or
-//!   `claude-cat-hook`, the name before the rename to Klat), so reinstalling never duplicates them, repairing moves old entries
+//! - Our entries are recognised by the program their command runs: a file named `klat-hook` (`klat-hook.exe` on
+//!   Windows; or `claude-cat-hook`, the name before the rename to Klat), so reinstalling never duplicates them, repairing moves old entries
 //!   to the new program, and uninstalling removes only them. Everything else keeps its content and order.
 //! - Exec form (`command` + `args`): no shell is involved (Git Bash or PowerShell on Windows, zsh on macOS),
 //!   so a path with spaces needs no quoting at all.
@@ -30,7 +30,7 @@ pub const HOOK_EVENTS: [&str; 9] = [
     "PermissionDenied",
     "SessionEnd",
 ];
-/// Our entries are recognised by this in their command (case-insensitive), with or without `.exe`.
+/// Our entries run a program with this file name (case-insensitive), with or without `.exe`.
 pub const MARKER: &str = "klat-hook";
 /// The adapter's name when the app was called Claude Cat; such entries are ours too.
 const LEGACY_MARKER: &str = "claude-cat-hook";
@@ -117,11 +117,31 @@ fn our_entry(exe: &str, event: &str) -> Value {
     json!({ "type": "command", "command": exe, "args": [event], "timeout": TIMEOUT_SECS })
 }
 
+/// Ours when the program the command runs is named `klat-hook` or `claude-cat-hook`. The program is the whole
+/// command (exec form, where the path may contain spaces) or its first word, quoted or not (the shell form older
+/// versions wrote). A command that only mentions the name, or runs `my-klat-hook-logger.exe`, is someone else's.
 fn is_ours(hook: &Value) -> bool {
-    hook.get("command")
-        .and_then(Value::as_str)
-        .map(str::to_ascii_lowercase)
-        .is_some_and(|c| c.contains(MARKER) || c.contains(LEGACY_MARKER))
+    let Some(cmd) = hook.get("command").and_then(Value::as_str) else {
+        return false;
+    };
+    let cmd = cmd.trim();
+    let quoted = cmd
+        .strip_prefix('"')
+        .and_then(|rest| rest.split_once('"'))
+        .map(|(program, _)| program);
+    let first_word = cmd.split_whitespace().next();
+    [Some(cmd), quoted, first_word]
+        .into_iter()
+        .flatten()
+        .any(is_our_program)
+}
+
+/// The file name is ours, in any case and with or without `.exe`.
+fn is_our_program(path: &str) -> bool {
+    let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
+    let name = name.to_ascii_lowercase();
+    let stem = name.strip_suffix(".exe").unwrap_or(&name);
+    stem == MARKER || stem == LEGACY_MARKER
 }
 
 fn hooks_map(settings: &Value) -> Result<Option<&Map<String, Value>>, InstallError> {
@@ -329,6 +349,7 @@ pub fn apply(path: &Path, exe: &Path, action: Action) -> Result<Report, InstallE
             name.push(format!(".bak.{ts}"));
             let backup = PathBuf::from(name);
             fs::write(&backup, text)?;
+            prune_backups(path, KEEP_BACKUPS);
             Some(backup)
         }
         None => {
@@ -351,6 +372,41 @@ pub fn apply(path: &Path, exe: &Path, action: Action) -> Result<Report, InstallE
     }
     fs::rename(&tmp, path)?;
     Ok(Report::Written { backup })
+}
+
+/// Backups kept next to settings.json. The file can hold secrets (`env`, `apiKeyHelper`), so copies of it should
+/// not pile up.
+const KEEP_BACKUPS: usize = 3;
+
+/// Deletes our `<settings>.bak.<unix-seconds>` files beyond the newest `keep`. Any other file is left alone.
+fn prune_backups(path: &Path, keep: usize) {
+    let (Some(dir), Some(name)) = (path.parent(), path.file_name().and_then(|n| n.to_str())) else {
+        return;
+    };
+    let prefix = format!("{name}.bak.");
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    let mut ours: Vec<(u64, PathBuf)> = entries
+        .flatten()
+        .filter_map(|entry| {
+            let file = entry.file_name();
+            let ts = file.to_str()?.strip_prefix(&prefix)?;
+            if ts.is_empty() || !ts.bytes().all(|b| b.is_ascii_digit()) {
+                return None;
+            }
+            let ts = ts.parse::<u64>().ok()?;
+            entry
+                .file_type()
+                .ok()?
+                .is_file()
+                .then(|| (ts, entry.path()))
+        })
+        .collect();
+    ours.sort_unstable_by_key(|(ts, _)| std::cmp::Reverse(*ts));
+    for (_, old) in ours.into_iter().skip(keep) {
+        let _ = fs::remove_file(old);
+    }
 }
 
 /// Status of the file on disk (read-only); unreadable or broken files count as not installed.
@@ -378,8 +434,17 @@ mod tests {
             "/Applications/Klat.app/Contents/MacOS/klat-hook"
         )));
         assert!(is_ours(&cmd(r"D:\old\claude-cat-hook.exe")));
+        // Shell-form entries from older versions: the program, quoted or not, then the event.
+        assert!(is_ours(&cmd(r#""D:\x\klat-hook.exe" Stop"#)));
+        assert!(is_ours(&cmd(r"C:\a\Klat-Hook.EXE Stop")));
+        assert!(is_ours(&cmd("/opt/klat/klat-hook Stop")));
         assert!(!is_ours(&cmd("notify-send done")));
         assert!(!is_ours(&json!({ "type": "command" })));
+        // Someone else's program that merely mentions the name is not ours.
+        assert!(!is_ours(&cmd(r"C:\tools\my-klat-hook-logger.exe")));
+        assert!(!is_ours(&cmd("echo klat-hook")));
+        assert!(!is_ours(&cmd(r#""C:\klat-hook.exe\other.exe" Stop"#)));
+        assert!(!is_ours(&cmd("/home/me/klat-hook.sh")));
     }
 
     #[test]
@@ -651,6 +716,45 @@ mod tests {
         ));
         assert_eq!(fs::read_to_string(&e.settings).unwrap(), "{}");
         assert!(backups(&e).is_empty());
+    }
+
+    #[test]
+    fn only_the_newest_backups_of_ours_are_kept() {
+        let e = env(Some("{}"));
+        let dir = e.settings.parent().unwrap();
+        for ts in [100, 900, 300, 1000, 200] {
+            fs::write(dir.join(format!("settings.json.bak.{ts}")), "x").unwrap();
+        }
+        let others = [
+            "settings.json.bak.mine",
+            "settings.json.bak.+5",
+            "settings.json.backup",
+            "other.json.bak.1",
+        ];
+        for name in others {
+            fs::write(dir.join(name), "x").unwrap();
+        }
+        prune_backups(&e.settings, KEEP_BACKUPS);
+        let mut ours: Vec<String> = backups(&e)
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .filter(|n| {
+                n.starts_with("settings.json.bak.") && n[18..].bytes().all(|b| b.is_ascii_digit())
+            })
+            .collect();
+        ours.sort();
+        assert_eq!(
+            ours,
+            [
+                "settings.json.bak.1000",
+                "settings.json.bak.300",
+                "settings.json.bak.900"
+            ]
+        );
+        for name in others {
+            assert!(dir.join(name).exists(), "{name}");
+        }
+        assert!(e.settings.exists());
     }
 
     #[test]

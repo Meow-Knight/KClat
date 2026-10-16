@@ -5,7 +5,8 @@
 //! - macOS: `~/Library/Application Support/Klat`
 //! - Other systems: `$XDG_DATA_HOME/Klat`, else `~/.local/share/Klat`
 //!
-//! When the base folder is unknown, callers fall back to the temp folder.
+//! When the base folder is unknown, settings and the log fall back to the temp folder, but runtime.json (which
+//! holds the token) does not exist: the temp folder can be shared with other users.
 
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -44,11 +45,9 @@ pub fn data_dir_for(os: Os, env: impl Fn(&str) -> Option<OsString>) -> Option<Pa
     Some(base.join("Klat"))
 }
 
-/// `runtime.json`: the port and token the running app listens with.
-pub fn runtime_path() -> PathBuf {
-    data_dir()
-        .unwrap_or_else(|| std::env::temp_dir().join("Klat"))
-        .join("runtime.json")
+/// `runtime.json`: the port and token the running app listens with. None without a data folder.
+pub fn runtime_path() -> Option<PathBuf> {
+    Some(data_dir()?.join("runtime.json"))
 }
 
 #[cfg(test)]
@@ -125,6 +124,8 @@ mod data_dir_tests {
         if let Some(dir) = data_dir() {
             assert!(dir.ends_with("Klat"));
         }
-        assert!(runtime_path().ends_with(PathBuf::from("Klat").join("runtime.json")));
+        if let Some(path) = runtime_path() {
+            assert!(path.ends_with(PathBuf::from("Klat").join("runtime.json")));
+        }
     }
 }
