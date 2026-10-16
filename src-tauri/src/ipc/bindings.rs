@@ -2,7 +2,8 @@
 //! (docs/ARCHITECTURE.md §7.6). The test fails when the file is out of date, so `pnpm check` catches a Rust
 //! change the frontend has not seen; `pnpm gen:types` rewrites it.
 
-use crate::ipc::commands::hooks::{HooksInfo, HooksResult};
+use crate::ipc::commands::hooks::HooksInfo;
+use crate::ipc::error::{ErrorCode, IpcError, Message};
 use crate::ipc::events::GrabMode;
 use crate::platform::Permission;
 use crate::ui::overlay::ZoomChange;
@@ -46,9 +47,12 @@ fn generated() -> String {
         declare::<KlatLanguage>(&cfg),
         declare::<Corner>(&cfg),
         declare::<DurationMs>(&cfg),
+        // What commands say, and how they fail (ipc/error.rs)
+        declare::<Message>(&cfg),
+        declare::<IpcError>(&cfg),
+        declare::<ErrorCode>(&cfg),
         // Hooks (hooks_status, hooks_apply)
         declare::<HooksInfo>(&cfg),
-        declare::<HooksResult>(&cfg),
         declare::<Status>(&cfg),
         declare::<Action>(&cfg),
         // The overlay window (set_hitboxes, cat://cursor, cat://grab, overlay_preview_zoom, drag_permission)

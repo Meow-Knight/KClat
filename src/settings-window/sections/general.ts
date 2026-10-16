@@ -3,6 +3,7 @@ import type { DragPermission } from '../../bridge/tauriBridge';
 import { CAT_SCALE, CHARACTERS, type CharacterId } from '../../settings';
 import { banner, button, card, h, pictureChoice, row, slider, svg, toggle } from '../controls';
 import type { Ctx, SectionView } from '../context';
+import { failureText } from '../viewModel';
 
 const MOVE_ICON = `<svg class="hint-icon" viewBox="0 0 20 20" aria-hidden="true">
   <rect x="2.5" y="11" width="15" height="5" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/>
@@ -18,7 +19,11 @@ export function generalSection(ctx: Ctx): SectionView {
     startError.replaceChildren();
     ctx.api
       .setStartAtLogin(on)
-      .catch((e: unknown) => startError.append(banner('error', t('settings.general.startAtLogin.error', { error: String(e) }))))
+      .catch((e: unknown) =>
+        startError.append(
+          banner('error', failureText(ctx.lang, e, (error) => t('settings.general.startAtLogin.error', { error }))),
+        ),
+      )
       .finally(() => startAtLogin.setBusy(false));
   });
   const character = pictureChoice<CharacterId>(

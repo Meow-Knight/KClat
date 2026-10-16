@@ -4,12 +4,13 @@
 import {
   bridge,
   type DragPermission,
+  type HooksAction,
   type HooksInfo,
-  type HooksResult,
   type HooksStatus,
+  type IpcError,
+  type Message,
   type SettingsPatch,
 } from '../bridge/tauriBridge';
-import { t } from '../i18n';
 import { DEFAULT_SETTINGS, type AppSettings, type UiLanguage } from '../settings';
 
 export interface SettingsApi {
@@ -21,7 +22,8 @@ export interface SettingsApi {
   wakeTest(): Promise<void>;
   sleep(): Promise<void>;
   hooksStatus(): Promise<HooksInfo>;
-  hooksApply(action: 'install' | 'uninstall'): Promise<HooksResult>;
+  /** Resolves to what was done; rejects with an IpcError saying why nothing was. */
+  hooksApply(action: HooksAction): Promise<Message>;
   dragPermission(): Promise<DragPermission>;
   openDragPermission(): Promise<void>;
   onDragPermission(cb: (p: DragPermission) => void): Promise<unknown>;
@@ -71,7 +73,13 @@ export function mockApi(params: URLSearchParams): SettingsApi {
     previewCatScale: async () => {},
     setStartAtLogin: async (on) => {
       await wait(250);
-      if (fail === 'autostart') throw new Error('Access is denied. (os error 5)');
+      if (fail === 'autostart') {
+        const e: IpcError = {
+          code: 'start-at-login',
+          message: { key: 'settings.general.startAtLogin.error', vars: { error: 'Access is denied. (os error 5)' } },
+        };
+        throw e;
+      }
       settings = { ...settings, startAtLogin: on };
       publish();
       return on;
@@ -81,13 +89,16 @@ export function mockApi(params: URLSearchParams): SettingsApi {
     hooksStatus: async () => ({ status: hooks, settingsPath }),
     hooksApply: async (action) => {
       await wait(700);
-      const lang = settings.uiLanguage;
       if (fail === 'hooks') {
-        return { ok: false, message: t(lang, 'hooks.error.brokenJson', { detail: 'expected value at line 4 column 3' }) };
+        const e: IpcError = {
+          code: 'hooks-broken-json',
+          message: { key: 'hooks.error.brokenJson', vars: { detail: 'expected value at line 4 column 3' } },
+        };
+        throw e;
       }
       hooks = action === 'install' ? 'installed' : 'not-installed';
       const key = action === 'install' ? 'hooks.install.written' : 'hooks.uninstall.written';
-      return { ok: true, message: t(lang, key, { path: settingsPath, backup: `${settingsPath}.bak.1760371200` }) };
+      return { key, vars: { path: settingsPath, backup: `${settingsPath}.bak.1760371200` } };
     },
     dragPermission: async () => drag,
     openDragPermission: async () => {

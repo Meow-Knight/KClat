@@ -1,0 +1,153 @@
+{
+  "_": "What Install/Uninstall said before messages moved to the windows (captured from the Rust texts at 4e2a9bf). Checked by src-tauri/src/ipc/commands/hooks.rs (the messages Rust sends) and tests/settingsViewModel.test.ts (how the window renders them).",
+  "cases": [
+    {
+      "case": "install.noChange",
+      "ok": true,
+      "message": {
+        "key": "hooks.install.noChange",
+        "vars": {
+          "path": "/home/me/.claude/settings.json"
+        }
+      },
+      "en": "Klat hooks are installed. Nothing needed to change in /home/me/.claude/settings.json.",
+      "vi": "Hook của Klat đã được cài. Không cần thay đổi gì trong /home/me/.claude/settings.json."
+    },
+    {
+      "case": "install.written",
+      "ok": true,
+      "message": {
+        "key": "hooks.install.written",
+        "vars": {
+          "backup": "/home/me/.claude/settings.json.bak.1",
+          "path": "/home/me/.claude/settings.json"
+        }
+      },
+      "en": "Klat hooks are installed in /home/me/.claude/settings.json.\n\nYour previous settings were saved to /home/me/.claude/settings.json.bak.1.\n\nNew Claude Code sessions pick this up; restart open sessions if the cat stays asleep.",
+      "vi": "Đã cài hook của Klat vào /home/me/.claude/settings.json.\n\nCài đặt cũ của bạn được lưu ở /home/me/.claude/settings.json.bak.1.\n\nCác phiên Claude Code mới sẽ dùng ngay; nếu mèo vẫn ngủ, hãy khởi động lại các phiên đang mở."
+    },
+    {
+      "case": "install.newFile",
+      "ok": true,
+      "message": {
+        "key": "hooks.install.newFile",
+        "vars": {
+          "path": "/home/me/.claude/settings.json"
+        }
+      },
+      "en": "Klat hooks are installed in /home/me/.claude/settings.json (new file).\n\nNew Claude Code sessions pick this up; restart open sessions if the cat stays asleep.",
+      "vi": "Đã cài hook của Klat vào /home/me/.claude/settings.json (file mới).\n\nCác phiên Claude Code mới sẽ dùng ngay; nếu mèo vẫn ngủ, hãy khởi động lại các phiên đang mở."
+    },
+    {
+      "case": "uninstall.noChange",
+      "ok": true,
+      "message": {
+        "key": "hooks.uninstall.noChange",
+        "vars": {
+          "path": "/home/me/.claude/settings.json"
+        }
+      },
+      "en": "Klat hooks are removed. Nothing needed to change in /home/me/.claude/settings.json.",
+      "vi": "Hook của Klat đã được gỡ. Không cần thay đổi gì trong /home/me/.claude/settings.json."
+    },
+    {
+      "case": "uninstall.written",
+      "ok": true,
+      "message": {
+        "key": "hooks.uninstall.written",
+        "vars": {
+          "backup": "/home/me/.claude/settings.json.bak.1",
+          "path": "/home/me/.claude/settings.json"
+        }
+      },
+      "en": "Klat hooks are removed from /home/me/.claude/settings.json.\n\nYour previous settings were saved to /home/me/.claude/settings.json.bak.1.",
+      "vi": "Đã gỡ hook của Klat khỏi /home/me/.claude/settings.json.\n\nCài đặt cũ của bạn được lưu ở /home/me/.claude/settings.json.bak.1."
+    },
+    {
+      "case": "uninstall.newFile",
+      "ok": true,
+      "message": {
+        "key": "hooks.uninstall.newFile",
+        "vars": {
+          "path": "/home/me/.claude/settings.json"
+        }
+      },
+      "en": "Klat hooks are removed from /home/me/.claude/settings.json.",
+      "vi": "Đã gỡ hook của Klat khỏi /home/me/.claude/settings.json."
+    },
+    {
+      "case": "error.brokenJson",
+      "ok": false,
+      "code": "hooks-broken-json",
+      "message": {
+        "key": "hooks.error.brokenJson",
+        "vars": {
+          "detail": "line 1"
+        }
+      },
+      "en": "settings.json is not valid JSON (line 1). Nothing was changed.",
+      "vi": "settings.json không phải JSON hợp lệ (line 1). Chưa thay đổi gì."
+    },
+    {
+      "case": "error.unexpectedShape",
+      "ok": false,
+      "code": "hooks-unexpected-shape",
+      "message": {
+        "key": "hooks.error.unexpectedShape",
+        "vars": {
+          "what": "\"hooks\""
+        }
+      },
+      "en": "\"hooks\" in settings.json is not a JSON object. Nothing was changed.",
+      "vi": "\"hooks\" trong settings.json không phải một JSON object. Chưa thay đổi gì."
+    },
+    {
+      "case": "error.exeMissing",
+      "ok": false,
+      "code": "hooks-exe-missing",
+      "message": {
+        "key": "hooks.error.exeMissing",
+        "vars": {
+          "path": "/x/klat-hook"
+        }
+      },
+      "en": "The hook program was not found at /x/klat-hook.",
+      "vi": "Không tìm thấy chương trình hook ở /x/klat-hook."
+    },
+    {
+      "case": "error.changedConcurrently",
+      "ok": false,
+      "code": "hooks-changed-concurrently",
+      "message": {
+        "key": "hooks.error.changedConcurrently",
+        "vars": {}
+      },
+      "en": "settings.json changed while installing. Nothing was changed; try again.",
+      "vi": "settings.json vừa bị thay đổi trong lúc cài. Chưa thay đổi gì; hãy thử lại."
+    },
+    {
+      "case": "error.io",
+      "ok": false,
+      "code": "hooks-io",
+      "message": {
+        "key": "hooks.error.io",
+        "vars": {
+          "detail": "disk full"
+        }
+      },
+      "en": "Could not update settings.json: disk full",
+      "vi": "Không cập nhật được settings.json: disk full"
+    },
+    {
+      "case": "notFound",
+      "ok": false,
+      "code": "hooks-not-found",
+      "message": {
+        "key": "hooks.notFound",
+        "vars": {}
+      },
+      "en": "Could not find your Claude Code settings (.claude/settings.json in your home folder) or the hook program.",
+      "vi": "Không tìm thấy file cài đặt của Claude Code (.claude/settings.json trong thư mục người dùng) hoặc chương trình hook."
+    }
+  ]
+}

@@ -8,6 +8,7 @@
   "tray.tooltip.one": "Klat · 1 phiên đang chờ",
   "tray.tooltip.many": "Klat · {count} phiên đang chờ",
   "dialog.alreadyRunning": "Klat đang chạy rồi. Tìm con mèo ở khay hệ thống nhé.",
+  "error.window": "Không mở được cửa sổ: {detail}",
   "hooks.notFound": "Không tìm thấy file cài đặt của Claude Code (.claude/settings.json trong thư mục người dùng) hoặc chương trình hook.",
   "hooks.install.noChange": "Hook của Klat đã được cài. Không cần thay đổi gì trong {path}.",
   "hooks.install.written": "Đã cài hook của Klat vào {path}.\n\nCài đặt cũ của bạn được lưu ở {backup}.\n\nCác phiên Claude Code mới sẽ dùng ngay; nếu mèo vẫn ngủ, hãy khởi động lại các phiên đang mở.",

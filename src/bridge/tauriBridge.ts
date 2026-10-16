@@ -8,7 +8,7 @@ import type {
   GrabMode,
   HooksAction,
   HooksInfo,
-  HooksResult,
+  Message,
   Point,
   Rect,
   Settings,
@@ -18,6 +18,8 @@ import type {
 
 // Every type that crosses IPC is generated from Rust (./generated.ts); these names are what the windows import.
 export type * from './generated';
+
+/** Commands that fail reject with an `IpcError` (src-tauri/src/ipc/error.rs): a code and a message to translate. */
 
 /** Cursor in the page's CSS px; null = on another monitor (the cat then looks at its bubble). */
 export type CursorPayload = Point | null;
@@ -34,12 +36,12 @@ export const bridge = {
   previewCatScale: (scale: number): Promise<void> => invoke('preview_cat_scale', { scale }),
   /** Overlay only, with the cat hidden: window to the preview size (true) or back to the cat size (false). */
   overlayPreviewZoom: (preview: boolean): Promise<ZoomChange> => invoke('overlay_preview_zoom', { preview }),
-  /** Resolves to the new state; rejects with the OS reason, leaving the setting unchanged. */
+  /** Resolves to the new state; rejects with an IpcError carrying the OS reason, leaving the setting unchanged. */
   setStartAtLogin: (on: boolean): Promise<boolean> => invoke('set_start_at_login', { on }),
   wakeTest: (): Promise<void> => invoke('wake_test'),
   sleep: (): Promise<void> => invoke('sleep'),
   hooksStatus: (): Promise<HooksInfo> => invoke('hooks_status'),
-  hooksApply: (action: HooksAction): Promise<HooksResult> => invoke('hooks_apply', { action }),
+  hooksApply: (action: HooksAction): Promise<Message> => invoke('hooks_apply', { action }),
   dragPermission: (): Promise<DragPermission> => invoke('drag_permission'),
   openDragPermission: (): Promise<void> => invoke('open_drag_permission'),
   onDragPermission: (cb: (p: DragPermission) => void): Promise<UnlistenFn> =>

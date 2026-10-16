@@ -1,5 +1,6 @@
 //! Settings: reading and editing them, start at login, the Settings window.
 
+use crate::ipc::error::{ErrorCode, IpcError, Message};
 use crate::services::cat_service::CatService;
 use crate::services::settings_service;
 use crate::ui::overlay::{self, OverlayState};
@@ -34,19 +35,32 @@ pub fn set_settings(
     }
 }
 
-/// Returns the state that is now in effect; on failure the setting is unchanged and the error is the OS reason.
+/// Returns the state that is now in effect; on failure the setting is unchanged and the error carries the OS reason.
 #[tauri::command]
 pub fn set_start_at_login(
     app: AppHandle,
     cat: State<'_, Arc<CatService>>,
     on: bool,
-) -> Result<bool, String> {
-    settings_service::set_start_at_login(&app, &cat, on).map(|()| on)
+) -> Result<bool, IpcError> {
+    settings_service::set_start_at_login(&app, &cat, on)
+        .map(|()| on)
+        .map_err(|e| {
+            IpcError::new(
+                ErrorCode::StartAtLogin,
+                Message::new("settings.general.startAtLogin.error").with("error", e.to_string()),
+            )
+        })
 }
 
 /// Opens (or brings forward) the Settings window. Async: creating a window from a sync command can deadlock
 /// on Windows.
 #[tauri::command]
-pub async fn open_settings(app: AppHandle, cat: State<'_, Arc<CatService>>) -> Result<(), String> {
-    crate::ui::settings_window::open(&app, cat.settings().ui_language).map_err(|e| e.to_string())
+pub async fn open_settings(
+    app: AppHandle,
+    cat: State<'_, Arc<CatService>>,
+) -> Result<(), IpcError> {
+    Ok(crate::ui::settings_window::open(
+        &app,
+        cat.settings().ui_language,
+    )?)
 }

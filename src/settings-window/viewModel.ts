@@ -1,8 +1,8 @@
 // Pure logic of the Settings window: units, ranges, and what the Hooks section offers. No DOM, so it is tested
 // directly (tests/settingsViewModel.test.ts).
-import type { HooksStatus } from '../bridge/tauriBridge';
-import type { UiKey } from '../i18n';
-import type { AppSettings } from '../settings';
+import type { HooksStatus, IpcError } from '../bridge/tauriBridge';
+import { tMessage, type UiKey } from '../i18n';
+import type { AppSettings, UiLanguage } from '../settings';
 
 export type SectionId = 'general' | 'language' | 'hooks' | 'advanced';
 export const SECTIONS: readonly SectionId[] = ['general', 'language', 'hooks', 'advanced'];
@@ -98,4 +98,16 @@ export function nextSection(current: SectionId, direction: 1 | -1): SectionId {
 export function sectionFromHash(hash: string): SectionId {
   const id = hash.replace(/^#/, '');
   return (SECTIONS as readonly string[]).includes(id) ? (id as SectionId) : 'general';
+}
+
+/** Whether a rejected command came from Rust's `IpcError` (anything else is a bridge or runtime failure). */
+export function isIpcError(e: unknown): e is IpcError {
+  if (typeof e !== 'object' || e === null || !('code' in e) || !('message' in e)) return false;
+  const m = (e as { message: unknown }).message;
+  return typeof m === 'object' && m !== null && 'key' in m;
+}
+
+/** What to show for a command that rejected: Rust's message for an `IpcError`, otherwise `fallback` of the reason. */
+export function failureText(lang: UiLanguage, e: unknown, fallback: (reason: string) => string): string {
+  return isIpcError(e) ? tMessage(lang, e.message) : fallback(String(e));
 }

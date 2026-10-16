@@ -2,7 +2,8 @@
 import type { HooksInfo } from '../../bridge/tauriBridge';
 import { banner, button, card, h } from '../controls';
 import type { Ctx, SectionView } from '../context';
-import { hooksView } from '../viewModel';
+import { tMessage } from '../../i18n';
+import { failureText, hooksView } from '../viewModel';
 
 export function hooksSection(ctx: Ctx): SectionView {
   const { t } = ctx;
@@ -19,8 +20,8 @@ export function hooksSection(ctx: Ctx): SectionView {
       render(info);
       void ctx.api
         .hooksApply(action)
-        .then((r) => result.replaceChildren(banner(r.ok ? 'ok' : 'error', r.message)))
-        .catch((e: unknown) => result.replaceChildren(banner('error', String(e))))
+        .then((m) => result.replaceChildren(banner('ok', tMessage(ctx.lang, m))))
+        .catch((e: unknown) => result.replaceChildren(banner('error', failureText(ctx.lang, e, (reason) => reason))))
         .then(() => ctx.api.hooksStatus())
         .then((next) => {
           busy = false;

@@ -43,7 +43,11 @@ pub fn reconcile_start_at_login(app: &AppHandle, cat: &CatService) {
 }
 
 /// Adds or removes the OS entry, then records the choice in settings. On failure settings are left alone.
-pub fn set_start_at_login(app: &AppHandle, cat: &CatService, on: bool) -> Result<(), String> {
+pub fn set_start_at_login(
+    app: &AppHandle,
+    cat: &CatService,
+    on: bool,
+) -> Result<(), tauri_plugin_autostart::Error> {
     let launcher = app.autolaunch();
     let result = if on {
         launcher.enable()
@@ -58,7 +62,7 @@ pub fn set_start_at_login(app: &AppHandle, cat: &CatService, on: bool) -> Result
         }
         Err(e) => {
             log::warn!("could not change start at login: {e}");
-            Err(e.to_string())
+            Err(e)
         }
     }
 }

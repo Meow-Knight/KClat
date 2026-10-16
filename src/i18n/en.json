@@ -8,6 +8,7 @@
   "tray.tooltip.one": "Klat · 1 session waiting",
   "tray.tooltip.many": "Klat · {count} sessions waiting",
   "dialog.alreadyRunning": "Klat is already running. Look for the cat in the tray.",
+  "error.window": "Could not open the window: {detail}",
   "hooks.notFound": "Could not find your Claude Code settings (.claude/settings.json in your home folder) or the hook program.",
   "hooks.install.noChange": "Klat hooks are installed. Nothing needed to change in {path}.",
   "hooks.install.written": "Klat hooks are installed in {path}.\n\nYour previous settings were saved to {backup}.\n\nNew Claude Code sessions pick this up; restart open sessions if the cat stays asleep.",

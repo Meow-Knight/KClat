@@ -77,17 +77,26 @@ export type Corner = "bottom-right";
  */
 export type DurationMs = number;
 
+/**
+ * A text from the shared catalogs (src/i18n) and the values of its `{placeholders}`.
+ */
+export type Message = { key: string, vars: { [key in string]: string }, };
+
+/**
+ * A command's failure: what failed and what to tell the user.
+ */
+export type IpcError = { code: ErrorCode, message: Message, };
+
+/**
+ * What failed, for a window that wants to react to a kind of failure rather than show the text.
+ */
+export type ErrorCode = "hooks-not-found" | "hooks-broken-json" | "hooks-unexpected-shape" | "hooks-exe-missing" | "hooks-changed-concurrently" | "hooks-io" | "start-at-login" | "window";
+
 export type HooksInfo = { status: HooksStatus,
 /**
  * `~/.claude/settings.json`; None when the home folder is unknown.
  */
 settingsPath: string | null, };
-
-export type HooksResult = { ok: boolean,
-/**
- * Text to show the user, success or error.
- */
-message: string, };
 
 export type HooksStatus = "not-installed" | "needs-repair" | "installed";
 

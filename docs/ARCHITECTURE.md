@@ -217,7 +217,7 @@ impl CatModel {
 | `bootstrap/` | `tauri::Builder`, plugin, `.manage()`, `setup`, khởi động task, dọn dẹp lúc `RunEvent::Exit` | Logic |
 | `ipc/commands/` | Validate input → gọi service → trả kết quả. Mỗi command ≤ ~10 dòng. Chia file theo miền: `cat.rs`, `settings.rs`, `hooks.rs`, `overlay.rs`, `drag.rs` | Lock state, I/O trực tiếp, `if` nghiệp vụ |
 | `ipc/events.rs` | Tên event `cat://…` (const) + struct payload; nguồn sinh type TS | |
-| `ipc/error.rs` | `IpcError { code, message_key }` serialize được | Chuỗi lỗi tự do |
+| `ipc/error.rs` | `Message { key, vars }` (key trong `src/i18n` + giá trị placeholder) và `IpcError { code, message }`, serialize được | Chuỗi lỗi tự do, chữ hiển thị soạn sẵn |
 | `services/` | **Chủ duy nhất** của state: `Mutex<Model>` + `watch::Sender<Snapshot>`; `dispatch(Command)` | Gọi `ui`/`tray` trực tiếp |
 | `ui/` | `overlay`, `settings_window`, `tray`: subscribe snapshot, cập nhật hiển thị; hành động người dùng → `service.dispatch(...)` | Giữ state nghiệp vụ, gọi sang `ui` khác |
 | `tasks/` | Vòng lặp nền: `cursor_poller`, `drag_loop`, `stale_ticker` | Như `ui/` |
@@ -311,7 +311,7 @@ là entry của OS).
 ### 7.3 Lỗi
 
 - `klat-core`, `klat-infra`: `enum` lỗi bằng `thiserror`, một enum cho mỗi miền (`InstallError`, `SettingsError`…).
-- `ipc`: chuyển thành `IpcError { code, message_key }`; frontend tự dịch theo ngôn ngữ đang dùng.
+- `ipc`: chuyển thành `IpcError { code, message: Message { key, vars } }` (`impl From<…> for IpcError` trong `ipc/error.rs`); kết quả cần nói thành lời cũng là `Message`. Frontend dịch bằng `tMessage` theo ngôn ngữ đang dùng: Rust không gửi chữ hiển thị.
 - Cấm `Result<_, String>` ở API mới. Cấm `unwrap()`/`expect()` trên dữ liệu từ ngoài; chỉ chấp nhận `expect` khi khởi động (spawn thread, build app) với thông điệp rõ.
 - `Mutex::lock().unwrap()` được chấp nhận (poison = đã panic ở chỗ khác).
 

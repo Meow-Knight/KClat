@@ -1,5 +1,6 @@
 // Platform Language (docs/specs/settings-i18n-macos.md §3.1). The same catalogs are compiled into the Rust side
 // (crates/klat-core/src/i18n.rs). A key missing in Vietnamese falls back to English; `{name}` is replaced by vars[name].
+import type { Message } from '../bridge/generated';
 import type { UiLanguage } from '../settings';
 import en from './en.json';
 import vi from './vi.json';
@@ -12,6 +13,11 @@ export function t(lang: UiLanguage, key: UiKey, vars?: Record<string, string | n
   const text = CATALOGS[lang][key] ?? en[key] ?? key;
   if (!vars) return text;
   return text.replace(/\{(\w+)\}/g, (match, name: string) => (name in vars ? String(vars[name]) : match));
+}
+
+/** A message from Rust (`Message` in src-tauri/src/ipc/error.rs): a catalog key and its placeholders. */
+export function tMessage(lang: UiLanguage, m: Message): string {
+  return t(lang, m.key as UiKey, m.vars);
 }
 
 /** For tests: both catalogs as plain records. */
