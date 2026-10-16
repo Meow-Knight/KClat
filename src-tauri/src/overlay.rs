@@ -11,10 +11,11 @@
 //! (`cat://scale-preview`); on release it is set once to the chosen size. The page hides the cat around both
 //! switches (`preview_zoom`).
 
-use crate::drag::{self, WindowPos};
+use crate::drag;
 use crate::log;
 use crate::settings::CAT_SCALE;
 use crate::state::{self, AppState};
+use klat_core::geometry::{self, PxRect, WindowPos};
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread;
@@ -184,7 +185,7 @@ pub fn keep_bottom_right(pos: (i32, i32), old: (u32, u32), new: (u32, u32)) -> (
 pub fn place(win: &WebviewWindow, saved: Option<WindowPos>) -> tauri::Result<()> {
     if let Some(pos) = saved {
         let size = win.outer_size()?;
-        let areas: Vec<drag::PxRect> = win
+        let areas: Vec<PxRect> = win
             .available_monitors()?
             .iter()
             .map(|m| {
@@ -197,7 +198,7 @@ pub fn place(win: &WebviewWindow, saved: Option<WindowPos>) -> tauri::Result<()>
                 )
             })
             .collect();
-        if drag::is_on_screen(pos, (size.width, size.height), &areas) {
+        if geometry::is_on_screen(pos, (size.width, size.height), &areas) {
             return win.set_position(PhysicalPosition::new(pos.x, pos.y));
         }
     }
@@ -261,7 +262,7 @@ fn reanchor(win: &WebviewWindow, before: Option<((i32, i32), (u32, u32))>) -> Op
         .state::<AppState>()
         .hitboxes()
         .first()
-        .map(|r| drag::to_px((0.0, 0.0), scale, r));
+        .map(|r| geometry::to_px((0.0, 0.0), scale, r));
     let area = win
         .app_handle()
         .monitor_from_point(
@@ -281,7 +282,7 @@ fn reanchor(win: &WebviewWindow, before: Option<((i32, i32), (u32, u32))>) -> Op
             )
         });
     let (x, y) = match (cat, area) {
-        (Some(cat), Some(area)) => drag::clamp_window(pos, cat, area),
+        (Some(cat), Some(area)) => geometry::clamp_window(pos, cat, area),
         _ => pos,
     };
     win.set_position(PhysicalPosition::new(x, y)).ok()?;

@@ -7,9 +7,9 @@
 //! ("sleep now, wake me when Claude is done") lets finished turns wake it. Ready stays armed until you turn it
 //! off with the bell button or the tray item. Permission and input waits always wake.
 
-use crate::cursor::Rect;
 use crate::log;
 use crate::settings::{self, Settings};
+use klat_core::geometry::Rect;
 pub use klat_core::session::{Gate, Outcome, SessionStore, SessionView, WakeReason};
 use klat_core::time::{DurationMs, UnixMs};
 use klat_protocol::HookEvent;

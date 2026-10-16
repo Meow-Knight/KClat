@@ -3,7 +3,7 @@
 //! Loading never fails: a missing or invalid field falls back to its default, and a file that is not a
 //! JSON object is renamed to `settings.json.corrupt.<unix-seconds>` and replaced with defaults.
 
-use crate::drag::WindowPos;
+use klat_core::geometry::WindowPos;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};

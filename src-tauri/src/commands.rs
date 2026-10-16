@@ -1,13 +1,13 @@
 //! Commands the overlay and the Settings window invoke.
 
 use crate::autostart;
-use crate::cursor::Rect;
 use crate::hooks_installer::{Action, Status};
 use crate::hooks_ui;
 use crate::i18n;
 use crate::overlay;
 use crate::settings::{self, Settings};
 use crate::state::{self, AppState, CatState};
+use klat_core::geometry::Rect;
 use serde::Serialize;
 use serde_json::{Map, Value};
 use tauri::{AppHandle, Manager, State};

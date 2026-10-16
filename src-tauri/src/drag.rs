@@ -12,11 +12,11 @@
 //! until Space is released. The cat is kept inside the work area of the monitor under the cursor.
 //! The overlay is told through `cat://grab` ("idle" | "armed" | "dragging"), so it can ignore the click.
 
-use crate::cursor::Rect;
 use crate::log;
 use crate::overlay;
 use crate::state::{self, AppState};
-use serde::{Deserialize, Serialize};
+use klat_core::geometry::{clamp_window, in_rect, to_px, PxRect, Rect, WindowPos};
+use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::RwLock;
 use std::time::Duration;
@@ -48,16 +48,6 @@ pub fn request_permission() {
     platform::request_permission();
 }
 
-/// Window top-left in physical screen px, as saved in settings.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct WindowPos {
-    pub x: i32,
-    pub y: i32,
-}
-
-/// (x, y, width, height) in physical px.
-pub type PxRect = (i32, i32, i32, i32);
-
 /// Where Space starts a grab: the overlay's clickable regions in physical screen px (kept by the cursor poller).
 static ZONE: RwLock<Vec<PxRect>> = RwLock::new(Vec::new());
 /// Space is held and kept from the focused app.
@@ -78,40 +68,6 @@ pub fn set_zone(origin: (f64, f64), scale: f64, rects: &[Rect]) {
             *z = zone;
         }
     }
-}
-
-pub fn to_px(origin: (f64, f64), scale: f64, r: &Rect) -> PxRect {
-    (
-        (origin.0 + r.x * scale).round() as i32,
-        (origin.1 + r.y * scale).round() as i32,
-        (r.w * scale).round() as i32,
-        (r.h * scale).round() as i32,
-    )
-}
-
-fn in_rect((x, y): (i32, i32), (rx, ry, rw, rh): PxRect) -> bool {
-    x >= rx && x < rx + rw && y >= ry && y < ry + rh
-}
-
-/// Window position that keeps `cat` (relative to the window's top-left) inside `area`. If the cat is larger
-/// than the area, its top-left edge wins.
-pub fn clamp_window(pos: (i32, i32), cat: PxRect, area: PxRect) -> (i32, i32) {
-    let axis = |p: i32, off: i32, len: i32, start: i32, size: i32| {
-        let min = start - off;
-        let max = start + size - off - len;
-        p.min(max).max(min)
-    };
-    (
-        axis(pos.0, cat.0, cat.2, area.0, area.2),
-        axis(pos.1, cat.1, cat.3, area.1, area.3),
-    )
-}
-
-/// A saved position is used only if the window's centre is still on one of the work areas (a monitor may have
-/// been unplugged or rearranged since).
-pub fn is_on_screen(pos: WindowPos, size: (u32, u32), areas: &[PxRect]) -> bool {
-    let centre = (pos.x + size.0 as i32 / 2, pos.y + size.1 as i32 / 2);
-    areas.iter().any(|a| in_rect(centre, *a))
 }
 
 /// Sent by the platform hook.
@@ -380,10 +336,6 @@ mod platform {
 mod tests {
     use super::*;
 
-    /// 2560×1392 work area (48px taskbar). The cat sits at (150, 80)-(320, 300) inside a 360×330 window.
-    const AREA: PxRect = (0, 0, 2560, 1392);
-    const CAT: PxRect = (150, 80, 170, 220);
-
     #[test]
     fn permission_uses_the_names_the_settings_window_expects() {
         let names: Vec<serde_json::Value> = [
@@ -405,59 +357,5 @@ mod tests {
             permission() == Permission::NotNeeded
         };
         assert!(expected);
-    }
-
-    #[test]
-    fn a_position_inside_the_area_is_kept() {
-        assert_eq!(clamp_window((1000, 500), CAT, AREA), (1000, 500));
-    }
-
-    #[test]
-    fn the_cat_stays_on_screen_while_the_window_may_hang_off() {
-        // Dragged far left and up: the transparent margins may leave the screen, the cat may not.
-        assert_eq!(clamp_window((-900, -900), CAT, AREA), (-150, -80));
-        // Far right and down, under the taskbar.
-        assert_eq!(
-            clamp_window((5000, 5000), CAT, AREA),
-            (2560 - 320, 1392 - 300)
-        );
-    }
-
-    #[test]
-    fn clamping_respects_a_second_monitor_offset() {
-        let left_monitor: PxRect = (-1920, 0, 1920, 1040);
-        assert_eq!(
-            clamp_window((-3000, 200), CAT, left_monitor),
-            (-1920 - 150, 200)
-        );
-    }
-
-    #[test]
-    fn a_cat_larger_than_the_area_keeps_its_top_left_visible() {
-        assert_eq!(clamp_window((50, 50), CAT, (0, 0, 100, 100)), (-150, -80));
-    }
-
-    #[test]
-    fn saved_positions_must_still_be_on_a_monitor() {
-        let size = (360, 330);
-        assert!(is_on_screen(WindowPos { x: 100, y: 100 }, size, &[AREA]));
-        // Window hanging off the left edge, centre still on screen.
-        assert!(is_on_screen(WindowPos { x: -150, y: 100 }, size, &[AREA]));
-        // A monitor that was unplugged.
-        assert!(!is_on_screen(WindowPos { x: -1500, y: 100 }, size, &[AREA]));
-        assert!(!is_on_screen(WindowPos { x: 100, y: 100 }, size, &[]));
-    }
-
-    #[test]
-    fn zone_converts_logical_rects_to_screen_px() {
-        let r = Rect {
-            x: 150.0,
-            y: 80.0,
-            w: 170.0,
-            h: 220.0,
-        };
-        assert_eq!(to_px((1000.0, 500.0), 1.25, &r), (1188, 600, 213, 275));
-        assert!(in_rect((1188, 600), to_px((1000.0, 500.0), 1.25, &r)));
-        assert!(!in_rect((1401, 600), to_px((1000.0, 500.0), 1.25, &r)));
     }
 }
