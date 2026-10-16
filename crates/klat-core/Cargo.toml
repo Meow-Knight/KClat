@@ -9,7 +9,9 @@ publish = false
 [dependencies]
 klat-protocol = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
+# preserve_order: Install and Uninstall keep the keys of people's settings.json in their order, also when
+# klat-core is built on its own (`cargo test -p klat-core`).
+serde_json = { workspace = true, features = ["preserve_order"] }
 
 [lints]
 workspace = true
