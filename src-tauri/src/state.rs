@@ -11,6 +11,7 @@ use crate::cursor::Rect;
 use crate::log;
 use crate::settings::{self, Settings};
 pub use klat_core::session::{Gate, Outcome, SessionStore, SessionView, WakeReason};
+use klat_core::time::{DurationMs, UnixMs};
 use klat_protocol::HookEvent;
 use serde::Serialize;
 use std::path::PathBuf;
@@ -61,8 +62,8 @@ struct Inner {
     /// Set by the tray's "Wake test"; cleared by Sleep / Dismiss.
     test_wake: Option<WakeReason>,
     attention: Option<Attention>,
-    /// When Ready was armed (unix ms); None while it is off. Only finished turns that start after it count.
-    ready_since: Option<u64>,
+    /// When Ready was armed; None while it is off. Only finished turns that start after it count.
+    ready_since: Option<UnixMs>,
     sleep_cause: SleepCause,
 }
 
@@ -95,11 +96,14 @@ pub fn data_dir() -> PathBuf {
     klat_protocol::data_dir().unwrap_or_else(|| std::env::temp_dir().join("Klat"))
 }
 
-pub fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
+/// The clock, read here and passed into klat-core, which never reads it.
+pub fn now_ms() -> UnixMs {
+    UnixMs(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0),
+    )
 }
 
 impl AppState {
@@ -251,7 +255,7 @@ pub fn expire_stale(app: &AppHandle) {
     let stale_after = state.settings.lock().unwrap().stale_after_ms;
     let changed = {
         let mut inner = state.inner.lock().unwrap();
-        let changed = inner.store.expire(now_ms(), stale_after);
+        let changed = inner.store.expire(now_ms(), DurationMs(stale_after));
         if changed {
             inner.sleep_cause = SleepCause::Auto;
         }

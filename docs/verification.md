@@ -61,7 +61,7 @@ Quit). It checked, all ✅ on the code above:
 | Event server | wrong token 401, `Origin` 403, GET 405, unknown hook 422; the state does not change |
 | Log | hook lines carry names only (no tool input), rejections are logged |
 
-The script was checked against a deliberate regression (`DEDUPE_MS` set to 0): it failed the duplicate check and
+The script was checked against a deliberate regression (`DEDUPE_MS` set to 0, now `klat_core::session::DEDUPE_WINDOW`): it failed the duplicate check and
 exited 1.
 
 **Owner, by hand** (what the script cannot see; nothing clicks the tray or taskbar automatically). Run the rows the

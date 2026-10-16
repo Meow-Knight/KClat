@@ -10,6 +10,7 @@
 //! - `PermissionDenied` (auto mode only) → clears a permission wait. `SessionEnd` → session removed.
 //! - Anything else (including `SubagentStop`) is ignored.
 
+use crate::time::{DurationMs, UnixMs};
 use klat_protocol::{HookEvent, HookName};
 use serde::Serialize;
 use std::collections::HashMap;
@@ -67,20 +68,20 @@ pub fn classify(ev: &HookEvent) -> Option<Signal> {
 }
 
 /// Same session + same reason within this window is a duplicate: no re-wake, no yell-counter reset.
-pub const DEDUPE_MS: u64 = 2_000;
+pub const DEDUPE_WINDOW: DurationMs = DurationMs(2_000);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Session {
     pub pending: bool,
     pub reason: WakeReason,
-    /// When it became pending (unix ms).
-    pub since: u64,
+    /// When it became pending.
+    pub since: UnixMs,
     pub project_name: String,
     pub tool_name: Option<String>,
     pub dismissed: bool,
-    last_attention: Option<(WakeReason, u64)>,
-    /// The last event for it, or when its wait expired (unix ms). Quiet sessions are forgotten by `expire`.
-    last_seen: u64,
+    last_attention: Option<(WakeReason, UnixMs)>,
+    /// The last event for it, or when its wait expired. Quiet sessions are forgotten by `expire`.
+    last_seen: UnixMs,
 }
 
 /// Sessions the store keeps at most. Room for a new one is made from sessions that are not waiting; when all of
@@ -117,8 +118,8 @@ pub struct SessionView {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Gate {
     pub paused: bool,
-    /// When Ready was armed (unix ms), if it is.
-    pub ready_since: Option<u64>,
+    /// When Ready was armed, if it is.
+    pub ready_since: Option<UnixMs>,
 }
 
 impl Gate {
@@ -136,7 +137,7 @@ pub struct SessionStore {
 }
 
 impl SessionStore {
-    pub fn apply(&mut self, ev: &HookEvent, now: u64) -> Outcome {
+    pub fn apply(&mut self, ev: &HookEvent, now: UnixMs) -> Outcome {
         let Some(signal) = classify(ev) else {
             return Outcome::Unchanged;
         };
@@ -167,7 +168,7 @@ impl SessionStore {
                     return Outcome::Unchanged;
                 }
                 if let Some((r, at)) = s.last_attention {
-                    if r == reason && now.saturating_sub(at) < DEDUPE_MS {
+                    if r == reason && now.since(at) < DEDUPE_WINDOW {
                         return Outcome::Unchanged;
                     }
                 }
@@ -253,15 +254,15 @@ impl SessionStore {
         quiet.and_then(|id| self.sessions.remove(&id)).is_some()
     }
 
-    /// Clears sessions that have been waiting longer than `stale_after_ms`, and forgets sessions that have not
+    /// Clears sessions that have been waiting longer than `stale_after`, and forgets sessions that have not
     /// been waiting nor heard from for that long (SessionEnd does not always come). Returns whether anything
     /// visible changed.
-    pub fn expire(&mut self, now: u64, stale_after_ms: u64) -> bool {
+    pub fn expire(&mut self, now: UnixMs, stale_after: DurationMs) -> bool {
         self.sessions
-            .retain(|_, s| s.pending || now.saturating_sub(s.last_seen) < stale_after_ms);
+            .retain(|_, s| s.pending || now.since(s.last_seen) < stale_after);
         let mut changed = false;
         for s in self.sessions.values_mut() {
-            if s.pending && now.saturating_sub(s.since) >= stale_after_ms {
+            if s.pending && now.since(s.since) >= stale_after {
                 s.last_seen = now;
                 s.pending = false;
                 s.dismissed = false;
@@ -316,6 +317,10 @@ impl SessionStore {
 mod tests {
     use super::*;
 
+    const fn t(ms: u64) -> UnixMs {
+        UnixMs(ms)
+    }
+
     fn ev(name: &str, session: &str) -> HookEvent {
         HookEvent {
             event_id: "e".into(),
@@ -342,11 +347,11 @@ mod tests {
     /// Ready armed from the start: "done" waits wake the cat, as before Ready existed.
     const READY: Gate = Gate {
         paused: false,
-        ready_since: Some(0),
+        ready_since: Some(t(0)),
     };
     const PAUSED: Gate = Gate {
         paused: true,
-        ready_since: Some(0),
+        ready_since: Some(t(0)),
     };
 
     fn attention(project: &str, reason: WakeReason) -> Outcome {
@@ -413,7 +418,7 @@ mod tests {
     fn stop_wakes_and_prompt_submit_sleeps() {
         let mut st = SessionStore::default();
         assert_eq!(
-            st.apply(&ev("Stop", "a"), 1_000),
+            st.apply(&ev("Stop", "a"), t(1_000)),
             attention("proj-a", WakeReason::Done)
         );
         assert!(st.awake(READY));
@@ -425,7 +430,7 @@ mod tests {
             }]
         );
         assert_eq!(
-            st.apply(&ev("UserPromptSubmit", "a"), 2_000),
+            st.apply(&ev("UserPromptSubmit", "a"), t(2_000)),
             Outcome::Changed
         );
         assert!(!st.awake(READY));
@@ -436,18 +441,18 @@ mod tests {
     fn duplicates_within_2s_are_ignored() {
         let mut st = SessionStore::default();
         assert!(matches!(
-            st.apply(&ev("Stop", "a"), 10_000),
+            st.apply(&ev("Stop", "a"), t(10_000)),
             Outcome::Attention { .. }
         ));
-        assert_eq!(st.apply(&ev("Stop", "a"), 11_999), Outcome::Unchanged);
+        assert_eq!(st.apply(&ev("Stop", "a"), t(11_999)), Outcome::Unchanged);
         // Past the window it counts again (e.g. a second turn ended).
         assert!(matches!(
-            st.apply(&ev("Stop", "a"), 12_000),
+            st.apply(&ev("Stop", "a"), t(12_000)),
             Outcome::Attention { .. }
         ));
         // A different reason inside the window is not a duplicate.
         assert!(matches!(
-            st.apply(&ev("PermissionRequest", "a"), 12_500),
+            st.apply(&ev("PermissionRequest", "a"), t(12_500)),
             Outcome::Attention { .. }
         ));
     }
@@ -456,27 +461,27 @@ mod tests {
     fn notification_fallbacks_only_count_when_not_already_waiting() {
         let mut st = SessionStore::default();
         // PermissionRequest first, permission_prompt ~6s later: no second wake.
-        st.apply(&tool("PermissionRequest", "a", "Bash"), 0);
+        st.apply(&tool("PermissionRequest", "a", "Bash"), t(0));
         assert_eq!(
-            st.apply(&note("permission_prompt", "a"), 6_000),
+            st.apply(&note("permission_prompt", "a"), t(6_000)),
             Outcome::Unchanged
         );
         // ...even after you dismissed it.
         st.dismiss_all();
         assert_eq!(
-            st.apply(&note("permission_prompt", "a"), 7_000),
+            st.apply(&note("permission_prompt", "a"), t(7_000)),
             Outcome::Unchanged
         );
         assert!(!st.awake(READY));
         // idle_prompt 60s after a Stop is ignored too.
-        st.apply(&ev("Stop", "b"), 0);
+        st.apply(&ev("Stop", "b"), t(0));
         assert_eq!(
-            st.apply(&note("idle_prompt", "b"), 60_000),
+            st.apply(&note("idle_prompt", "b"), t(60_000)),
             Outcome::Unchanged
         );
         // But a fallback alone (no PermissionRequest seen) does wake.
         assert_eq!(
-            st.apply(&note("permission_prompt", "c"), 0),
+            st.apply(&note("permission_prompt", "c"), t(0)),
             attention("proj-c", WakeReason::Permission)
         );
     }
@@ -484,10 +489,10 @@ mod tests {
     #[test]
     fn events_of_one_session_never_touch_another() {
         let mut st = SessionStore::default();
-        st.apply(&ev("Stop", "a"), 0);
-        st.apply(&tool("PermissionRequest", "b", "Edit"), 0);
-        st.apply(&ev("UserPromptSubmit", "a"), 1_000);
-        st.apply(&ev("SessionEnd", "c"), 1_000);
+        st.apply(&ev("Stop", "a"), t(0));
+        st.apply(&tool("PermissionRequest", "b", "Edit"), t(0));
+        st.apply(&ev("UserPromptSubmit", "a"), t(1_000));
+        st.apply(&ev("SessionEnd", "c"), t(1_000));
         assert!(!st.get("a").unwrap().pending);
         assert!(st.get("b").unwrap().pending);
         assert_eq!(st.waiting(READY).len(), 1);
@@ -497,21 +502,21 @@ mod tests {
     #[test]
     fn permission_cleared_by_the_same_tool_running() {
         let mut st = SessionStore::default();
-        st.apply(&tool("PermissionRequest", "a", "Bash"), 0);
+        st.apply(&tool("PermissionRequest", "a", "Bash"), t(0));
         assert_eq!(
-            st.apply(&tool("PostToolUse", "a", "Edit"), 100),
+            st.apply(&tool("PostToolUse", "a", "Edit"), t(100)),
             Outcome::Unchanged
         );
         assert!(st.awake(READY));
         assert_eq!(
-            st.apply(&tool("PostToolUse", "a", "Bash"), 200),
+            st.apply(&tool("PostToolUse", "a", "Bash"), t(200)),
             Outcome::Changed
         );
         assert!(!st.awake(READY));
         // PostToolUseFailure means the tool ran too (approved, then failed).
-        st.apply(&tool("PermissionRequest", "a", "Write"), 5_000);
+        st.apply(&tool("PermissionRequest", "a", "Write"), t(5_000));
         assert_eq!(
-            st.apply(&tool("PostToolUseFailure", "a", "Write"), 5_100),
+            st.apply(&tool("PostToolUseFailure", "a", "Write"), t(5_100)),
             Outcome::Changed
         );
     }
@@ -519,13 +524,13 @@ mod tests {
     #[test]
     fn tool_events_do_not_clear_a_done_wait() {
         let mut st = SessionStore::default();
-        st.apply(&ev("Stop", "a"), 0);
+        st.apply(&ev("Stop", "a"), t(0));
         assert_eq!(
-            st.apply(&tool("PostToolUse", "a", "Bash"), 10),
+            st.apply(&tool("PostToolUse", "a", "Bash"), t(10)),
             Outcome::Unchanged
         );
         assert_eq!(
-            st.apply(&ev("PermissionDenied", "a"), 10),
+            st.apply(&ev("PermissionDenied", "a"), t(10)),
             Outcome::Unchanged
         );
         assert!(st.awake(READY));
@@ -534,9 +539,9 @@ mod tests {
     #[test]
     fn fallback_permission_without_tool_is_cleared_by_any_tool() {
         let mut st = SessionStore::default();
-        st.apply(&note("permission_prompt", "a"), 0);
+        st.apply(&note("permission_prompt", "a"), t(0));
         assert_eq!(
-            st.apply(&tool("PostToolUse", "a", "Read"), 10),
+            st.apply(&tool("PostToolUse", "a", "Read"), t(10)),
             Outcome::Changed
         );
     }
@@ -544,9 +549,9 @@ mod tests {
     #[test]
     fn permission_denied_clears_a_permission_wait() {
         let mut st = SessionStore::default();
-        st.apply(&tool("PermissionRequest", "a", "Bash"), 0);
+        st.apply(&tool("PermissionRequest", "a", "Bash"), t(0));
         assert_eq!(
-            st.apply(&tool("PermissionDenied", "a", "Bash"), 10),
+            st.apply(&tool("PermissionDenied", "a", "Bash"), t(10)),
             Outcome::Changed
         );
         assert!(!st.awake(READY));
@@ -556,18 +561,18 @@ mod tests {
     fn clears_and_ends_for_unknown_sessions_are_no_ops() {
         let mut st = SessionStore::default();
         assert_eq!(
-            st.apply(&ev("UserPromptSubmit", "x"), 0),
+            st.apply(&ev("UserPromptSubmit", "x"), t(0)),
             Outcome::Unchanged
         );
-        assert_eq!(st.apply(&ev("SessionEnd", "x"), 0), Outcome::Unchanged);
+        assert_eq!(st.apply(&ev("SessionEnd", "x"), t(0)), Outcome::Unchanged);
         assert!(st.get("x").is_none());
     }
 
     #[test]
     fn session_end_removes_the_session() {
         let mut st = SessionStore::default();
-        st.apply(&ev("Stop", "a"), 0);
-        assert_eq!(st.apply(&ev("SessionEnd", "a"), 10), Outcome::Changed);
+        st.apply(&ev("Stop", "a"), t(0));
+        assert_eq!(st.apply(&ev("SessionEnd", "a"), t(10)), Outcome::Changed);
         assert!(st.get("a").is_none());
         assert!(!st.awake(READY));
     }
@@ -575,15 +580,15 @@ mod tests {
     #[test]
     fn dismiss_quiets_pending_sessions_until_they_need_you_again() {
         let mut st = SessionStore::default();
-        st.apply(&ev("Stop", "a"), 0);
-        st.apply(&ev("Stop", "b"), 0);
+        st.apply(&ev("Stop", "a"), t(0));
+        st.apply(&ev("Stop", "b"), t(0));
         assert!(st.dismiss_all());
         assert!(!st.dismiss_all()); // nothing left to dismiss
         assert!(!st.awake(READY));
         assert!(st.get("a").unwrap().pending); // still pending, just seen
                                                // A new attention_needed for a resets dismissed for a only.
         assert!(matches!(
-            st.apply(&tool("PermissionRequest", "a", "Bash"), 5_000),
+            st.apply(&tool("PermissionRequest", "a", "Bash"), t(5_000)),
             Outcome::Attention { .. }
         ));
         assert!(st.awake(READY));
@@ -594,7 +599,7 @@ mod tests {
     #[test]
     fn pause_keeps_the_cat_asleep_without_losing_state() {
         let mut st = SessionStore::default();
-        st.apply(&ev("Stop", "a"), 0);
+        st.apply(&ev("Stop", "a"), t(0));
         assert!(!st.awake(PAUSED));
         assert!(st.awake(READY));
     }
@@ -603,10 +608,10 @@ mod tests {
     fn without_ready_done_waits_do_not_wake_but_permission_and_input_do() {
         let normal = Gate::default();
         let mut st = SessionStore::default();
-        st.apply(&ev("Stop", "a"), 1_000);
+        st.apply(&ev("Stop", "a"), t(1_000));
         assert!(!st.awake(normal));
         assert!(st.waiting(normal).is_empty());
-        st.apply(&tool("PermissionRequest", "b", "Bash"), 2_000);
+        st.apply(&tool("PermissionRequest", "b", "Bash"), t(2_000));
         assert!(st.awake(normal));
         assert_eq!(
             st.waiting(normal),
@@ -615,20 +620,20 @@ mod tests {
                 reason: WakeReason::Permission
             }]
         );
-        st.apply(&note("agent_needs_input", "c"), 3_000);
+        st.apply(&note("agent_needs_input", "c"), t(3_000));
         assert_eq!(st.waiting(normal).len(), 2);
     }
 
     #[test]
     fn ready_counts_only_done_waits_that_start_after_arming() {
         let mut st = SessionStore::default();
-        st.apply(&ev("Stop", "old"), 1_000); // finished before you armed Ready
+        st.apply(&ev("Stop", "old"), t(1_000)); // finished before you armed Ready
         let armed = Gate {
             paused: false,
-            ready_since: Some(5_000),
+            ready_since: Some(t(5_000)),
         };
         assert!(!st.awake(armed));
-        st.apply(&ev("Stop", "new"), 5_000);
+        st.apply(&ev("Stop", "new"), t(5_000));
         assert!(st.awake(armed));
         let names: Vec<_> = st
             .waiting(armed)
@@ -643,21 +648,21 @@ mod tests {
         let mut st = SessionStore::default();
         let armed = Gate {
             paused: false,
-            ready_since: Some(5_000),
+            ready_since: Some(t(5_000)),
         };
-        st.apply(&ev("Stop", "a"), 6_000);
+        st.apply(&ev("Stop", "a"), t(6_000));
         assert!(st.awake(armed));
         st.dismiss_all(); // "not now"
         assert!(!st.awake(armed));
-        st.apply(&ev("UserPromptSubmit", "a"), 7_000);
-        st.apply(&ev("Stop", "a"), 9_000); // the next turn finishes: the cat wakes again
+        st.apply(&ev("UserPromptSubmit", "a"), t(7_000));
+        st.apply(&ev("Stop", "a"), t(9_000)); // the next turn finishes: the cat wakes again
         assert!(st.awake(armed));
     }
 
     #[test]
     fn pause_beats_everything() {
         let mut st = SessionStore::default();
-        st.apply(&tool("PermissionRequest", "a", "Bash"), 0);
+        st.apply(&tool("PermissionRequest", "a", "Bash"), t(0));
         let paused = Gate {
             paused: true,
             ready_since: None,
@@ -669,10 +674,10 @@ mod tests {
     #[test]
     fn stale_pending_sessions_expire() {
         let mut st = SessionStore::default();
-        st.apply(&ev("Stop", "a"), 0);
-        st.apply(&ev("Stop", "b"), 1_000_000);
-        assert!(!st.expire(1_799_999, 1_800_000));
-        assert!(st.expire(1_800_000, 1_800_000));
+        st.apply(&ev("Stop", "a"), t(0));
+        st.apply(&ev("Stop", "b"), t(1_000_000));
+        assert!(!st.expire(t(1_799_999), DurationMs(1_800_000)));
+        assert!(st.expire(t(1_800_000), DurationMs(1_800_000)));
         assert!(!st.get("a").unwrap().pending);
         assert!(st.get("b").unwrap().pending);
     }
@@ -680,17 +685,17 @@ mod tests {
     #[test]
     fn quiet_sessions_are_forgotten() {
         let mut st = SessionStore::default();
-        st.apply(&ev("Stop", "a"), 0);
-        st.apply(&ev("UserPromptSubmit", "a"), 10);
-        st.apply(&ev("Stop", "b"), 0);
-        st.expire(1_800_009, 1_800_000);
+        st.apply(&ev("Stop", "a"), t(0));
+        st.apply(&ev("UserPromptSubmit", "a"), t(10));
+        st.apply(&ev("Stop", "b"), t(0));
+        st.expire(t(1_800_009), DurationMs(1_800_000));
         assert!(st.get("a").is_some(), "quiet for less than the stale time");
         assert!(!st.get("b").unwrap().pending);
-        st.expire(1_800_010, 1_800_000);
+        st.expire(t(1_800_010), DurationMs(1_800_000));
         assert!(st.get("a").is_none());
         // b's wait expired just now: it is forgotten one stale time later.
         assert!(st.get("b").is_some());
-        st.expire(3_600_009, 1_800_000);
+        st.expire(t(3_600_009), DurationMs(1_800_000));
         assert!(st.get("b").is_none());
     }
 
@@ -698,13 +703,13 @@ mod tests {
     fn the_store_is_capped_and_makes_room_from_quiet_sessions() {
         let mut st = SessionStore::default();
         for i in 0..MAX_SESSIONS {
-            st.apply(&ev("Stop", &format!("s{i}")), 0);
+            st.apply(&ev("Stop", &format!("s{i}")), t(0));
         }
-        assert_eq!(st.apply(&ev("Stop", "new"), 5_000), Outcome::Unchanged);
+        assert_eq!(st.apply(&ev("Stop", "new"), t(5_000)), Outcome::Unchanged);
         assert!(st.get("new").is_none());
-        st.apply(&ev("UserPromptSubmit", "s7"), 6_000);
+        st.apply(&ev("UserPromptSubmit", "s7"), t(6_000));
         assert_eq!(
-            st.apply(&ev("Stop", "new"), 7_000),
+            st.apply(&ev("Stop", "new"), t(7_000)),
             attention("proj-new", WakeReason::Done)
         );
         assert!(st.get("s7").is_none());
@@ -714,10 +719,10 @@ mod tests {
     #[test]
     fn since_is_kept_while_already_pending_and_waiting_is_oldest_first() {
         let mut st = SessionStore::default();
-        st.apply(&ev("Stop", "b"), 5_000);
-        st.apply(&ev("Stop", "a"), 1_000);
-        st.apply(&tool("PermissionRequest", "b", "Bash"), 9_000); // b changes reason, keeps since
-        assert_eq!(st.get("b").unwrap().since, 5_000);
+        st.apply(&ev("Stop", "b"), t(5_000));
+        st.apply(&ev("Stop", "a"), t(1_000));
+        st.apply(&tool("PermissionRequest", "b", "Bash"), t(9_000)); // b changes reason, keeps since
+        assert_eq!(st.get("b").unwrap().since, t(5_000));
         let names: Vec<_> = st
             .waiting(READY)
             .into_iter()
