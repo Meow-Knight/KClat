@@ -1,9 +1,10 @@
 [workspace]
 resolver = "2"
-members = ["src-tauri", "crates/klat-protocol", "crates/klat-hook"]
+members = ["src-tauri", "crates/klat-protocol", "crates/klat-core", "crates/klat-hook"]
 
 # One version for what several crates use. A crate opts in with `x = { workspace = true }`.
 [workspace.dependencies]
+klat-core = { path = "crates/klat-core" }
 klat-protocol = { path = "crates/klat-protocol" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"

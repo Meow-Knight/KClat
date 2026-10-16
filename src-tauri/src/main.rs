@@ -11,7 +11,6 @@ mod hooks_ui;
 mod i18n;
 mod log;
 mod overlay;
-mod session_store;
 mod settings;
 mod settings_window;
 mod state;

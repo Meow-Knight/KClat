@@ -9,6 +9,7 @@
 //!   sending a byte now and then, and rejections are logged in short bursts, so a flood cannot rotate the
 //!   real entries out of the capped log.
 
+use klat_core::ratelimit::RejectLog;
 use klat_protocol::{HookEvent, RuntimeInfo, EVENT_PATH, MAX_BODY};
 use std::fs;
 use std::io::{self, BufRead, BufReader, Read, Write};
@@ -26,9 +27,6 @@ const IO_TIMEOUT: Duration = Duration::from_secs(1);
 /// The whole request (head and body) must arrive within this. The adapter sends it in one write and gives up
 /// after 300ms itself; a per-read timeout alone let one byte a second keep a connection open for hours.
 const REQUEST_DEADLINE: Duration = Duration::from_millis(500);
-/// At most this many rejected requests are logged per window; the rest are only counted.
-const REJECT_LOG_BURST: u32 = 5;
-const REJECT_LOG_WINDOW_MS: u64 = 60_000;
 const MAX_FIELD: usize = 200;
 
 /// Writes `runtime.json` (`klat_protocol::runtime_path`, where the hook adapter reads it).
@@ -114,52 +112,6 @@ impl Read for Deadline {
             .ok_or_else(|| io::Error::from(io::ErrorKind::TimedOut))?;
         self.stream.set_read_timeout(Some(left))?;
         self.stream.read(buf)
-    }
-}
-
-/// Rate limit for the rejection warnings (`REJECT_LOG_BURST` per `REJECT_LOG_WINDOW_MS`).
-#[derive(Debug, Default)]
-struct RejectLog {
-    window_start: u64,
-    logged: u32,
-    suppressed: u32,
-}
-
-impl RejectLog {
-    const fn new() -> Self {
-        Self {
-            window_start: 0,
-            logged: 0,
-            suppressed: 0,
-        }
-    }
-
-    /// The log lines for a rejection at `now` (unix ms): none once the burst is used up.
-    fn on_reject(&mut self, status: u16, now: u64) -> Vec<String> {
-        let mut lines = Vec::new();
-        if now.saturating_sub(self.window_start) >= REJECT_LOG_WINDOW_MS {
-            if self.suppressed > 0 {
-                lines.push(format!(
-                    "{} more rejected requests to the event endpoint were not logged",
-                    self.suppressed
-                ));
-            }
-            *self = Self {
-                window_start: now,
-                ..Self::new()
-            };
-        }
-        if self.logged < REJECT_LOG_BURST {
-            self.logged += 1;
-            let mut line = format!("rejected a request to the event endpoint: HTTP {status}");
-            if self.logged == REJECT_LOG_BURST {
-                line.push_str(" (more this minute are counted, not logged)");
-            }
-            lines.push(line);
-        } else {
-            self.suppressed += 1;
-        }
-        lines
     }
 }
 
@@ -600,19 +552,5 @@ mod tests {
             "{:?}",
             started.elapsed()
         );
-    }
-
-    #[test]
-    fn rejections_are_logged_in_bursts_and_the_rest_counted() {
-        let mut log = RejectLog::default();
-        let t0 = 1_000_000;
-        let lines: Vec<_> = (0..20).flat_map(|i| log.on_reject(401, t0 + i)).collect();
-        assert_eq!(lines.len(), REJECT_LOG_BURST as usize);
-        assert!(lines.last().unwrap().contains("not logged"), "{lines:?}");
-        // Next window: one line for what was dropped, then logging resumes.
-        let next = log.on_reject(404, t0 + REJECT_LOG_WINDOW_MS);
-        assert_eq!(next.len(), 2, "{next:?}");
-        assert!(next[0].contains("15 more"), "{next:?}");
-        assert!(next[1].contains("HTTP 404"), "{next:?}");
     }
 }

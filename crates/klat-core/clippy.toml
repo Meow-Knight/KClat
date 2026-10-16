@@ -1,0 +1,7 @@
+# klat-core is deterministic: the caller passes the time in, and nothing here starts threads
+# (docs/ARCHITECTURE.md §4.1, §5.2). Tests then never depend on the clock or on scheduling.
+disallowed-methods = [
+  { path = "std::time::SystemTime::now", reason = "core takes `now: UnixMs` from the caller" },
+  { path = "std::time::Instant::now", reason = "core takes `now: UnixMs` from the caller" },
+  { path = "std::thread::spawn", reason = "core does no work in the background; the app runs tasks" },
+]
