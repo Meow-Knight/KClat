@@ -29,6 +29,11 @@ win32-x64, rustc 1.99.0, 50 hook runs per case (wall time including process star
 A phase may not make klat-hook more than 10% larger or slower, nor lower the test counts (a removed test needs a
 replacement named in the bead's notes).
 
+**After Phase 1 step 2** (klat-hook builds `HookEvent` and reads `RuntimeInfo` from klat-protocol, ClauCat-dv6.2.2):
+binary 239.5 KB (−2.2%); medians 2.9 ms / 166.0 ms / 3.8 ms for the three cases above (p95 4.2 / 174.8 / 4.3);
+Rust tests 129 (the five data-folder tests no longer run twice; klat-protocol adds 15). `pnpm regress`: 16/16
+through the new hook.
+
 ### Regression script
 
 **Automated: `pnpm regress`** (Windows, ~5 s after a warm build). Starts the debug app with `APPDATA` in a temp
