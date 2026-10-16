@@ -93,7 +93,7 @@ fn set_low(app: &AppHandle, low: bool) {
                 .and_then(|core| core.SetMemoryUsageTargetLevel(level))
         };
         if let Err(e) = result {
-            crate::log::warn(format!("could not set the webview memory level: {e}"));
+            log::warn!("could not set the webview memory level: {e}");
         }
     });
 }

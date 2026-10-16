@@ -192,14 +192,12 @@ pub fn install_hook(app: AppHandle, tx: Sender<Msg>) {
             ) {
                 Ok(tap) => tap,
                 Err(()) => {
-                    crate::log::warn(
-                        "could not create the Space event tap; dragging the cat is off",
-                    );
+                    log::warn!("could not create the Space event tap; dragging the cat is off");
                     return;
                 }
             };
             let Ok(source) = tap.mach_port().create_runloop_source(0) else {
-                crate::log::warn("could not attach the Space event tap; dragging the cat is off");
+                log::warn!("could not attach the Space event tap; dragging the cat is off");
                 return;
             };
             TAP_PORT.store(
@@ -209,7 +207,7 @@ pub fn install_hook(app: AppHandle, tx: Sender<Msg>) {
             // SAFETY: kCFRunLoopCommonModes is a constant owned by CoreFoundation.
             CFRunLoop::get_current().add_source(&source, unsafe { kCFRunLoopCommonModes });
             tap.enable();
-            crate::log::info("Space event tap installed");
+            log::info!("Space event tap installed");
             // The tap lives as long as this thread's run loop, which is the rest of the app.
             CFRunLoop::run_current();
             drop(tap);

@@ -5,7 +5,6 @@
 
 // target: services::cat_service
 
-use crate::log;
 use crate::settings;
 pub use klat_core::cat::CatState;
 use klat_core::cat::{CatModel, Command, Ctx, Handled};
@@ -53,10 +52,10 @@ impl AppState {
         let settings_path = data_dir().join("settings.json");
         let (settings, outcome) = settings::load(&settings_path);
         if let settings::LoadOutcome::RecoveredCorrupt(moved) = &outcome {
-            log::warn(format!(
+            log::warn!(
                 "settings were corrupt; moved to {} and reset to defaults",
                 moved.display()
-            ));
+            );
         }
         Self {
             settings: Mutex::new(settings),
@@ -107,7 +106,7 @@ pub fn wake_test(app: &AppHandle) {
 /// The Ready button next to the cat, or the tray item.
 pub fn set_ready(app: &AppHandle, on: bool) {
     handle(app, Command::SetReady(on));
-    log::info(format!("ready {}", if on { "armed" } else { "off" }));
+    log::info!("ready {}", if on { "armed" } else { "off" });
     publish_state(app);
 }
 
@@ -122,7 +121,7 @@ pub fn apply_hook_event(app: &AppHandle, ev: &HookEvent) {
     let handled = handle(app, Command::Hook(ev));
     // Only names and outcomes: the adapter never forwards prompts, commands or tool input.
     let session: String = ev.session_id.chars().take(8).collect();
-    log::info(format!(
+    log::info!(
         "hook {}{} session {session} project {:?} -> {}",
         ev.hook_event_name,
         ev.notification_type
@@ -135,7 +134,7 @@ pub fn apply_hook_event(app: &AppHandle, ev: &HookEvent) {
             Some(Outcome::Changed) => "cleared".to_owned(),
             Some(Outcome::Attention { reason, .. }) => format!("attention {reason:?}"),
         }
-    ));
+    );
     if handled.publish {
         publish_state(app);
     }
@@ -170,7 +169,7 @@ pub fn update_settings(app: &AppHandle, change: impl FnOnce(&mut Settings)) -> S
         s.clone()
     };
     if let Err(e) = settings::save(&state.settings_path, &next) {
-        log::warn(format!("could not save settings: {e}"));
+        log::warn!("could not save settings: {e}");
     }
     handle(app, Command::SettingsChanged);
     crate::tray::sync_settings(app, &next);

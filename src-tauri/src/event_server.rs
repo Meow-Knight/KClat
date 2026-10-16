@@ -134,7 +134,7 @@ fn serve(stream: TcpStream, token: &str, on_event: &dyn Fn(HookEvent)) -> io::Re
                 Err(_) => Vec::new(),
             };
             for line in lines {
-                crate::log::warn(line);
+                log::warn!("{line}");
             }
             status
         }

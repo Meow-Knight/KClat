@@ -12,7 +12,6 @@
 //! until Space is released. The cat is kept inside the work area of the monitor under the cursor.
 //! The overlay is told through `cat://grab` ("idle" | "armed" | "dragging"), so it can ignore the click.
 
-use crate::log;
 use crate::overlay;
 use crate::state::{self, AppState};
 use klat_core::geometry::{clamp_window, Logical, Physical, Point, Rect, WindowPos};
@@ -143,7 +142,7 @@ fn run_grab(app: &AppHandle, rx: &std::sync::mpsc::Receiver<Msg>) {
     let _ = app.emit(EVENT_GRAB, "idle");
     if moved {
         if let Some(Ok(p)) = win.as_ref().map(|w| w.outer_position()) {
-            log::info(format!("cat moved to {},{}", p.x, p.y));
+            log::info!("cat moved to {},{}", p.x, p.y);
             state::update_settings(app, |s| s.position = Some(WindowPos::new(p.x, p.y)));
         }
     } else if !pressed {
@@ -284,9 +283,7 @@ mod platform {
                         0,
                     );
                     if handle.is_null() {
-                        crate::log::warn(
-                            "could not install the Space hook; dragging the cat is off",
-                        );
+                        log::warn!("could not install the Space hook; dragging the cat is off");
                         return;
                     }
                     let mut msg: MSG = std::mem::zeroed();

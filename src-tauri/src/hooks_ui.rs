@@ -2,7 +2,6 @@
 //! hooks_installer.rs). Messages are in the Platform Language; the log stays in English.
 
 use crate::hooks_installer::{self as hooks, Action, InstallError, Report, Status};
-use crate::log;
 use klat_core::i18n::{t, tf};
 use klat_core::settings::UiLanguage;
 use std::path::{Path, PathBuf};
@@ -29,14 +28,11 @@ pub fn apply(lang: UiLanguage, action: Action) -> Result<String, String> {
     };
     match hooks::apply(&settings, &exe, action) {
         Ok(report) => {
-            log::info(format!(
-                "hooks {action:?}: {report:?} (exe {})",
-                exe.display()
-            ));
+            log::info!("hooks {action:?}: {report:?} (exe {})", exe.display());
             Ok(success_text(lang, action, &report, &settings))
         }
         Err(e) => {
-            log::warn(format!("hooks {action:?} failed: {e}"));
+            log::warn!("hooks {action:?} failed: {e}");
             Err(error_text(lang, &e))
         }
     }

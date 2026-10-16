@@ -1,0 +1,18 @@
+[package]
+name = "klat-infra"
+version = "0.1.0"
+description = "Klat's I/O without Tauri: the log, the event server, runtime.json, settings files"
+edition = "2021"
+publish = false
+
+# docs/ARCHITECTURE.md §4.1: may use the file system, sockets and threads; never tauri.
+[dependencies]
+klat-core = { workspace = true }
+klat-protocol = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

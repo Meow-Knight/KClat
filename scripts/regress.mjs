@@ -3,6 +3,7 @@
 // its own commands. Windows only (it drives the overlay page over WebView2 remote debugging).
 //
 //   pnpm regress
+//   pnpm regress --hold 300   # keep the app running 300 s more before the log is read (a longer soak)
 //
 // Isolation: the app runs with APPDATA pointed at a temp folder, so your settings.json, log and runtime.json are
 // not touched, and the Claude Code hooks you have installed (which read the real runtime.json) cannot reach it.
@@ -60,10 +61,13 @@ process.on('exit', () => {
 });
 process.on('SIGINT', () => process.exit(130));
 // Whatever hangs (a page that never loads, a command that never answers), the app is stopped and the run fails.
+// `--hold N`: seconds to keep the app running before the log is read.
+const holdAt = process.argv.indexOf('--hold');
+const hold = holdAt > 0 ? Number(process.argv[holdAt + 1]) : 0;
 setTimeout(() => {
-  console.error('pnpm regress: gave up after 5 minutes');
+  console.error(`pnpm regress: gave up after ${5 + Math.ceil(hold / 60)} minutes`);
   process.exit(1);
-}, 5 * 60_000).unref();
+}, 5 * 60_000 + hold * 1000).unref();
 
 async function until(what, fn, ms = 60_000) {
   const end = Date.now() + ms;
@@ -301,12 +305,29 @@ await check('Event server rejects: wrong token 401, Origin 403, GET 405, unknown
   expect(!s.awake, `a rejected event changed the state: ${summary(s)}`);
   return JSON.stringify(got);
 });
-await check('Log: hook lines carry names only, rejections are logged', async () => {
+if (hold > 0) {
+  console.error(`holding the app ${hold} s before reading the log`);
+  await sleep(hold * 1000);
+}
+
+/** How Klat's own log lines begin (after the timestamp and level). Anything else came from another crate. */
+const OUR_MESSAGES = [
+  'Klat ', 'event server ', 'hook ', 'ready ', 'rejected a request', 'more rejected', 'cat moved', 'DPI changed',
+  'start at login', 'could not', 'hooks ', 'second launch', 'exiting', 'no data folder', 'Space event tap',
+  'settings were corrupt',
+];
+await check("Log: only Klat's lines, names only, rejections are logged", async () => {
   const log = readFileSync(join(dataDir, 'klat.log'), 'utf8');
   expect(log.includes('hook PermissionRequest session sc'), 'no hook line for session sc');
   expect(log.includes('rejected a request to the event endpoint: HTTP 401'), 'no rejection line');
   expect(!log.includes('echo secret'), 'tool input reached the log');
-  return `${log.split('\n').filter(Boolean).length} lines`;
+  const lines = log.split('\n').filter(Boolean);
+  const foreign = lines.filter((line) => {
+    const m = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ (INFO|WARN|ERROR) (.*)$/.exec(line);
+    return !m || !OUR_MESSAGES.some((p) => m[2].startsWith(p));
+  });
+  expect(foreign.length === 0, `not Klat's: ${foreign.slice(0, 3).join(' / ')}`);
+  return `${lines.length} lines${hold > 0 ? ` after ${hold} s more` : ''}`;
 });
 
 ws.close();

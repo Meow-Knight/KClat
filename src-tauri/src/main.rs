@@ -9,7 +9,6 @@ mod event_server;
 mod hooks_installer;
 mod hooks_ui;
 mod i18n;
-mod log;
 mod overlay;
 mod settings;
 mod settings_window;
@@ -27,12 +26,12 @@ const STALE_CHECK: Duration = Duration::from_secs(30);
 fn main() {
     webview_memory::scrub_env();
     settings::migrate_legacy_dir();
-    log::init(&state::data_dir());
+    klat_infra::log::init(&state::data_dir());
 
     let app = tauri::Builder::default()
         // Must come first: a second launch hands over to this instance and exits before creating anything.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            log::info("second launch ignored: already running");
+            log::info!("second launch ignored: already running");
             tray::notify(
                 app,
                 klat_core::i18n::t(i18n::current(app), "dialog.alreadyRunning"),
@@ -73,7 +72,7 @@ fn main() {
         })
         .setup(|app| {
             // Logged here, not before the builder: a second launch exits inside the single-instance plugin.
-            log::info(format!("Klat {} starting", env!("CARGO_PKG_VERSION")));
+            log::info!("Klat {} starting", env!("CARGO_PKG_VERSION"));
             // macOS: a menu bar app, without a Dock icon or an app menu.
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
@@ -95,7 +94,7 @@ fn main() {
             if let Some(path) = klat_protocol::runtime_path() {
                 event_server::remove_runtime(&path);
             }
-            log::info("exiting");
+            log::info!("exiting");
         }
     });
 }
@@ -103,7 +102,7 @@ fn main() {
 fn start_event_server(app: &AppHandle) -> std::io::Result<()> {
     // Without a data folder there is nowhere private to hand the token to the hooks.
     let Some(runtime) = klat_protocol::runtime_path() else {
-        log::warn("no data folder (APPDATA / HOME unset): hook events are off");
+        log::warn!("no data folder (APPDATA / HOME unset): hook events are off");
         return Ok(());
     };
     let token = event_server::new_token()?;
@@ -111,7 +110,7 @@ fn start_event_server(app: &AppHandle) -> std::io::Result<()> {
     let port = event_server::start(token.clone(), move |ev| {
         state::apply_hook_event(&handle, &ev)
     })?;
-    log::info(format!("event server listening on 127.0.0.1:{port}"));
+    log::info!("event server listening on 127.0.0.1:{port}");
     event_server::write_runtime(
         &runtime,
         &klat_protocol::RuntimeInfo {

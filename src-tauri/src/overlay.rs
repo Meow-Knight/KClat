@@ -12,7 +12,6 @@
 //! switches (`preview_zoom`).
 
 use crate::drag;
-use crate::log;
 use crate::state::{self, AppState};
 use klat_core::geometry::{self, Physical, Point, Rect, WindowPos};
 use klat_core::settings::CAT_SCALE;
@@ -234,7 +233,7 @@ pub fn on_scale_changed(win: &WebviewWindow) {
             return;
         }
         if let Some(pos) = reanchor(&win, before) {
-            log::info(format!("DPI changed: cat moved to {},{}", pos.x, pos.y));
+            log::info!("DPI changed: cat moved to {},{}", pos.x, pos.y);
             state::update_settings(app, |s| s.position = Some(pos));
         }
     });

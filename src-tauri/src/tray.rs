@@ -178,7 +178,7 @@ fn on_menu(app: &AppHandle, event: &MenuEvent) {
 
 fn open_settings(app: &AppHandle) {
     if let Err(e) = crate::settings_window::open(app) {
-        crate::log::warn(format!("could not open settings: {e}"));
+        log::warn!("could not open settings: {e}");
     }
 }
 
