@@ -41,6 +41,12 @@ faster than the 2881 ms baseline. klat-hook unchanged at 239.5 KB; medians 3.1 /
 regress`: 16/16. Not covered by the script, left for the owner: dragging the cat with Space, and a DPI change with
 a dragged cat (the coordinates got types, ClauCat-dv6.3.2).
 
+**After Phase 3** (klat-infra, ClauCat-dv6.4, at `aa47d2d`): klat-hook unchanged at 239.5 KB; medians 3.1 / 162.2 /
+4.2 ms (p95 3.6 / 173.5 / 5.2); edit-test loop 541 ms. Rust tests 166: klat-infra 36 (log, event_server with 2000
+seeded junk requests, runtime_file, settings_repo, claude_settings), app 5. `pnpm regress`: 16/16; its log check now
+fails on any line that is not one of Klat's messages, and `pnpm regress --hold 300` (five more minutes of the debug
+app running) left 17 lines, none from Tauri, wry or tao.
+
 ### Regression script
 
 **Automated: `pnpm regress`** (Windows, ~5 s after a warm build). Starts the debug app with `APPDATA` in a temp

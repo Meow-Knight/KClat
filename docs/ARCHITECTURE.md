@@ -204,9 +204,9 @@ impl CatModel {
 |---|---|
 | `settings_repo` | load/save atomic (tmp + rename), đổi tên file hỏng `.corrupt.<ts>`, migrate thư mục cũ |
 | `runtime_file` | ghi `runtime.json` 0600, `create_new`, xoá khi thoát |
-| `event_server` | HTTP loopback: deadline cả request, token so sánh thời gian hằng, allowlist, giới hạn kết nối, giới hạn log từ chối. Nhận `on_event: impl Fn(HookEvent)` và `clock: impl Fn() -> UnixMs` |
-| `claude_settings` | đọc/ghi `~/.claude/settings.json` có backup; biến đổi bằng `core::claude_hooks` |
-| `log` | backend của facade `log`: file có giới hạn dung lượng, một dòng mỗi bản ghi, không bao giờ ghi nội dung prompt |
+| `event_server` | HTTP loopback: deadline cả request, token so sánh thời gian hằng, allowlist, giới hạn kết nối, giới hạn log từ chối (theo từng server, không `static`). `start(token, clock: impl Fn() -> UnixMs, on_event: impl Fn(HookEvent))`; lỗi là `enum Reject` → `status()`; test 2000 request rác seed cố định |
+| `claude_settings` | đọc/ghi `~/.claude/settings.json` có backup; biến đổi bằng `core::claude_hooks`; `InstallError` (thiserror) |
+| `log` | backend của facade `log` (`FileLogger`): file có giới hạn dung lượng, một dòng mỗi bản ghi, không bao giờ ghi nội dung prompt; chỉ nhận target `klat`/`klat_*`, bỏ record của tauri/wry/tao |
 
 **Lý do:** `event_server` là bề mặt tấn công duy nhất; đứng riêng thì test được `handle()` bằng input rác/ngẫu nhiên, test socket thật không cần WebView, review bảo mật cô lập. Tách khỏi core để core không có `std::fs`/`std::net`.
 
@@ -457,7 +457,7 @@ design, acceptance và OUTPUT cụ thể; quy trình chất lượng bắt buộ
 | 0 | `ClauCat-dv6.1` | Baseline: chốt thay đổi đang dở, gate một lệnh `pnpm check` (§12), đo `klat-hook` + số test, kịch bản hồi quy | Test xanh, có số liệu baseline và kịch bản hồi quy | Xong 2026-10-16 |
 | 1 | `ClauCat-dv6.2` | `klat-protocol`; bỏ `#[path]`; `HookName` | Hook và app dùng chung type; hook không tăng > 10% | Xong 2026-10-16 |
 | 2 | `ClauCat-dv6.3` | `klat-core`: `session`, `geometry` (newtype đơn vị), `settings` (phần thuần), `claude_hooks`, `i18n`, `CatModel` | `cargo test -p klat-core` không compile Tauri | Xong 2026-10-16 |
-| 3 | `ClauCat-dv6.4` | `klat-infra`: facade `log`, `event_server`, `runtime_file`, `settings_repo`, `claude_settings` | Không còn `crate::` trong event server; test socket xanh | Chưa bắt đầu |
+| 3 | `ClauCat-dv6.4` | `klat-infra`: facade `log`, `event_server`, `runtime_file`, `settings_repo`, `claude_settings` | Không còn `crate::` trong event server; test socket xanh | Xong 2026-10-16 |
 | 4 | `ClauCat-dv6.5` | `klat`: `CatService` + `watch`, subscriber, xoá `static`, chia `ipc/ui/tasks/platform` | Không còn `crate::tray::` trong service; hồi quy Windows pass, macOS do owner | Chưa bắt đầu |
 | 5 | `ClauCat-dv6.6` | Type TS sinh tự động, `IpcError`; frontend: `CatPose` sang `kit/`, phá vòng `cat` ↔ `characters`, gộp `settings-window/api.ts` vào `bridge/`, ESLint ép tầng | `tauriBridge.ts` dùng type sinh; `pnpm check` kiểm drift | Chưa bắt đầu |
 
