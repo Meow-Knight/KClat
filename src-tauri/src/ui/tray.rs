@@ -1,8 +1,9 @@
 //! Tray menu: quick actions only (docs/specs/settings-i18n-macos.md §4.4). Everything else lives in the Settings
 //! window. Labels and tooltip follow the Platform Language and change as soon as it does.
 
-use crate::i18n;
-use crate::state::{self, AppState};
+use crate::platform;
+use crate::services::cat_service::{self, AppState};
+use crate::services::i18n;
 use klat_core::i18n::{t, tf};
 use klat_core::settings::{Settings, UiLanguage};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -91,26 +92,9 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
                 open_settings(tray.app_handle());
             }
         });
-    builder = tray_icon(app, builder);
+    builder = platform::tray_icon(app, builder);
     builder.build(app)?;
     Ok(())
-}
-
-/// Windows: the app icon. macOS: a black template image that the menu bar tints for light and dark mode
-/// (drawn by scripts/make-tray-template.py).
-#[cfg(target_os = "macos")]
-fn tray_icon(_app: &AppHandle, builder: TrayIconBuilder<Wry>) -> TrayIconBuilder<Wry> {
-    builder
-        .icon(tauri::include_image!("icons/tray-template.png"))
-        .icon_as_template(true)
-}
-
-#[cfg(not(target_os = "macos"))]
-fn tray_icon(app: &AppHandle, builder: TrayIconBuilder<Wry>) -> TrayIconBuilder<Wry> {
-    match app.default_window_icon() {
-        Some(icon) => builder.icon(icon.clone()),
-        None => builder,
-    }
 }
 
 fn set_checked(item: &CheckMenuItem<Wry>, on: bool) {
@@ -164,12 +148,12 @@ fn on_menu(app: &AppHandle, event: &MenuEvent) {
     // Check items flip themselves before this runs; read the new state from the item.
     let checked = |item: &CheckMenuItem<Wry>| item.is_checked().unwrap_or(false);
     match event.id().as_ref() {
-        READY => state::set_ready(app, checked(&items.ready)),
+        READY => cat_service::set_ready(app, checked(&items.ready)),
         PAUSE => {
             let paused = checked(&items.pause);
-            state::update_settings(app, |s| s.notifications_enabled = !paused);
+            cat_service::update_settings(app, |s| s.notifications_enabled = !paused);
         }
-        DISMISS_ALL => state::dismiss_all(app),
+        DISMISS_ALL => cat_service::dismiss_all(app),
         SETTINGS => open_settings(app),
         QUIT => app.exit(0),
         _ => {}
@@ -177,7 +161,7 @@ fn on_menu(app: &AppHandle, event: &MenuEvent) {
 }
 
 fn open_settings(app: &AppHandle) {
-    if let Err(e) = crate::settings_window::open(app) {
+    if let Err(e) = crate::ui::settings_window::open(app) {
         log::warn!("could not open settings: {e}");
     }
 }

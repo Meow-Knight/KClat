@@ -5,6 +5,7 @@
 
 // target: services::cat_service
 
+use crate::ipc::events::{EVENT_SETTINGS, EVENT_STATE};
 pub use klat_core::cat::CatState;
 use klat_core::cat::{CatModel, Command, Ctx, Handled};
 use klat_core::geometry::{Css, Logical, Rect};
@@ -19,9 +20,6 @@ use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 
-pub const EVENT_STATE: &str = "cat://state";
-pub const EVENT_SETTINGS: &str = "cat://settings";
-
 pub struct AppState {
     pub settings: Mutex<Settings>,
     pub settings_path: PathBuf,
@@ -32,7 +30,7 @@ pub struct AppState {
     pub awake: AtomicBool,
 }
 
-/// The data folder (settings, runtime.json, log): see data_dir.rs. The temp folder if the base is unknown.
+/// The data folder (settings, runtime.json, log): see klat_protocol::data_dir. The temp folder if the base is unknown.
 pub fn data_dir() -> PathBuf {
     klat_protocol::data_dir().unwrap_or_else(|| std::env::temp_dir().join("Klat"))
 }
@@ -77,7 +75,7 @@ impl AppState {
 
     /// Clickable regions relative to the overlay's top-left corner.
     pub fn hitboxes(&self) -> Vec<Rect<Logical>> {
-        let zoom = crate::overlay::zoom();
+        let zoom = crate::ui::overlay::zoom();
         let rects = self.page_hitboxes.lock().unwrap();
         rects.iter().map(|r| r.to_logical(zoom)).collect()
     }
@@ -152,10 +150,10 @@ pub fn publish_state(app: &AppHandle) {
     let state = app.state::<AppState>();
     let snapshot = state.snapshot();
     if state.awake.swap(snapshot.awake, Ordering::Relaxed) != snapshot.awake {
-        crate::webview_memory::awake_changed(app, snapshot.awake);
+        crate::platform::webview_memory::awake_changed(app, snapshot.awake);
     }
-    crate::tray::set_waiting(app, snapshot.sessions.len());
-    crate::tray::set_ready_checked(snapshot.ready);
+    crate::ui::tray::set_waiting(app, snapshot.sessions.len());
+    crate::ui::tray::set_ready_checked(snapshot.ready);
     let _ = app.emit(EVENT_STATE, snapshot);
 }
 
@@ -172,8 +170,8 @@ pub fn update_settings(app: &AppHandle, change: impl FnOnce(&mut Settings)) -> S
         log::warn!("could not save settings: {e}");
     }
     handle(app, Command::SettingsChanged);
-    crate::tray::sync_settings(app, &next);
-    crate::settings_window::sync_title(app, next.ui_language);
+    crate::ui::tray::sync_settings(app, &next);
+    crate::ui::settings_window::sync_title(app, next.ui_language);
     let _ = app.emit(EVENT_SETTINGS, next.clone());
     // Pausing or resuming notifications changes whether the cat is awake.
     publish_state(app);

@@ -2,7 +2,7 @@
 
 // target: services (the settings service hands out the language)
 
-use crate::state::AppState;
+use crate::services::cat_service::AppState;
 use klat_core::settings::UiLanguage;
 use tauri::{AppHandle, Manager};
 

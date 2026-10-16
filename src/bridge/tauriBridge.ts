@@ -1,5 +1,5 @@
 // Typed wrapper over the Tauri events and commands the overlay and the Settings window use (see
-// src-tauri/src/commands.rs, state.rs).
+// src-tauri/src/ipc/).
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { WakeReason } from '../phrases/PhrasePicker';
@@ -10,7 +10,7 @@ export interface SessionView {
   reason: WakeReason;
 }
 
-/** The latest "a session needs you" moment; `seq` changes each time (see src-tauri/src/state.rs). */
+/** The latest "a session needs you" moment; `seq` changes each time (see crates/klat-core/src/cat.rs). */
 export interface Attention {
   seq: number;
   projectName: string;
@@ -32,7 +32,7 @@ export interface CatStatePayload {
 /** Cursor in logical px relative to the overlay's top-left corner; null = on another monitor. */
 export type CursorPayload = { x: number; y: number } | null;
 
-/** Moving the cat with Space (see src-tauri/src/drag.rs): Space held over the cat, then the mouse pressed. */
+/** Moving the cat with Space (see src-tauri/src/tasks/drag_loop.rs): Space held over the cat, then the mouse pressed. */
 export type GrabMode = 'idle' | 'armed' | 'dragging';
 
 /** Logical px relative to the overlay's top-left corner. */
@@ -58,10 +58,10 @@ export interface HooksResult {
   message: string;
 }
 
-/** Whether dragging the cat needs a permission first (macOS: Accessibility). See src-tauri/src/drag.rs. */
+/** Whether dragging the cat needs a permission first (macOS: Accessibility). See src-tauri/src/platform/. */
 export type DragPermission = 'not-needed' | 'granted' | 'missing';
 
-/** What `overlayPreviewZoom` did (src-tauri/src/overlay.rs `ZoomChange`): the webview zoom before and after, and
+/** What `overlayPreviewZoom` did (src-tauri/src/ui/overlay.rs `ZoomChange`): the webview zoom before and after, and
  * the page's size in CSS px, which is the same at every zoom. */
 export interface ZoomChange {
   from: number;
@@ -112,7 +112,7 @@ export const bridge = {
     listen<DragPermission>('cat://drag-permission', (e) => cb(e.payload)),
   onState: (cb: (s: CatStatePayload) => void): Promise<UnlistenFn> => listen<CatStatePayload>('cat://state', (e) => cb(e.payload)),
   onSettings: (cb: (s: AppSettings) => void): Promise<UnlistenFn> => listen<AppSettings>('cat://settings', (e) => cb(e.payload)),
-  /** 30Hz while the cat is awake, only when the cursor moved (see src-tauri/src/cursor.rs). */
+  /** 30Hz while the cat is awake, only when the cursor moved (see src-tauri/src/tasks/cursor_poller.rs). */
   onCursor: (cb: (p: CursorPayload) => void): Promise<UnlistenFn> => listen<CursorPayload>('cat://cursor', (e) => cb(e.payload)),
   /** Size slider preview: the cat's scale relative to the page, or null when the drag is over. */
   onScalePreview: (cb: (factor: number | null) => void): Promise<UnlistenFn> =>

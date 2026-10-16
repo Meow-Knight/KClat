@@ -1,12 +1,13 @@
 //! macOS side of dragging the cat with Space (docs/specs/settings-i18n-macos.md §5.1). Same contract as the
-//! Windows hook in drag.rs: Space pressed over the cat with no modifier starts a grab and is kept from the
+//! Windows hook in windows.rs: Space pressed over the cat with no modifier starts a grab and is kept from the
 //! focused app; its release ends it; a plain tap is replayed.
 //!
 //! A CGEventTap that can drop key events needs the Accessibility permission. Without it the tap is not created,
 //! the rest of the app works, and Settings shows a button that asks for it. The hook thread checks again every
 //! 2s and installs the tap as soon as the permission is there, without a restart.
 
-use super::{Msg, Permission, EVENT_PERMISSION, GRABBING, ZONE};
+use super::{Msg, Permission, GRABBING, ZONE};
+use crate::ipc::events::EVENT_PERMISSION;
 use core_foundation::base::TCFType;
 use core_foundation::boolean::CFBoolean;
 use core_foundation::dictionary::{CFDictionary, CFDictionaryRef};
@@ -52,7 +53,7 @@ extern "C" {
     fn CGEventTapEnable(tap: *mut c_void, enable: bool);
 }
 
-/// Cursor in the same physical px as the overlay's position (see cursor.rs), not CoreGraphics points.
+/// Cursor in the same physical px as the overlay's position (see tasks::cursor_poller), not CoreGraphics points.
 pub fn cursor() -> Option<Point<Physical, i32>> {
     let p = APP.get()?.cursor_position().ok()?;
     Some(Point::new(p.x.round() as i32, p.y.round() as i32))

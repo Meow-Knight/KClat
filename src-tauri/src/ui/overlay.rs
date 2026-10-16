@@ -11,8 +11,10 @@
 //! (`cat://scale-preview`); on release it is set once to the chosen size. The page hides the cat around both
 //! switches (`preview_zoom`).
 
-use crate::drag;
-use crate::state::{self, AppState};
+use crate::ipc::events::EVENT_SCALE_PREVIEW;
+use crate::platform;
+use crate::services::cat_service::{self, AppState};
+use crate::tasks::drag_loop;
 use klat_core::geometry::{self, Physical, Point, Rect, WindowPos};
 use klat_core::settings::CAT_SCALE;
 use serde::Serialize;
@@ -30,9 +32,6 @@ const WIDTH: f64 = 360.0;
 const HEIGHT: f64 = 330.0;
 const MARGIN: f64 = 16.0;
 
-/// Size slider being dragged: the scale to show, as a factor of the page's size at `PREVIEW_ZOOM`; null when
-/// the drag ends.
-pub const EVENT_SCALE_PREVIEW: &str = "cat://scale-preview";
 /// The window's zoom while the size slider is dragged: the largest cat size, so every preview is a shrink.
 const PREVIEW_ZOOM: f64 = CAT_SCALE.1 as f64 / 100.0;
 
@@ -61,13 +60,9 @@ pub fn create(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         // Not focused on creation, and WS_EX_NOACTIVATE so clicking the cat never takes focus from the terminal.
         .focused(false)
         .focusable(false)
-        .additional_browser_args(crate::webview_memory::BROWSER_ARGS)
+        .additional_browser_args(platform::webview_memory::BROWSER_ARGS)
         .visible(true);
-    // macOS: stay on every desktop (Space), as the overlay does on Windows virtual desktops.
-    #[cfg(target_os = "macos")]
-    {
-        builder = builder.visible_on_all_workspaces(true);
-    }
+    builder = platform::on_every_desktop(builder);
 
     // Approximate logical position for creation; place() then corrects it in physical px at the real DPI.
     if let Some(pos) = initial_position(app, size) {
@@ -216,7 +211,7 @@ pub fn place(win: &WebviewWindow, saved: Option<WindowPos>) -> tauri::Result<()>
 /// A dragged cat keeps the window's bottom-right corner, where it stands: keeping the saved top-left would grow
 /// the window (150% DPI: half as big again) right and down, off the screen and under the taskbar.
 pub fn on_scale_changed(win: &WebviewWindow) {
-    if drag::dragging() {
+    if drag_loop::dragging() {
         return;
     }
     // Still the old geometry here.
@@ -234,7 +229,7 @@ pub fn on_scale_changed(win: &WebviewWindow) {
         }
         if let Some(pos) = reanchor(&win, before) {
             log::info!("DPI changed: cat moved to {},{}", pos.x, pos.y);
-            state::update_settings(app, |s| s.position = Some(pos));
+            cat_service::update_settings(app, |s| s.position = Some(pos));
         }
     });
 }

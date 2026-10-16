@@ -1,6 +1,6 @@
 //! Start at login (spec §10 `startAtLogin`): opt-in only. An HKCU Run entry on Windows, a LaunchAgent on macOS.
 
-use crate::state::{self, AppState};
+use crate::services::cat_service::{self, AppState};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_autostart::ManagerExt;
 
@@ -13,7 +13,7 @@ pub fn is_enabled(app: &AppHandle) -> bool {
 pub fn reconcile(app: &AppHandle) {
     let on = is_enabled(app);
     if on != app.state::<AppState>().settings().start_at_login {
-        state::update_settings(app, |s| s.start_at_login = on);
+        cat_service::update_settings(app, |s| s.start_at_login = on);
     }
 }
 
@@ -28,7 +28,7 @@ pub fn set(app: &AppHandle, on: bool) -> Result<(), String> {
     match result {
         Ok(()) => {
             log::info!("start at login {}", if on { "enabled" } else { "disabled" });
-            state::update_settings(app, |s| s.start_at_login = on);
+            cat_service::update_settings(app, |s| s.start_at_login = on);
             Ok(())
         }
         Err(e) => {

@@ -1,7 +1,8 @@
 //! The Settings window (docs/specs/settings-i18n-macos.md §4.1): one at a time, created when asked for and
 //! destroyed when closed, so its webview costs no memory while it is not open.
 
-use crate::i18n;
+use crate::platform;
+use crate::services::i18n;
 use klat_core::i18n::t;
 use klat_core::settings::UiLanguage;
 use tauri::{
@@ -36,7 +37,7 @@ pub fn open(app: &AppHandle) -> tauri::Result<()> {
         .resizable(true)
         .maximizable(false)
         .center()
-        .additional_browser_args(crate::webview_memory::BROWSER_ARGS)
+        .additional_browser_args(platform::webview_memory::BROWSER_ARGS)
         .focused(true)
         .visible(true)
         .build()?;

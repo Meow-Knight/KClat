@@ -50,7 +50,7 @@ function applyState(s: CatStatePayload): void {
   lastAttention = seq;
 }
 
-/** The window's zoom while the size slider is dragged (src-tauri/src/overlay.rs PREVIEW_ZOOM). */
+/** The window's zoom while the size slider is dragged (src-tauri/src/ui/overlay.rs PREVIEW_ZOOM). */
 const PREVIEW_ZOOM = CAT_SCALE.max / 100;
 
 function applySettings(next: AppSettings): void {
@@ -63,7 +63,7 @@ function applySettings(next: AppSettings): void {
 }
 
 /**
- * Size slider (src-tauri/src/overlay.rs): while it is dragged the window sits at the largest size and the cat is
+ * Size slider (src-tauri/src/ui/overlay.rs): while it is dragged the window sits at the largest size and the cat is
  * scaled with a transform, which the compositor does every frame. Switching the window between that and the
  * real size takes a few frames to land (size, position and zoom separately), so the cat is hidden meanwhile.
  */

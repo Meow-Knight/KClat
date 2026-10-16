@@ -163,7 +163,7 @@ Memory after ClauCat-gwd (release, 2026-10-14). "Task Manager" is its Memory col
 | Awake | ~52 MB | ~173 MB |
 | Asleep again | ~50 MB | ~178 MB |
 
-Two changes, both in `webview_memory.rs`. The network service runs inside the browser process (`NetworkServiceInProcess2`; the page only talks to the app over IPC), which removes a ~11 MB process. And 3 s after the cat falls asleep, the overlay sets WebView2's memory target to low, which trims the working sets of all its processes; it goes back to normal when the cat wakes. CPU is unchanged (asleep ~3–7% of one core, awake ~11%).
+Two changes, both in `platform/webview_memory.rs`. The network service runs inside the browser process (`NetworkServiceInProcess2`; the page only talks to the app over IPC), which removes a ~11 MB process. And 3 s after the cat falls asleep, the overlay sets WebView2's memory target to low, which trims the working sets of all its processes; it goes back to normal when the cat wakes. CPU is unchanged (asleep ~3–7% of one core, awake ~11%).
 
 Also measured and not used: the GPU process is ~81 MB even without WebGL (`--disable-webgl`), so it is Chromium's compositor, not the cat. `--disable-gpu` brings the total down to ~141 MB committed, but WebGL then runs on WARP and the sleeping cat costs ~20% of one core instead of ~4%. Turning off antialiasing saves ~5 MB and makes the cat jagged.
 
@@ -237,13 +237,8 @@ With the app running and the hook built:
 | `src/phrases/` | Phrase data and `PhrasePicker` |
 | `src/bridge/tauriBridge.ts` | Typed events and commands |
 | `src/overlay/main.ts`, `dev.ts` | Overlay entry, dev page entry |
-| `src-tauri/src/overlay.rs` | Overlay window (transparent, topmost, no taskbar, never activates; DPI-correct placement) |
-| `src-tauri/src/tray.rs` | Tray menu; labels follow the Platform Language |
-| `crates/klat-core/src/i18n.rs` | Reads the shared `src/i18n` catalogs (`src-tauri/src/i18n.rs` only picks the language in effect) |
-| `src-tauri/src/autostart.rs` | Start at login |
-| `src-tauri/src/hooks_ui.rs` | Hook status and install/uninstall messages for the tray and the Settings window |
-| `src-tauri/src/cursor.rs` | Cursor poller: click-through and `cat://cursor` |
-| `src-tauri/src/state.rs` | Shared state, `cat://state` / `cat://settings` |
+| `src-tauri/src/` | The app shell, laid out as in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §3: `bootstrap/` (builder, setup), `ipc/` (commands by domain, `events.rs` with every `cat://` name), `services/` (`cat_service.rs` shared state, `hooks_service.rs` hook messages, `autostart.rs`, `i18n.rs` the language in effect), `ui/` (`overlay.rs` the transparent, topmost, never-activating window with DPI-correct placement; `tray.rs`; `settings_window.rs`), `tasks/` (`cursor_poller.rs` click-through and `cat://cursor`, `drag_loop.rs`, `stale_ticker.rs`), `platform/` (all OS code: `windows.rs`, `macos.rs`, `fallback.rs`, `webview_memory.rs`) |
+| `crates/klat-core/src/i18n.rs` | Reads the shared `src/i18n` catalogs (`src-tauri/src/services/i18n.rs` only picks the language in effect) |
 | `crates/klat-core/` | The rules, pure (no Tauri, no I/O, no clock): `session` (hook mapping, per-session state), `cat` (when the cat is awake), `geometry`, `settings` model, `claude_hooks` edits, `i18n` |
 | `crates/klat-infra/` | I/O without Tauri: `event_server` (loopback HTTP endpoint, token), `runtime_file` (`runtime.json`), `claude_settings` (install / repair / uninstall in `~/.claude/settings.json`), `settings_repo` (settings load/save), `log` (capped local log behind the `log` facade) |
 | `crates/klat-hook/` | Hook adapter |
@@ -258,7 +253,7 @@ Small decisions made during implementation, as the spec asks (§11).
   - Pinned versions: Tauri 2.12 (crate `tauri` 2.12.2, CLI 2.12.1), Vite 8.3.4, Three.js 0.186.1, TypeScript 6.0.3, Vitest 4.1.11, ESLint 10.
     - TypeScript 7 is not supported by `typescript-eslint` yet (it needs a version below 6.1).
     - Vitest 5 needs Node 22+, and this machine runs Node 20.19.
-  - The overlay window is created in Rust (`src-tauri/src/overlay.rs`) rather than declared in `tauri.conf.json`. This way it is placed at the work-area corner and created with `focused(false)`, so it never needs a `show()` call that could steal focus.
+  - The overlay window is created in Rust (`src-tauri/src/ui/overlay.rs`) rather than declared in `tauri.conf.json`. This way it is placed at the work-area corner and created with `focused(false)`, so it never needs a `show()` call that could steal focus.
   - A minimal tray with only **Quit** is already included, because the overlay has no taskbar button and no decorations. The full tray menu (§2.3) comes in Phase 2.
   - The app icon is a generated placeholder cat head (`src-tauri/icons/`).
   - The bundle identifier is `vn.ema.klat`.
@@ -346,7 +341,7 @@ Small decisions made during implementation, as the spec asks (§11).
     - It counts only finished turns that arrive **after** arming. A turn that ended before you clicked does not fire it.
     - It stays armed until you turn it off (bell button or tray). The first version was one-shot (it switched off once the cat had woken you), but the user wanted it to stay on.
     - Permission and input waits always wake the cat, as the user chose. Pause still silences everything.
-    - Ready lives in Rust (`state.rs`, the time it was armed), and `session_store::Gate` decides which waits may wake the cat. It is sent to the overlay as `cat://state.ready`.
+    - Ready lives in Rust (`klat_core::cat`, the time it was armed), and `session_store::Gate` decides which waits may wake the cat. It is sent to the overlay as `cat://state.ready`.
     - A finished turn that arrives without Ready is still tracked, but it neither wakes the cat nor makes an awake cat yell again.
   - **Ready feedback.** Arming makes the cat peek, perk one ear (kept up while it listens) and say a short line (`ready` phrases, en/vi, SFW-safe) for 2.2s. The button uses only static CSS: an endless CSS animation would repaint the transparent window at the display rate, as the old Zzz did.
   - The button shows only while the cat is asleep and shown. With "Hide cat while sleeping" on, use the tray item instead.
@@ -379,7 +374,7 @@ Small decisions made during implementation, as the spec asks (§11).
   - **Per-user install kept** (owner decision): `klat-hook.exe` sits in `%LOCALAPPDATA%\Klat`, which the user can write, and Claude Code runs it on every hook with the hook's full input. Malware already running as the user could replace it. A per-machine install would close this but needs admin rights to install and update; the owner chose to keep installs admin-free.
   - Not applicable: RustSec advisories for `glib` 0.18.5 (RUSTSEC-2024-0429) and `proc-macro-error` (RUSTSEC-2024-0370, unmaintained) come only through Tauri's GTK stack on Linux, which Klat does not build; they are ignored in `.cargo/audit.toml`.
 - **Drag and drop** (2026-10-12): hold Space, click the cat and drag; releasing Space drops it.
-  - The overlay never takes focus, so it cannot see the keyboard. A low-level keyboard hook (`drag.rs`) looks at Space only, and only takes it from the focused app while the pointer is over the cat (or its bubble or Ready button) with no modifier held. Anywhere else Space passes through untouched. A tap with no click is replayed to the focused app with `SendInput`, so typing with the pointer resting on the cat is not lost.
+  - The overlay never takes focus, so it cannot see the keyboard. A low-level keyboard hook (`platform/windows.rs`, `macos.rs`) looks at Space only, and only takes it from the focused app while the pointer is over the cat (or its bubble or Ready button) with no modifier held. Anywhere else Space passes through untouched. A tap with no click is replayed to the focused app with `SendInput`, so typing with the pointer resting on the cat is not lost.
   - Grab plus the primary mouse button starts the drag. The window follows the cursor at ~120Hz until Space is released. The grip is kept in logical px, so crossing to a monitor with another DPI keeps the cat in hand, and the DPI re-place is skipped while dragging.
   - The cat (not the whole window, which is mostly transparent) is kept inside the work area of the monitor under the cursor, so it can sit flush against any edge.
   - The spot is saved as `position` in settings.json (window top-left, physical px). At start it is used only if the window's centre is still on a monitor; otherwise the cat goes back to the corner. (A tray item "Move the cat back to the corner" existed until 2026-10-13; it was dropped because you can drag the cat.)

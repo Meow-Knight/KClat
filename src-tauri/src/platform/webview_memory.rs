@@ -75,7 +75,7 @@ fn set_low(app: &AppHandle, low: bool) {
     };
     use windows_core::Interface;
 
-    let Some(win) = crate::overlay::get(app) else {
+    let Some(win) = crate::ui::overlay::get(app) else {
         return;
     };
     let level = if low {
