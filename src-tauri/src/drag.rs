@@ -80,7 +80,7 @@ pub fn set_zone(origin: (f64, f64), scale: f64, rects: &[Rect]) {
     }
 }
 
-fn to_px(origin: (f64, f64), scale: f64, r: &Rect) -> PxRect {
+pub fn to_px(origin: (f64, f64), scale: f64, r: &Rect) -> PxRect {
     (
         (origin.0 + r.x * scale).round() as i32,
         (origin.1 + r.y * scale).round() as i32,

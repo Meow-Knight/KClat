@@ -12,8 +12,9 @@
 //! switches (`preview_zoom`).
 
 use crate::drag::{self, WindowPos};
+use crate::log;
 use crate::settings::CAT_SCALE;
-use crate::state::AppState;
+use crate::state::{self, AppState};
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread;
@@ -169,7 +170,8 @@ pub fn preview_zoom(app: &AppHandle, preview: bool) -> (ZoomChange, Option<Windo
     (change, saved)
 }
 
-/// Top-left that keeps a window's bottom-right corner in place when it goes from `old` to `new` size.
+/// Top-left that keeps a window's bottom-right corner in place when it goes from `old` to `new` size (a new
+/// cat scale, or a DPI change).
 pub fn keep_bottom_right(pos: (i32, i32), old: (u32, u32), new: (u32, u32)) -> (i32, i32) {
     (
         pos.0 + old.0 as i32 - new.0 as i32,
@@ -215,16 +217,75 @@ pub fn place(win: &WebviewWindow, saved: Option<WindowPos>) -> tauri::Result<()>
 /// When the DPI changes Windows resizes the window, which knocks it off its spot. Re-place it once the
 /// resize has landed (the event fires before the new size is applied). Not while you are dragging it across
 /// monitors: the drag keeps it under the cursor.
+///
+/// A dragged cat keeps the window's bottom-right corner, where it stands: keeping the saved top-left would grow
+/// the window (150% DPI: half as big again) right and down, off the screen and under the taskbar.
 pub fn on_scale_changed(win: &WebviewWindow) {
     if drag::dragging() {
         return;
     }
+    // Still the old geometry here.
+    let before = match (win.outer_position(), win.outer_size()) {
+        (Ok(p), Ok(s)) => Some(((p.x, p.y), (s.width, s.height))),
+        _ => None,
+    };
     let win = win.clone();
     thread::spawn(move || {
         thread::sleep(Duration::from_millis(150));
-        let saved = win.app_handle().state::<AppState>().settings().position;
-        let _ = place(&win, saved);
+        let app = win.app_handle();
+        if app.state::<AppState>().settings().position.is_none() {
+            let _ = place(&win, None);
+            return;
+        }
+        if let Some(pos) = reanchor(&win, before) {
+            log::info(format!("DPI changed: cat moved to {},{}", pos.x, pos.y));
+            state::update_settings(app, |s| s.position = Some(pos));
+        }
     });
+}
+
+/// Puts a dragged window back with the bottom-right corner it had `before` (or where it is, without that) at its
+/// new size, with the cat inside the work area. Returns the new top-left.
+fn reanchor(win: &WebviewWindow, before: Option<((i32, i32), (u32, u32))>) -> Option<WindowPos> {
+    let size = win.outer_size().ok()?;
+    let scale = win.scale_factor().ok()?;
+    let pos = match before {
+        Some((pos, old)) => keep_bottom_right(pos, old, (size.width, size.height)),
+        None => {
+            let p = win.outer_position().ok()?;
+            (p.x, p.y)
+        }
+    };
+    let cat = win
+        .app_handle()
+        .state::<AppState>()
+        .hitboxes()
+        .first()
+        .map(|r| drag::to_px((0.0, 0.0), scale, r));
+    let area = win
+        .app_handle()
+        .monitor_from_point(
+            f64::from(pos.0) + f64::from(size.width) / 2.0,
+            f64::from(pos.1) + f64::from(size.height) / 2.0,
+        )
+        .ok()
+        .flatten()
+        .or_else(|| win.primary_monitor().ok().flatten())
+        .map(|m| {
+            let a = m.work_area();
+            (
+                a.position.x,
+                a.position.y,
+                a.size.width as i32,
+                a.size.height as i32,
+            )
+        });
+    let (x, y) = match (cat, area) {
+        (Some(cat), Some(area)) => drag::clamp_window(pos, cat, area),
+        _ => pos,
+    };
+    win.set_position(PhysicalPosition::new(x, y)).ok()?;
+    Some(WindowPos { x, y })
 }
 
 /// Physical top-left for a window of `size` inside the bottom-right corner of a work area.
