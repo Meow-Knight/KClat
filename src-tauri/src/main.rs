@@ -5,7 +5,6 @@ mod autostart;
 mod commands;
 mod cursor;
 mod drag;
-mod event_server;
 mod hooks_installer;
 mod hooks_ui;
 mod i18n;
@@ -16,6 +15,7 @@ mod state;
 mod tray;
 mod webview_memory;
 
+use klat_infra::{event_server, runtime_file};
 use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Manager, RunEvent};
@@ -92,7 +92,7 @@ fn main() {
     app.run(|_app, event| {
         if let RunEvent::Exit = event {
             if let Some(path) = klat_protocol::runtime_path() {
-                event_server::remove_runtime(&path);
+                runtime_file::remove_runtime(&path);
             }
             log::info!("exiting");
         }
@@ -111,7 +111,7 @@ fn start_event_server(app: &AppHandle) -> std::io::Result<()> {
         state::apply_hook_event(&handle, &ev)
     })?;
     log::info!("event server listening on 127.0.0.1:{port}");
-    event_server::write_runtime(
+    runtime_file::write_runtime(
         &runtime,
         &klat_protocol::RuntimeInfo {
             port,

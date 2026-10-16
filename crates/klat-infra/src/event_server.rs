@@ -1,8 +1,7 @@
 //! Loopback HTTP endpoint for the hook adapter (spec §8.3–8.4).
 //!
 //! - Binds 127.0.0.1 on a random port; a fresh 256-bit bearer token per app run.
-//! - `{port, token}` goes to `%APPDATA%\Klat\runtime.json`, deleted when the app quits. Readable by this user only
-//!   (0600 on Unix), never placed in the temp folder, and created fresh so a planted file or link is not followed.
+//! - `{port, token}` goes to `%APPDATA%\Klat\runtime.json` (runtime_file.rs), deleted when the app quits.
 //! - Accepts only `POST /event` with the right token, no `Origin` header (no browser pages), a body of at
 //!   most 64 KB, valid JSON, and an allowlisted `hookEventName`. Everything else gets a 4xx and is dropped.
 //! - Each request must arrive whole within `REQUEST_DEADLINE`, so nobody can hold a connection slot open by
@@ -10,15 +9,14 @@
 //!   real entries out of the capped log.
 
 use klat_core::ratelimit::RejectLog;
-use klat_protocol::{HookEvent, RuntimeInfo, EVENT_PATH, MAX_BODY};
-use std::fs;
+use klat_core::time::UnixMs;
+use klat_protocol::{HookEvent, EVENT_PATH, MAX_BODY};
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{Ipv4Addr, TcpListener, TcpStream};
-use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const MAX_HEADER_BYTES: usize = 8 * 1024;
 const MAX_CONNECTIONS: usize = 16;
@@ -28,35 +26,6 @@ const IO_TIMEOUT: Duration = Duration::from_secs(1);
 /// after 300ms itself; a per-read timeout alone let one byte a second keep a connection open for hours.
 const REQUEST_DEADLINE: Duration = Duration::from_millis(500);
 const MAX_FIELD: usize = 200;
-
-/// Writes `runtime.json` (`klat_protocol::runtime_path`, where the hook adapter reads it).
-pub fn write_runtime(path: &Path, info: &RuntimeInfo) -> io::Result<()> {
-    if let Some(dir) = path.parent() {
-        fs::create_dir_all(dir)?;
-    }
-    let mut tmp = path.as_os_str().to_owned();
-    tmp.push(".tmp");
-    let tmp = PathBuf::from(tmp);
-    let _ = fs::remove_file(&tmp);
-    let mut file = private_file().create_new(true).open(&tmp)?;
-    file.write_all(&serde_json::to_vec(info).map_err(io::Error::other)?)?;
-    drop(file);
-    fs::rename(&tmp, path)
-}
-
-/// Options for a file only this user can read: 0600 on Unix. On Windows the data folder (`%APPDATA%`) is
-/// already private to the user.
-fn private_file() -> fs::OpenOptions {
-    let mut options = fs::OpenOptions::new();
-    options.write(true);
-    #[cfg(unix)]
-    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-    options
-}
-
-pub fn remove_runtime(path: &Path) {
-    let _ = fs::remove_file(path);
-}
 
 pub fn new_token() -> io::Result<String> {
     let mut bytes = [0u8; 32];
@@ -117,6 +86,15 @@ impl Read for Deadline {
 
 static REJECTS: Mutex<RejectLog> = Mutex::new(RejectLog::new());
 
+fn now_ms() -> UnixMs {
+    UnixMs(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0),
+    )
+}
+
 fn serve(stream: TcpStream, token: &str, on_event: &dyn Fn(HookEvent)) -> io::Result<()> {
     stream.set_write_timeout(Some(IO_TIMEOUT))?;
     let mut reader = BufReader::new(Deadline {
@@ -130,7 +108,7 @@ fn serve(stream: TcpStream, token: &str, on_event: &dyn Fn(HookEvent)) -> io::Re
         }
         Err(status) => {
             let lines = match REJECTS.lock() {
-                Ok(mut log) => log.on_reject(status, crate::state::now_ms()),
+                Ok(mut log) => log.on_reject(status, now_ms()),
                 Err(_) => Vec::new(),
             };
             for line in lines {
@@ -448,55 +426,6 @@ mod tests {
         assert!(klat_protocol::is_valid_token(&a));
         assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
         assert_ne!(a, b);
-    }
-
-    #[test]
-    fn runtime_file_round_trips_and_is_removed() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("Klat").join("runtime.json");
-        let info = RuntimeInfo {
-            port: 4242,
-            token: "t".into(),
-            pid: 7,
-        };
-        write_runtime(&path, &info).unwrap();
-        let back: RuntimeInfo = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-        assert_eq!(back, info);
-        remove_runtime(&path);
-        assert!(!path.exists());
-    }
-
-    #[test]
-    fn runtime_file_replaces_a_leftover_temp_file() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("runtime.json");
-        fs::write(dir.path().join("runtime.json.tmp"), "planted").unwrap();
-        let info = RuntimeInfo {
-            port: 1,
-            token: "t".into(),
-            pid: 2,
-        };
-        write_runtime(&path, &info).unwrap();
-        let back: RuntimeInfo = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-        assert_eq!(back, info);
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn runtime_file_is_private_to_the_user() {
-        use std::os::unix::fs::PermissionsExt;
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("runtime.json");
-        let info = RuntimeInfo {
-            port: 1,
-            token: "t".into(),
-            pid: 2,
-        };
-        write_runtime(&path, &info).unwrap();
-        assert_eq!(
-            fs::metadata(&path).unwrap().permissions().mode() & 0o777,
-            0o600
-        );
     }
 
     #[test]

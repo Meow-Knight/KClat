@@ -7,9 +7,11 @@ publish = false
 
 # docs/ARCHITECTURE.md §4.1: may use the file system, sockets and threads; never tauri.
 [dependencies]
+getrandom = { workspace = true }
 klat-core = { workspace = true }
 klat-protocol = { workspace = true }
 log = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

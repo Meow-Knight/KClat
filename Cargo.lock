@@ -1910,7 +1910,6 @@ version = "0.1.0"
 dependencies = [
  "core-foundation",
  "core-graphics",
- "getrandom 0.3.4",
  "klat-core",
  "klat-infra",
  "klat-protocol",
@@ -1950,9 +1949,11 @@ dependencies = [
 name = "klat-infra"
 version = "0.1.0"
 dependencies = [
+ "getrandom 0.3.4",
  "klat-core",
  "klat-protocol",
  "log",
+ "serde_json",
  "tempfile",
 ]
 
