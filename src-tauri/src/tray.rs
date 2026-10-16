@@ -1,8 +1,9 @@
 //! Tray menu: quick actions only (docs/specs/settings-i18n-macos.md §4.4). Everything else lives in the Settings
 //! window. Labels and tooltip follow the Platform Language and change as soon as it does.
 
-use crate::i18n::{self, t, tf};
+use crate::i18n;
 use crate::state::{self, AppState};
+use klat_core::i18n::{t, tf};
 use klat_core::settings::{Settings, UiLanguage};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};

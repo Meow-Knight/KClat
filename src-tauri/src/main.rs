@@ -33,7 +33,10 @@ fn main() {
         // Must come first: a second launch hands over to this instance and exits before creating anything.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             log::info("second launch ignored: already running");
-            tray::notify(app, i18n::t(i18n::current(app), "dialog.alreadyRunning"));
+            tray::notify(
+                app,
+                klat_core::i18n::t(i18n::current(app), "dialog.alreadyRunning"),
+            );
         }))
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())

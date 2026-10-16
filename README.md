@@ -239,12 +239,12 @@ With the app running and the hook built:
 | `src/overlay/main.ts`, `dev.ts` | Overlay entry, dev page entry |
 | `src-tauri/src/overlay.rs` | Overlay window (transparent, topmost, no taskbar, never activates; DPI-correct placement) |
 | `src-tauri/src/tray.rs` | Tray menu; labels follow the Platform Language |
-| `src-tauri/src/i18n.rs` | Reads the shared `src/i18n` catalogs |
+| `crates/klat-core/src/i18n.rs` | Reads the shared `src/i18n` catalogs (`src-tauri/src/i18n.rs` only picks the language in effect) |
 | `src-tauri/src/autostart.rs` | Start at login |
 | `src-tauri/src/hooks_ui.rs` | Hook status and install/uninstall messages for the tray and the Settings window |
 | `src-tauri/src/cursor.rs` | Cursor poller: click-through and `cat://cursor` |
 | `src-tauri/src/state.rs` | Shared state, `cat://state` / `cat://settings` |
-| `src-tauri/src/session_store.rs` | Hook event mapping and per-session state. Pure logic |
+| `crates/klat-core/` | The rules, pure (no Tauri, no I/O, no clock): `session` (hook mapping, per-session state), `geometry`, `settings` model, `claude_hooks` edits, `i18n` |
 | `src-tauri/src/event_server.rs` | Loopback HTTP endpoint, token, `runtime.json` |
 | `src-tauri/src/hooks_installer.rs` | Install / repair / uninstall in `~/.claude/settings.json` |
 | `src-tauri/src/settings.rs` | Settings load/save |

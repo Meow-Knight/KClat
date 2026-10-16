@@ -2,6 +2,7 @@
 //! destroyed when closed, so its webview costs no memory while it is not open.
 
 use crate::i18n;
+use klat_core::i18n::t;
 use klat_core::settings::UiLanguage;
 use tauri::{
     AppHandle, LogicalUnit, Manager, PixelUnit, WebviewUrl, WebviewWindowBuilder,
@@ -24,7 +25,7 @@ pub fn open(app: &AppHandle) -> tauri::Result<()> {
         return win.set_focus();
     }
     let win = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("settings.html".into()))
-        .title(i18n::t(i18n::current(app), "settings.windowTitle"))
+        .title(t(i18n::current(app), "settings.windowTitle"))
         .inner_size(WIDTH, HEIGHT)
         .inner_size_constraints(WindowSizeConstraints {
             min_width: Some(logical(MIN_WIDTH)),
@@ -49,6 +50,6 @@ fn logical(px: f64) -> PixelUnit {
 /// The window title follows the Platform Language (the page sets its own text).
 pub fn sync_title(app: &AppHandle, lang: UiLanguage) {
     if let Some(win) = app.get_webview_window(LABEL) {
-        let _ = win.set_title(&i18n::t(lang, "settings.windowTitle"));
+        let _ = win.set_title(&t(lang, "settings.windowTitle"));
     }
 }

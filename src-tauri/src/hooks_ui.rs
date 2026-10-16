@@ -2,8 +2,8 @@
 //! hooks_installer.rs). Messages are in the Platform Language; the log stays in English.
 
 use crate::hooks_installer::{self as hooks, Action, InstallError, Report, Status};
-use crate::i18n::{t, tf};
 use crate::log;
+use klat_core::i18n::{t, tf};
 use klat_core::settings::UiLanguage;
 use std::path::{Path, PathBuf};
 

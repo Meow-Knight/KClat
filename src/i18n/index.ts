@@ -1,5 +1,5 @@
 // Platform Language (docs/specs/settings-i18n-macos.md §3.1). The same catalogs are compiled into the Rust side
-// (src-tauri/src/i18n.rs). A key missing in Vietnamese falls back to English; `{name}` is replaced by vars[name].
+// (crates/klat-core/src/i18n.rs). A key missing in Vietnamese falls back to English; `{name}` is replaced by vars[name].
 import type { UiLanguage } from '../settings';
 import en from './en.json';
 import vi from './vi.json';

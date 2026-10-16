@@ -4,6 +4,7 @@
 
 pub mod claude_hooks;
 pub mod geometry;
+pub mod i18n;
 pub mod ratelimit;
 pub mod session;
 pub mod settings;
