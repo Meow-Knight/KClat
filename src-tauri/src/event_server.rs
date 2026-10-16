@@ -202,12 +202,19 @@ fn serve(stream: TcpStream, token: &str, on_event: &dyn Fn(HookEvent)) -> io::Re
         }
     };
     let mut out = stream;
-    write!(
-        out,
+    out.write_all(&response(status))?;
+    out.flush()
+}
+
+/// The whole answer, so it goes out in one write. `write!` straight to the socket sent each piece on its own,
+/// and when a client still sending was cut off, the reset that followed the close could discard the pieces it
+/// had not read yet (Windows), leaving it with just "HTTP/1.1 ".
+fn response(status: u16) -> Vec<u8> {
+    format!(
         "HTTP/1.1 {status} {}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
         reason(status)
-    )?;
-    out.flush()
+    )
+    .into_bytes()
 }
 
 fn reason(status: u16) -> &'static str {
@@ -480,6 +487,19 @@ mod tests {
             "a".repeat(MAX_HEADER_BYTES)
         );
         assert_eq!(run(raw.into_bytes()), Err(400));
+    }
+
+    #[test]
+    fn the_answer_is_one_complete_message() {
+        assert_eq!(
+            response(204),
+            b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        );
+        assert_eq!(
+            response(400),
+            b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        );
+        assert!(response(418).starts_with(b"HTTP/1.1 418 Error\r\n"));
     }
 
     #[test]
