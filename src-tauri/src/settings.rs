@@ -428,7 +428,7 @@ mod tests {
     #[test]
     fn patch_changes_only_whitelisted_fields_and_revalidates() {
         let current = Settings {
-            position: Some(WindowPos { x: 10, y: 20 }),
+            position: Some(WindowPos::new(10, 20)),
             ..Settings::default()
         };
         let patch = json!({

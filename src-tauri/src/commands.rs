@@ -7,7 +7,7 @@ use crate::i18n;
 use crate::overlay;
 use crate::settings::{self, Settings};
 use crate::state::{self, AppState, CatState};
-use klat_core::geometry::Rect;
+use klat_core::geometry::{Css, Rect};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use tauri::{AppHandle, Manager, State};
@@ -145,7 +145,7 @@ pub fn set_ready(app: AppHandle, on: bool) {
 }
 
 #[tauri::command]
-pub fn set_hitboxes(state: State<'_, AppState>, rects: Vec<Rect>) {
+pub fn set_hitboxes(state: State<'_, AppState>, rects: Vec<Rect<Css>>) {
     let rects = rects
         .into_iter()
         .filter(|r| [r.x, r.y, r.w, r.h].iter().all(|v| v.is_finite()) && r.w > 0.0 && r.h > 0.0)

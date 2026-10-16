@@ -9,7 +9,7 @@
 
 use crate::log;
 use crate::settings::{self, Settings};
-use klat_core::geometry::Rect;
+use klat_core::geometry::{Css, Logical, Rect};
 pub use klat_core::session::{Gate, Outcome, SessionStore, SessionView, WakeReason};
 use klat_core::time::{DurationMs, UnixMs};
 use klat_protocol::HookEvent;
@@ -85,8 +85,8 @@ pub struct AppState {
     pub settings: Mutex<Settings>,
     pub settings_path: PathBuf,
     inner: Mutex<Inner>,
-    /// Clickable regions of the overlay as the page reports them (CSS px); see `hitboxes()`.
-    pub page_hitboxes: Mutex<Vec<Rect>>,
+    /// Clickable regions of the overlay as the page reports them; see `hitboxes()`.
+    pub page_hitboxes: Mutex<Vec<Rect<Css>>>,
     /// Mirrors the last published `awake`, read lock-free by the cursor poller.
     pub awake: AtomicBool,
 }
@@ -156,11 +156,11 @@ impl AppState {
         }
     }
 
-    /// Clickable regions in logical px relative to the overlay's top-left corner.
-    pub fn hitboxes(&self) -> Vec<Rect> {
+    /// Clickable regions relative to the overlay's top-left corner.
+    pub fn hitboxes(&self) -> Vec<Rect<Logical>> {
         let zoom = crate::overlay::zoom();
         let rects = self.page_hitboxes.lock().unwrap();
-        rects.iter().map(|r| r.scaled(zoom)).collect()
+        rects.iter().map(|r| r.to_logical(zoom)).collect()
     }
 
     pub fn settings(&self) -> Settings {

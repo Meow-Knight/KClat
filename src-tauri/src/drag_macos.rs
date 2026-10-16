@@ -6,7 +6,7 @@
 //! the rest of the app works, and Settings shows a button that asks for it. The hook thread checks again every
 //! 2s and installs the tap as soon as the permission is there, without a restart.
 
-use super::{in_rect, Msg, Permission, EVENT_PERMISSION, GRABBING, ZONE};
+use super::{Msg, Permission, EVENT_PERMISSION, GRABBING, ZONE};
 use core_foundation::base::TCFType;
 use core_foundation::boolean::CFBoolean;
 use core_foundation::dictionary::{CFDictionary, CFDictionaryRef};
@@ -17,6 +17,7 @@ use core_graphics::event::{
     CGEventType, CGMouseButton, CallbackResult, EventField,
 };
 use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
+use klat_core::geometry::{Physical, Point};
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicPtr, AtomicU8, Ordering};
 use std::sync::mpsc::Sender;
@@ -52,9 +53,9 @@ extern "C" {
 }
 
 /// Cursor in the same physical px as the overlay's position (see cursor.rs), not CoreGraphics points.
-pub fn cursor() -> Option<(i32, i32)> {
+pub fn cursor() -> Option<Point<Physical, i32>> {
     let p = APP.get()?.cursor_position().ok()?;
-    Some((p.x.round() as i32, p.y.round() as i32))
+    Some(Point::new(p.x.round() as i32, p.y.round() as i32))
 }
 
 /// macOS already maps "left" to the primary button for left-handed setups.
@@ -113,7 +114,7 @@ fn set_permission(granted: bool) {
 fn pointer_in_zone() -> bool {
     let Some(p) = cursor() else { return false };
     ZONE.try_read()
-        .map(|z| z.iter().any(|r| in_rect(p, *r)))
+        .map(|z| z.iter().any(|r| r.contains(p)))
         .unwrap_or(false)
 }
 

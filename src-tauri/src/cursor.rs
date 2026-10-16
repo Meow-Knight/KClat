@@ -1,8 +1,8 @@
 //! Cursor poller (spec §9).
 //!
 //! - Click-through is turned off only while the cursor is over the cat or the bubble (both states).
-//! - While the cat is awake it emits `cat://cursor` for head tracking: logical px relative to the overlay's
-//!   top-left corner, or `null` when the cursor is on another monitor (the cat then looks at its bubble).
+//! - While the cat is awake it emits `cat://cursor` for head tracking: `{x, y}` in the page's CSS px, or `null`
+//!   when the cursor is on another monitor (the cat then looks at its bubble).
 //!
 //! - It also hands the clickable regions to the Space hook (see drag.rs).
 //!
@@ -11,8 +11,7 @@
 use crate::drag;
 use crate::overlay;
 use crate::state::AppState;
-use klat_core::geometry::{hit_test, to_overlay, Geometry, LookTracker};
-use serde::Serialize;
+use klat_core::geometry::{hit_test, to_overlay, LookTracker, OverlayFrame, Point, Rect};
 use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::Duration;
@@ -21,13 +20,6 @@ use tauri::{AppHandle, Emitter, Manager};
 pub const EVENT_CURSOR: &str = "cat://cursor";
 const AWAKE_PERIOD: Duration = Duration::from_millis(33);
 const ASLEEP_PERIOD: Duration = Duration::from_millis(200);
-
-/// `cat://cursor` payload; the event carries `null` when there is no usable cursor position.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
-pub struct CursorPoint {
-    pub x: f64,
-    pub y: f64,
-}
 
 pub fn start(app: AppHandle) {
     thread::Builder::new()
@@ -58,18 +50,18 @@ pub fn start(app: AppHandle) {
                 };
                 let monitor = win.current_monitor().ok().flatten().map(|m| {
                     let (p, s) = (m.position(), m.size());
-                    (p.x as f64, p.y as f64, s.width as f64, s.height as f64)
+                    Rect::new(p.x as f64, p.y as f64, s.width as f64, s.height as f64)
                 });
-                let geometry = Geometry {
-                    origin: (origin.x as f64, origin.y as f64),
+                let frame = OverlayFrame {
+                    origin: Point::new(origin.x as f64, origin.y as f64),
                     scale,
                     monitor,
                 };
-                let point = to_overlay((cursor.x, cursor.y), &geometry);
+                let point = to_overlay(Point::new(cursor.x, cursor.y), &frame);
 
                 let inside = {
                     let rects = state.hitboxes();
-                    drag::set_zone(geometry.origin, scale, &rects);
+                    drag::set_zone(frame.origin, scale, &rects);
                     // Never turn click-through on under a cat that is being dragged: the release must land on it.
                     drag::dragging() || hit_test(point, &rects)
                 };
@@ -78,15 +70,9 @@ pub fn start(app: AppHandle) {
                 }
 
                 if let Some(payload) = tracker.update(awake, point) {
-                    // The page works in CSS px: logical px divided by the webview zoom.
+                    // The page works in CSS px.
                     let zoom = crate::overlay::zoom();
-                    let _ = app.emit(
-                        EVENT_CURSOR,
-                        payload.map(|(x, y)| CursorPoint {
-                            x: x / zoom,
-                            y: y / zoom,
-                        }),
-                    );
+                    let _ = app.emit(EVENT_CURSOR, payload.map(|p| p.to_css(zoom)));
                 }
             }
         })

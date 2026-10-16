@@ -15,7 +15,7 @@
 use crate::log;
 use crate::overlay;
 use crate::state::{self, AppState};
-use klat_core::geometry::{clamp_window, in_rect, to_px, PxRect, Rect, WindowPos};
+use klat_core::geometry::{clamp_window, Logical, Physical, Point, Rect, WindowPos};
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::RwLock;
@@ -49,7 +49,7 @@ pub fn request_permission() {
 }
 
 /// Where Space starts a grab: the overlay's clickable regions in physical screen px (kept by the cursor poller).
-static ZONE: RwLock<Vec<PxRect>> = RwLock::new(Vec::new());
+static ZONE: RwLock<Vec<Rect<Physical, i32>>> = RwLock::new(Vec::new());
 /// Space is held and kept from the focused app.
 #[cfg_attr(not(any(windows, target_os = "macos")), allow(dead_code))]
 static GRABBING: AtomicBool = AtomicBool::new(false);
@@ -60,9 +60,9 @@ pub fn dragging() -> bool {
     DRAGGING.load(Ordering::Relaxed)
 }
 
-/// Called by the cursor poller with the overlay's geometry and its clickable regions (logical px).
-pub fn set_zone(origin: (f64, f64), scale: f64, rects: &[Rect]) {
-    let zone: Vec<PxRect> = rects.iter().map(|r| to_px(origin, scale, r)).collect();
+/// Called by the cursor poller with the overlay's top-left, its scale factor and its clickable regions.
+pub fn set_zone(origin: Point<Physical>, scale: f64, rects: &[Rect<Logical>]) {
+    let zone: Vec<_> = rects.iter().map(|r| r.to_physical(origin, scale)).collect();
     if let Ok(mut z) = ZONE.write() {
         if *z != zone {
             *z = zone;
@@ -98,7 +98,7 @@ fn run_grab(app: &AppHandle, rx: &std::sync::mpsc::Receiver<Msg>) {
     let _ = app.emit(EVENT_GRAB, "armed");
     let mut pressed = false;
     // Logical px from the window's top-left to the grab point, so a DPI change mid-drag keeps the cat in hand.
-    let mut grip: Option<(f64, f64)> = None;
+    let mut grip: Option<Point<Logical>> = None;
     let win = overlay::get(app);
     loop {
         match rx.recv_timeout(DRAG_PERIOD) {
@@ -113,42 +113,29 @@ fn run_grab(app: &AppHandle, rx: &std::sync::mpsc::Receiver<Msg>) {
         if grip.is_none() && platform::primary_button_down() {
             pressed = true;
             if let (Ok(origin), Ok(scale)) = (win.outer_position(), win.scale_factor()) {
-                grip = Some((
-                    (cursor.0 - origin.x) as f64 / scale,
-                    (cursor.1 - origin.y) as f64 / scale,
-                ));
+                let origin = overlay::screen_pos(origin).to_f64();
+                grip = Some(cursor.to_f64().to_logical(origin, scale));
                 DRAGGING.store(true, Ordering::Relaxed);
                 let _ = app.emit(EVENT_GRAB, "dragging");
             }
         }
-        if let Some((gx, gy)) = grip {
+        if let Some(grip) = grip {
             let scale = win.scale_factor().unwrap_or(1.0);
-            let mut pos = (
-                cursor.0 - (gx * scale).round() as i32,
-                cursor.1 - (gy * scale).round() as i32,
-            );
+            let mut pos = grip.window_at(cursor, scale);
             let cat = app
                 .state::<AppState>()
                 .hitboxes()
                 .first()
-                .map(|r| to_px((0.0, 0.0), scale, r));
+                .map(|r| r.to_physical(Point::new(0.0, 0.0), scale));
             let area = app
-                .monitor_from_point(cursor.0 as f64, cursor.1 as f64)
+                .monitor_from_point(f64::from(cursor.x), f64::from(cursor.y))
                 .ok()
                 .flatten()
-                .map(|m| {
-                    let a = m.work_area();
-                    (
-                        a.position.x,
-                        a.position.y,
-                        a.size.width as i32,
-                        a.size.height as i32,
-                    )
-                });
+                .map(|m| overlay::work_area(&m));
             if let (Some(cat), Some(area)) = (cat, area) {
                 pos = clamp_window(pos, cat, area);
             }
-            let _ = win.set_position(tauri::PhysicalPosition::new(pos.0, pos.1));
+            let _ = win.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
         }
     }
 
@@ -157,7 +144,7 @@ fn run_grab(app: &AppHandle, rx: &std::sync::mpsc::Receiver<Msg>) {
     if moved {
         if let Some(Ok(p)) = win.as_ref().map(|w| w.outer_position()) {
             log::info(format!("cat moved to {},{}", p.x, p.y));
-            state::update_settings(app, |s| s.position = Some(WindowPos { x: p.x, y: p.y }));
+            state::update_settings(app, |s| s.position = Some(WindowPos::new(p.x, p.y)));
         }
     } else if !pressed {
         // A plain tap while the pointer rested on the cat: give it back to the app you were typing in.
@@ -167,7 +154,8 @@ fn run_grab(app: &AppHandle, rx: &std::sync::mpsc::Receiver<Msg>) {
 
 #[cfg(windows)]
 mod platform {
-    use super::{in_rect, Msg, Permission, GRABBING, ZONE};
+    use super::{Msg, Permission, GRABBING, ZONE};
+    use klat_core::geometry::{Physical, Point};
     use std::sync::atomic::Ordering;
     use std::sync::mpsc::Sender;
     use std::sync::OnceLock;
@@ -190,10 +178,10 @@ mod platform {
         unsafe { GetAsyncKeyState(vk as i32) as u16 & 0x8000 != 0 }
     }
 
-    pub fn cursor() -> Option<(i32, i32)> {
+    pub fn cursor() -> Option<Point<Physical, i32>> {
         let mut p = POINT { x: 0, y: 0 };
         // SAFETY: `p` is a valid, writable POINT.
-        (unsafe { GetCursorPos(&mut p) } != 0).then_some((p.x, p.y))
+        (unsafe { GetCursorPos(&mut p) } != 0).then_some(Point::new(p.x, p.y))
     }
 
     /// The physical button that acts as "left" (swapped for left-handed setups).
@@ -231,7 +219,7 @@ mod platform {
         let Some(p) = cursor() else { return false };
         // Never block inside the hook: if the poller is writing right now, let this press through.
         ZONE.try_read()
-            .map(|z| z.iter().any(|r| in_rect(p, *r)))
+            .map(|z| z.iter().any(|r| r.contains(p)))
             .unwrap_or(false)
     }
 
@@ -316,9 +304,10 @@ mod platform;
 #[cfg(not(any(windows, target_os = "macos")))]
 mod platform {
     use super::{Msg, Permission};
+    use klat_core::geometry::{Physical, Point};
     use std::sync::mpsc::Sender;
 
-    pub fn cursor() -> Option<(i32, i32)> {
+    pub fn cursor() -> Option<Point<Physical, i32>> {
         None
     }
     pub fn primary_button_down() -> bool {
