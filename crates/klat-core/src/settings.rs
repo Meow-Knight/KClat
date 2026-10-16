@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 /// Platform Language: the tray, the Settings window and dialogs.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum UiLanguage {
@@ -18,6 +19,7 @@ pub enum UiLanguage {
 }
 
 /// Klat Language: what the cat says. Auto mixes both languages.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum KlatLanguage {
@@ -28,6 +30,7 @@ pub enum KlatLanguage {
 }
 
 /// Who sits in the corner (src/characters in the frontend). The overlay draws it; Rust only stores the choice.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Character {
@@ -38,6 +41,7 @@ pub enum Character {
 }
 
 /// Where the cat sits until you drag it. Only one corner so far.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Corner {
@@ -45,6 +49,7 @@ pub enum Corner {
     BottomRight,
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
@@ -63,6 +68,7 @@ pub struct Settings {
     pub start_at_login: bool,
     pub corner: Corner,
     /// Where you dragged the cat (window top-left, physical px); None = the corner.
+    #[cfg_attr(feature = "ts", ts(as = "Option<crate::geometry::wire::Point>"))]
     pub position: Option<WindowPos>,
 }
 
@@ -183,6 +189,11 @@ impl Settings {
 /// the patch resets the field rather than failing. `None` = the key was not in the patch.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(from = "Map<String, Value>")]
+#[cfg_attr(
+    feature = "ts",
+    derive(ts_rs::TS),
+    ts(rename_all = "camelCase", optional_fields)
+)]
 pub struct SettingsPatch {
     pub character: Option<Character>,
     pub notifications_enabled: Option<bool>,

@@ -2,100 +2,34 @@
 // src-tauri/src/ipc/).
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { WakeReason } from '../phrases/PhrasePicker';
-import type { AppSettings } from '../settings';
+import type {
+  CatState,
+  DragPermission,
+  GrabMode,
+  HooksAction,
+  HooksInfo,
+  HooksResult,
+  Point,
+  Rect,
+  Settings,
+  SettingsPatch,
+  ZoomChange,
+} from './generated';
 
-export interface SessionView {
-  projectName: string;
-  reason: WakeReason;
-}
+// Every type that crosses IPC is generated from Rust (./generated.ts); these names are what the windows import.
+export type * from './generated';
 
-/** The latest "a session needs you" moment; `seq` changes each time (see crates/klat-core/src/cat.rs). */
-export interface Attention {
-  seq: number;
-  projectName: string;
-  reason: WakeReason;
-}
-
-export interface CatStatePayload {
-  awake: boolean;
-  reason: WakeReason | null;
-  /** Sessions currently calling for you, oldest first. */
-  sessions: SessionView[];
-  attention: Attention | null;
-  /** Ready is armed: finished turns wake the cat until you turn it off. */
-  ready: boolean;
-  /** Why the latest change happened: 'user' (you answered or dismissed) or 'auto' (expiry, Pause). */
-  sleepCause: 'user' | 'auto';
-}
-
-/** Cursor in logical px relative to the overlay's top-left corner; null = on another monitor. */
-export type CursorPayload = { x: number; y: number } | null;
-
-/** Moving the cat with Space (see src-tauri/src/tasks/drag_loop.rs): Space held over the cat, then the mouse pressed. */
-export type GrabMode = 'idle' | 'armed' | 'dragging';
-
-/** Logical px relative to the overlay's top-left corner. */
-export interface HitRect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-/** Claude Code hooks, as crates/klat-infra/src/claude_settings.rs reports them. */
-export type HooksStatus = 'installed' | 'needs-repair' | 'not-installed';
-
-export interface HooksInfo {
-  status: HooksStatus;
-  /** `~/.claude/settings.json`; null when the home folder is unknown. */
-  settingsPath: string | null;
-}
-
-export interface HooksResult {
-  ok: boolean;
-  /** Text to show the user, success or error. */
-  message: string;
-}
-
-/** Whether dragging the cat needs a permission first (macOS: Accessibility). See src-tauri/src/platform/. */
-export type DragPermission = 'not-needed' | 'granted' | 'missing';
-
-/** What `overlayPreviewZoom` did (src-tauri/src/ui/overlay.rs `ZoomChange`): the webview zoom before and after, and
- * the page's size in CSS px, which is the same at every zoom. */
-export interface ZoomChange {
-  from: number;
-  to: number;
-  width: number;
-  height: number;
-}
-
-/** What the Settings window may change (`SettingsPatch` in crates/klat-core/src/settings.rs); Rust validates it again. */
-export type SettingsPatch = Partial<
-  Pick<
-    AppSettings,
-    | 'character'
-    | 'notificationsEnabled'
-    | 'hideWhileSleeping'
-    | 'sfwMode'
-    | 'uiLanguage'
-    | 'klatLanguage'
-    | 'yellIntervalMs'
-    | 'maxYellsPerWake'
-    | 'staleAfterMs'
-    | 'reduceMotion'
-    | 'catScale'
-  >
->;
+/** Cursor in the page's CSS px; null = on another monitor (the cat then looks at its bubble). */
+export type CursorPayload = Point | null;
 
 export const bridge = {
-  getState: (): Promise<CatStatePayload> => invoke('get_state'),
-  getSettings: (): Promise<AppSettings> => invoke('get_settings'),
+  getState: (): Promise<CatState> => invoke('get_state'),
+  getSettings: (): Promise<Settings> => invoke('get_settings'),
   dismiss: (): Promise<void> => invoke('dismiss'),
   setReady: (on: boolean): Promise<void> => invoke('set_ready', { on }),
-  setHitboxes: (rects: HitRect[]): Promise<void> => invoke('set_hitboxes', { rects }),
+  setHitboxes: (rects: Rect[]): Promise<void> => invoke('set_hitboxes', { rects }),
   /** Returns the settings now in effect (out-of-range values clamped). */
-  setSettings: (patch: SettingsPatch): Promise<AppSettings> => invoke('set_settings', { patch }),
+  setSettings: (patch: SettingsPatch): Promise<Settings> => invoke('set_settings', { patch }),
   /** Size slider being dragged: shows `scale` (percent) on the overlay without saving it. */
   previewCatScale: (scale: number): Promise<void> => invoke('preview_cat_scale', { scale }),
   /** Overlay only, with the cat hidden: window to the preview size (true) or back to the cat size (false). */
@@ -105,13 +39,13 @@ export const bridge = {
   wakeTest: (): Promise<void> => invoke('wake_test'),
   sleep: (): Promise<void> => invoke('sleep'),
   hooksStatus: (): Promise<HooksInfo> => invoke('hooks_status'),
-  hooksApply: (action: 'install' | 'uninstall'): Promise<HooksResult> => invoke('hooks_apply', { action }),
+  hooksApply: (action: HooksAction): Promise<HooksResult> => invoke('hooks_apply', { action }),
   dragPermission: (): Promise<DragPermission> => invoke('drag_permission'),
   openDragPermission: (): Promise<void> => invoke('open_drag_permission'),
   onDragPermission: (cb: (p: DragPermission) => void): Promise<UnlistenFn> =>
     listen<DragPermission>('cat://drag-permission', (e) => cb(e.payload)),
-  onState: (cb: (s: CatStatePayload) => void): Promise<UnlistenFn> => listen<CatStatePayload>('cat://state', (e) => cb(e.payload)),
-  onSettings: (cb: (s: AppSettings) => void): Promise<UnlistenFn> => listen<AppSettings>('cat://settings', (e) => cb(e.payload)),
+  onState: (cb: (s: CatState) => void): Promise<UnlistenFn> => listen<CatState>('cat://state', (e) => cb(e.payload)),
+  onSettings: (cb: (s: Settings) => void): Promise<UnlistenFn> => listen<Settings>('cat://settings', (e) => cb(e.payload)),
   /** 30Hz while the cat is awake, only when the cursor moved (see src-tauri/src/tasks/cursor_poller.rs). */
   onCursor: (cb: (p: CursorPayload) => void): Promise<UnlistenFn> => listen<CursorPayload>('cat://cursor', (e) => cb(e.payload)),
   /** Size slider preview: the cat's scale relative to the page, or null when the drag is over. */

@@ -1,5 +1,6 @@
 // Composes renderer, rig, controller, bubble and render loop inside one container element.
 // Shared by the overlay window and the browser dev page.
+import type { Rect } from '../bridge/generated';
 import * as THREE from 'three';
 import { Bubble } from '../bubble/Bubble';
 import { ReadyButton } from '../bubble/ReadyButton';
@@ -34,13 +35,8 @@ const pixelRatio = () => Math.min(window.devicePixelRatio, 3);
 /** How long the cat's "fine, I'll wake you" reply stays up. */
 const READY_REPLY_MS = 2200;
 
-/** Logical px relative to the stage's top-left corner. */
-export interface StageRect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
+/** CSS px relative to the stage's top-left corner; what `set_hitboxes` takes. */
+export type StageRect = Rect;
 
 export interface StageCallbacks {
   /** The bubble was clicked. */

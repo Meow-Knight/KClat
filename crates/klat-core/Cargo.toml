@@ -12,6 +12,11 @@ serde = { workspace = true }
 # preserve_order: Install and Uninstall keep the keys of people's settings.json in their order, also when
 # klat-core is built on its own (`cargo test -p klat-core`).
 serde_json = { workspace = true, features = ["preserve_order"] }
+ts-rs = { workspace = true, optional = true }
+
+[features]
+# TypeScript declarations of the types that cross IPC (src-tauri's tests write src/bridge/generated.ts).
+ts = ["dep:ts-rs"]
 
 [lints]
 workspace = true

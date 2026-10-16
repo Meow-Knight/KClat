@@ -35,6 +35,7 @@ pub struct UnexpectedShape(pub &'static str);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "HooksStatus"))]
 pub enum Status {
     NotInstalled,
     /// Some of our entries are missing, or point at another exe path.

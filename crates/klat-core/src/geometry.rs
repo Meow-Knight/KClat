@@ -49,6 +49,27 @@ pub struct Rect<U, N = f64> {
 /// A window's top-left corner on screen, as saved in settings (`position`).
 pub type WindowPos = Point<Physical, i32>;
 
+/// What `Point` and `Rect` look like on the wire, whatever their unit, for the TypeScript declarations. A test
+/// checks that they serialize alike.
+#[cfg(feature = "ts")]
+pub mod wire {
+    /// A point `{x, y}`, in whatever unit the field or event says.
+    #[derive(ts_rs::TS, serde::Serialize)]
+    pub struct Point {
+        pub x: f64,
+        pub y: f64,
+    }
+
+    /// A rectangle `{x, y, w, h}`: top-left corner, width and height, in whatever unit the field or event says.
+    #[derive(ts_rs::TS, serde::Serialize)]
+    pub struct Rect {
+        pub x: f64,
+        pub y: f64,
+        pub w: f64,
+        pub h: f64,
+    }
+}
+
 impl<U, N> Point<U, N> {
     pub const fn new(x: N, y: N) -> Self {
         Self {

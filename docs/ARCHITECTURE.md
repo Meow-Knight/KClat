@@ -139,7 +139,7 @@ Thứ tự tầng, trong ra ngoài. Một thư mục chỉ được import từ 
 | 1 | `kit/` | Bộ dựng toon dùng chung: mesh, viền, mặt, fx, chuyển động, kiểu `CharacterRig` và `CatPose` | Không biết nhân vật cụ thể nào |
 | 2 | `characters/` (bao gồm `CatRig`) | Mỗi nhân vật một rig + registry `characters/index.ts` | Chỉ import `kit/` + tầng 0 |
 | 3 | `cat/` (bộ não + stage), `bubble/` | `CatController` (thuần), `CatStage`, `RenderLoop`, bong bóng | Lấy rig qua registry, không import rig cụ thể |
-| 4 | `bridge/` | **Nơi duy nhất** import `@tauri-apps/*`; type sinh từ Rust | |
+| 4 | `bridge/` | **Nơi duy nhất** import `@tauri-apps/*`; type sinh từ Rust | `bridge/generated.ts` chỉ có type, không code: mọi tầng được `import type` từ nó (coi như tầng 0) |
 | 5 | `overlay/`, `settings-window/` | Entry point, composition root của từng cửa sổ | Nối bridge với tầng 0–3 |
 
 ---
@@ -335,8 +335,9 @@ là entry của OS).
 
 ### 7.6 Hợp đồng IPC với frontend
 
-- Struct đi qua IPC: `#[derive(Serialize)] #[serde(rename_all = "camelCase")]` + derive sinh TS (`ts-rs` hoặc `tauri-specta`).
-- File sinh `src/bridge/generated.ts` được commit; `pnpm check` báo lỗi nếu sinh lại khác bản đã commit (repo không có remote/CI: gate chạy cục bộ).
+- Struct đi qua IPC: `#[derive(Serialize)] #[serde(rename_all = "camelCase")]` + `ts_rs::TS`. Trong `klat-core`/`klat-infra`: `#[cfg_attr(feature = "ts", derive(ts_rs::TS))]`; trong app: `#[cfg_attr(test, derive(ts_rs::TS))]`. Feature `ts` chỉ được bật qua dev-dependency của `src-tauri`, nên bản release không có ts-rs.
+- Type mới qua IPC: thêm một dòng `declare::<T>()` trong `src-tauri/src/ipc/bindings.rs`, chạy `pnpm gen:types`, commit cả `src/bridge/generated.ts`. Test trong `bindings.rs` so file với type Rust, nên `pnpm check` (bước `test:rust`) fail khi file cũ (repo không có remote/CI: gate chạy cục bộ).
+- Type có tham số đơn vị (`Point<U>`, `Rect<U>`): TS nhận hình dạng qua `klat_core::geometry::wire`, có test khẳng định serialize giống nhau.
 - Tên event: const trong `ipc/events.rs`, tiền tố `cat://`.
 
 ### 7.7 Cấm
@@ -539,3 +540,4 @@ pnpm check --skip audit # khi offline (cargo audit cần tải advisory DB); c�
 | Ngày | Quyết định | Lý do |
 |---|---|---|
 | 2026-10-16 | Áp dụng kiến trúc phân tầng protocol / core / infra / app | Tách logic khỏi Tauri để test và mở rộng; một nguồn sự thật cho giao thức hook; xoá phụ thuộc vòng và global state |
+| 2026-10-16 | Type TS sinh bằng `ts-rs` 12 (chỉ lúc test), không dùng `tauri-specta` | ts-rs đã ổn định (12.0.1) và không đổi cách gọi `invoke`; tauri-specta vẫn là bản RC (2.0.0-rc.25) cho Tauri 2. Đổi khi tauri-specta ổn định và ta muốn sinh luôn wrapper command |

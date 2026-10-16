@@ -1,37 +1,24 @@
 // Settings file (spec §10, docs/specs/settings-i18n-macos.md §2). Rust owns load/save and validation; the
 // overlay and the Settings window receive them via the bridge.
+// The types are generated from Rust (bridge/generated.ts, pure types: any layer may import them).
+import type { Character, KlatLanguage, Settings } from './bridge/generated';
 import type { PhraseLang } from './phrases/phrases';
 
-/** Platform Language: the tray, the Settings window and dialogs. */
-export type UiLanguage = 'en' | 'vi';
-/** Klat Language: what the cat says. Auto mixes both languages. */
-export type KlatLanguage = PhraseLang | 'auto';
+export type { KlatLanguage, UiLanguage } from './bridge/generated';
 /** Who sits in the corner (src/characters). */
-export const CHARACTERS = ['cat', 'snake', 'dragon'] as const;
-export type CharacterId = (typeof CHARACTERS)[number];
+export type CharacterId = Character;
+/** Every character once; a character added in Rust and missing here fails to compile. */
+const CHARACTER_SET: Record<CharacterId, true> = { cat: true, snake: true, dragon: true };
+export const CHARACTERS = Object.keys(CHARACTER_SET) as readonly CharacterId[];
+
+/** The settings file, as Rust sends it (`Settings` in crates/klat-core/src/settings.rs). */
+export type AppSettings = Settings;
 
 /** The part of the settings the cat itself uses. */
-export interface CatSettings {
-  character: CharacterId;
-  sfwMode: boolean;
-  klatLanguage: KlatLanguage;
-  yellIntervalMs: number;
-  maxYellsPerWake: number;
-  reduceMotion: boolean;
-}
-
-export interface AppSettings extends CatSettings {
-  notificationsEnabled: boolean;
-  hideWhileSleeping: boolean;
-  uiLanguage: UiLanguage;
-  staleAfterMs: number;
-  /** Cat size in percent (CAT_SCALE range). Rust sizes and zooms the overlay window; the page does not see it. */
-  catScale: number;
-  startAtLogin: boolean;
-  corner: 'bottom-right';
-  /** Where the cat was dragged (window top-left, physical px); null = the corner. */
-  position: { x: number; y: number } | null;
-}
+export type CatSettings = Pick<
+  AppSettings,
+  'character' | 'sfwMode' | 'klatLanguage' | 'yellIntervalMs' | 'maxYellsPerWake' | 'reduceMotion'
+>;
 
 export const DEFAULT_SETTINGS: Readonly<AppSettings> = {
   character: 'cat',

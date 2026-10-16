@@ -71,6 +71,7 @@ pub fn default_exe_path() -> io::Result<PathBuf> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "HooksAction"))]
 pub enum Action {
     Install,
     Uninstall,

@@ -2,3 +2,6 @@
 
 pub mod commands;
 pub mod events;
+
+#[cfg(test)]
+mod bindings;

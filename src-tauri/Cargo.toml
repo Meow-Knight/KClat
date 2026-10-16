@@ -40,3 +40,7 @@ windows-sys = { version = "0.61.2", features = [
 
 [dev-dependencies]
 tempfile = { workspace = true }
+# src/bridge/generated.ts is written from these (ipc/bindings.rs); release builds never see them.
+klat-core = { workspace = true, features = ["ts"] }
+klat-infra = { workspace = true, features = ["ts"] }
+ts-rs = { workspace = true }

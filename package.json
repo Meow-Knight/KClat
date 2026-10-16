@@ -20,7 +20,8 @@
     "check": "node scripts/check.mjs",
     "check:mac": "node scripts/check-macos.mjs",
     "measure": "node scripts/measure.mjs",
-    "regress": "node scripts/regress.mjs"
+    "regress": "node scripts/regress.mjs",
+    "gen:types": "node scripts/gen-types.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.2",

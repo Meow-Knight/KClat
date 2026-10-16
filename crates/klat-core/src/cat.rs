@@ -14,9 +14,11 @@ use serde::Serialize;
 
 /// The latest "a session needs you" moment. `seq` changes on each one, so the overlay can tell a new
 /// session (or a new reason) that arrives while the cat is already awake and yell again.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Attention {
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub seq: u64,
     pub project_name: String,
     pub reason: WakeReason,
@@ -25,6 +27,7 @@ pub struct Attention {
 /// Why the last change happened, so the overlay can pick how the cat falls asleep: knocked out by a flying
 /// object when you did something (answered Claude, dismissed, turned Ready off), a yawn when nobody did
 /// (a waiting session expired, notifications were paused).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SleepCause {
@@ -32,6 +35,7 @@ pub enum SleepCause {
     Auto,
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CatState {

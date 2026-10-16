@@ -15,6 +15,7 @@ use klat_protocol::{HookEvent, HookName};
 use serde::Serialize;
 use std::collections::HashMap;
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum WakeReason {
@@ -102,6 +103,7 @@ pub enum Outcome {
     Changed,
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionView {

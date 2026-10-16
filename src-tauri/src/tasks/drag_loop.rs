@@ -10,9 +10,9 @@
 //!
 //! While grabbing, pressing the primary mouse button starts the drag: the window follows the cursor (~120Hz)
 //! until Space is released. The cat is kept inside the work area of the monitor under the cursor.
-//! The overlay is told through `cat://grab` ("idle" | "armed" | "dragging"), so it can ignore the click.
+//! The overlay is told through `cat://grab` ([`GrabMode`]), so it can ignore the click.
 
-use crate::ipc::events::{EVENT_GRAB, EVENT_PERMISSION};
+use crate::ipc::events::{GrabMode, EVENT_GRAB, EVENT_PERMISSION};
 use crate::platform::{self, Msg};
 use crate::services::cat_service::CatService;
 use crate::ui::overlay::{self, OverlayState};
@@ -49,7 +49,7 @@ fn run_grab(
     overlay_state: &OverlayState,
     rx: &std::sync::mpsc::Receiver<Msg>,
 ) {
-    let _ = app.emit(EVENT_GRAB, "armed");
+    let _ = app.emit(EVENT_GRAB, GrabMode::Armed);
     let mut pressed = false;
     // Logical px from the window's top-left to the grab point, so a DPI change mid-drag keeps the cat in hand.
     let mut grip: Option<Point<Logical>> = None;
@@ -70,7 +70,7 @@ fn run_grab(
                 let origin = overlay::screen_pos(origin).to_f64();
                 grip = Some(cursor.to_f64().to_logical(origin, scale));
                 overlay_state.set_dragging(true);
-                let _ = app.emit(EVENT_GRAB, "dragging");
+                let _ = app.emit(EVENT_GRAB, GrabMode::Dragging);
             }
         }
         if let Some(grip) = grip {
@@ -93,7 +93,7 @@ fn run_grab(
     }
 
     let moved = overlay_state.set_dragging(false);
-    let _ = app.emit(EVENT_GRAB, "idle");
+    let _ = app.emit(EVENT_GRAB, GrabMode::Idle);
     if moved {
         if let Some(Ok(p)) = win.as_ref().map(|w| w.outer_position()) {
             log::info!("cat moved to {},{}", p.x, p.y);

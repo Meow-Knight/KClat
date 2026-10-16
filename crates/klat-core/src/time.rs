@@ -18,6 +18,7 @@ pub struct UnixMs(pub u64);
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
 )]
 #[serde(transparent)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(type = "number"))]
 pub struct DurationMs(pub u64);
 
 impl UnixMs {

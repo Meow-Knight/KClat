@@ -207,6 +207,7 @@ pub fn end_preview(app: &AppHandle, overlay: &OverlayState) -> bool {
 
 /// What `preview_zoom` did, for the page to know when the switch has landed.
 #[derive(Debug, Clone, Copy, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 pub struct ZoomChange {
     pub from: f64,
     pub to: f64,

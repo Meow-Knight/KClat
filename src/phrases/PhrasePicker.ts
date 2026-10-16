@@ -1,7 +1,9 @@
 // Phrase selection rules from spec §7.2.
 import type { Phrase, PhraseLang } from './phrases';
 
-export type WakeReason = 'done' | 'permission' | 'input';
+import type { WakeReason } from '../bridge/generated';
+
+export type { WakeReason };
 
 export interface PickerOptions {
   sfwMode: boolean;

@@ -38,6 +38,7 @@ pub use webview_memory::scrub_env;
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(rename = "DragPermission"))]
 pub enum Permission {
     NotNeeded,
     Granted,

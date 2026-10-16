@@ -1,5 +1,5 @@
 // Overlay window entry: wires Tauri state/settings events to the cat, and reports hitboxes for click-through.
-import { bridge, type CatStatePayload, type ZoomChange } from '../bridge/tauriBridge';
+import { bridge, type CatState, type ZoomChange } from '../bridge/tauriBridge';
 import { CatStage } from '../cat/CatStage';
 import type { CatPhase } from '../cat/CatController';
 import { CAT_SCALE, type AppSettings } from '../settings';
@@ -30,7 +30,7 @@ function syncHidden(): void {
 
 let lastAttention = 0;
 
-function applyState(s: CatStatePayload): void {
+function applyState(s: CatState): void {
   stage.setReady(s.ready);
   // Name the project only when more than one session is waiting (spec §7.2 rule 5).
   stage.setSubtitle(s.sessions.length > 1 ? s.attention?.projectName || undefined : undefined);

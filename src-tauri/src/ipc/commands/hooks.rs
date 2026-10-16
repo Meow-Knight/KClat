@@ -9,6 +9,7 @@ use tauri::{AppHandle, Manager};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS))]
 pub struct HooksInfo {
     pub status: Status,
     /// `~/.claude/settings.json`; None when the home folder is unknown.
@@ -24,8 +25,10 @@ pub fn hooks_status() -> HooksInfo {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 pub struct HooksResult {
     pub ok: bool,
+    /// Text to show the user, success or error.
     pub message: String,
 }
 
