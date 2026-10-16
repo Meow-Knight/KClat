@@ -2,6 +2,7 @@
 //! about bad requests. Pure: no Tauri, no files or sockets, no clock, no threads, no logging. The app passes
 //! the time in and logs or publishes what these functions return, so every rule is tested here in milliseconds.
 
+pub mod cat;
 pub mod claude_hooks;
 pub mod geometry;
 pub mod i18n;
