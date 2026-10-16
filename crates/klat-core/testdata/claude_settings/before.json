@@ -1,0 +1,26 @@
+{
+  "permissions": { "allow": ["Bash(ls)"], "deny": [] },
+  "model": "opus",
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Bash", "hooks": [ { "type": "command", "command": "rtk hook claude" } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "notify-send done", "timeout": 5 } ] },
+      { "hooks": [ { "type": "command", "command": "\"C:\\Old Place\\claude-cat-hook.exe\" Stop" } ] }
+    ],
+    "SubagentStop": [
+      { "hooks": [ { "type": "command", "command": "C:\\Old Place\\claude-cat-hook.exe", "args": ["SubagentStop"] } ] }
+    ],
+    "Notification": [
+      { "matcher": "", "hooks": [
+        { "type": "command", "command": "say hi" },
+        { "type": "command", "command": "D:\\x\\KLAT-HOOK.EXE", "args": ["Notification"], "timeout": 1 },
+        { "type": "command", "command": "/opt/klat/klat-hook", "args": ["Notification"] }
+      ] }
+    ],
+    "UserPromptSubmit": []
+  },
+  "env": { "ZED": "1", "ALPHA": "2" },
+  "theme": "dark"
+}

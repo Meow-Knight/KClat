@@ -1,0 +1,167 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls)"
+    ],
+    "deny": []
+  },
+  "model": "opus",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "rtk hook claude"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "notify-send done",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Program Files\\Klat\\klat-hook.exe",
+            "args": [
+              "Stop"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "say hi"
+          },
+          {
+            "type": "command",
+            "command": "C:\\Program Files\\Klat\\klat-hook.exe",
+            "args": [
+              "Notification"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Program Files\\Klat\\klat-hook.exe",
+            "args": [
+              "UserPromptSubmit"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Program Files\\Klat\\klat-hook.exe",
+            "args": [
+              "StopFailure"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Program Files\\Klat\\klat-hook.exe",
+            "args": [
+              "PermissionRequest"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Program Files\\Klat\\klat-hook.exe",
+            "args": [
+              "PostToolUse"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Program Files\\Klat\\klat-hook.exe",
+            "args": [
+              "PostToolUseFailure"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Program Files\\Klat\\klat-hook.exe",
+            "args": [
+              "PermissionDenied"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Program Files\\Klat\\klat-hook.exe",
+            "args": [
+              "SessionEnd"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ]
+  },
+  "env": {
+    "ZED": "1",
+    "ALPHA": "2"
+  },
+  "theme": "dark"
+}

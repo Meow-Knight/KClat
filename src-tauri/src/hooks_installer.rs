@@ -612,6 +612,56 @@ mod tests {
         ));
     }
 
+    /// Golden files (crates/klat-core/testdata/claude_settings): a settings.json with someone else's hooks in
+    /// several shapes, our entries from before the rename (shell form, an event we no longer use) and from
+    /// other folders, an empty event list, and keys in no particular order. The expected files were written by
+    /// this code; any change to them is a change in what Install and Uninstall do to people's files.
+    mod golden {
+        use super::*;
+
+        const BEFORE: &str =
+            include_str!("../../crates/klat-core/testdata/claude_settings/before.json");
+        const INSTALLED: &str =
+            include_str!("../../crates/klat-core/testdata/claude_settings/installed.json");
+        const UNINSTALLED: &str =
+            include_str!("../../crates/klat-core/testdata/claude_settings/uninstalled.json");
+        const UNINSTALLED_FROM_BEFORE: &str = include_str!(
+            "../../crates/klat-core/testdata/claude_settings/uninstalled_from_before.json"
+        );
+
+        fn text(v: &Value) -> String {
+            serde_json::to_string_pretty(v).unwrap() + "\n"
+        }
+        /// The files may be checked out with CRLF.
+        fn lf(s: &str) -> String {
+            s.replace("\r\n", "\n")
+        }
+
+        #[test]
+        fn install_writes_exactly_this() {
+            let mut v: Value = serde_json::from_str(BEFORE).unwrap();
+            install_into(&mut v, EXE).unwrap();
+            assert_eq!(text(&v), lf(INSTALLED));
+            assert_eq!(status(&v, EXE), Status::Installed);
+        }
+
+        #[test]
+        fn uninstall_after_install_writes_exactly_this() {
+            let mut v: Value = serde_json::from_str(INSTALLED).unwrap();
+            assert!(uninstall_from(&mut v).unwrap());
+            assert_eq!(text(&v), lf(UNINSTALLED));
+            assert_eq!(status(&v, EXE), Status::NotInstalled);
+        }
+
+        #[test]
+        fn uninstall_of_the_old_entries_writes_exactly_this() {
+            let mut v: Value = serde_json::from_str(BEFORE).unwrap();
+            assert_eq!(status(&v, EXE), Status::NeedsRepair);
+            assert!(uninstall_from(&mut v).unwrap());
+            assert_eq!(text(&v), lf(UNINSTALLED_FROM_BEFORE));
+        }
+    }
+
     // ---- file-level behaviour ----
 
     struct Env {
