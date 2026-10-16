@@ -12,24 +12,16 @@
 //! until Space is released. The cat is kept inside the work area of the monitor under the cursor.
 //! The overlay is told through `cat://grab` ("idle" | "armed" | "dragging"), so it can ignore the click.
 
-use crate::ipc::events::EVENT_GRAB;
+use crate::ipc::events::{EVENT_GRAB, EVENT_PERMISSION};
 use crate::platform::{self, Msg};
 use crate::services::cat_service::CatService;
 use crate::ui::overlay::{self, OverlayState};
 use klat_core::geometry::{clamp_window, Logical, Point, WindowPos};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
 const DRAG_PERIOD: Duration = Duration::from_millis(8);
-
-/// The window is following the cursor.
-static DRAGGING: AtomicBool = AtomicBool::new(false);
-
-pub fn dragging() -> bool {
-    DRAGGING.load(Ordering::Relaxed)
-}
 
 pub fn start(app: AppHandle, service: Arc<CatService>, overlay_state: Arc<OverlayState>) {
     let (tx, rx) = std::sync::mpsc::channel::<Msg>();
@@ -44,7 +36,10 @@ pub fn start(app: AppHandle, service: Arc<CatService>, overlay_state: Arc<Overla
             }
         })
         .expect("failed to start the drag worker");
-    platform::install_hook(app, tx);
+    let emitter = app.clone();
+    platform::install_hook(app, tx, move |permission| {
+        let _ = emitter.emit(EVENT_PERMISSION, permission);
+    });
 }
 
 /// One Space hold: wait for the mouse button, follow the cursor, save on release.
@@ -74,7 +69,7 @@ fn run_grab(
             if let (Ok(origin), Ok(scale)) = (win.outer_position(), win.scale_factor()) {
                 let origin = overlay::screen_pos(origin).to_f64();
                 grip = Some(cursor.to_f64().to_logical(origin, scale));
-                DRAGGING.store(true, Ordering::Relaxed);
+                overlay_state.set_dragging(true);
                 let _ = app.emit(EVENT_GRAB, "dragging");
             }
         }
@@ -97,7 +92,7 @@ fn run_grab(
         }
     }
 
-    let moved = DRAGGING.swap(false, Ordering::Relaxed);
+    let moved = overlay_state.set_dragging(false);
     let _ = app.emit(EVENT_GRAB, "idle");
     if moved {
         if let Some(Ok(p)) = win.as_ref().map(|w| w.outer_position()) {

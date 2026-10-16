@@ -44,6 +44,9 @@ pub enum Permission {
     Missing,
 }
 
+// ZONE and GRABBING are statics (docs/ARCHITECTURE.md §7.2): the keyboard hook reads them inside the OS callback
+// (WH_KEYBOARD_LL on Windows, the CGEventTap on macOS), which gets no state of ours.
+
 /// Where Space starts a grab: the overlay's clickable regions in physical screen px (kept by the cursor poller).
 static ZONE: RwLock<Vec<Rect<Physical, i32>>> = RwLock::new(Vec::new());
 /// Space is held and kept from the focused app.

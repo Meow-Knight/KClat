@@ -10,7 +10,6 @@
 
 use crate::ipc::events::EVENT_CURSOR;
 use crate::platform;
-use crate::tasks::drag_loop;
 use crate::ui::overlay::{self, OverlayState};
 use klat_core::cat::CatState;
 use klat_core::geometry::{hit_test, to_overlay, LookTracker, OverlayFrame, Point, Rect};
@@ -64,7 +63,7 @@ pub fn start(app: AppHandle, state: Receiver<CatState>, overlay_state: Arc<Overl
                     let rects = overlay_state.hitboxes();
                     platform::set_zone(frame.origin, scale, &rects);
                     // Never turn click-through on under a cat that is being dragged: the release must land on it.
-                    drag_loop::dragging() || hit_test(point, &rects)
+                    overlay_state.dragging() || hit_test(point, &rects)
                 };
                 if inside != interactive && win.set_ignore_cursor_events(!inside).is_ok() {
                     interactive = inside;
@@ -72,7 +71,7 @@ pub fn start(app: AppHandle, state: Receiver<CatState>, overlay_state: Arc<Overl
 
                 if let Some(payload) = tracker.update(awake, point) {
                     // The page works in CSS px.
-                    let zoom = overlay::zoom();
+                    let zoom = overlay_state.zoom();
                     let _ = app.emit(EVENT_CURSOR, payload.map(|p| p.to_css(zoom)));
                 }
             }

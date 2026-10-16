@@ -17,6 +17,8 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     WM_SYSKEYDOWN, WM_SYSKEYUP,
 };
 
+/// Where the hook reports grabs. A static (docs/ARCHITECTURE.md §7.2): WH_KEYBOARD_LL calls `hook` with no user
+/// data.
 static TX: OnceLock<Sender<Msg>> = OnceLock::new();
 
 fn held(vk: u16) -> bool {
@@ -115,7 +117,11 @@ pub fn permission() -> Permission {
 
 pub fn request_permission() {}
 
-pub fn install_hook(_app: tauri::AppHandle, tx: Sender<Msg>) {
+pub fn install_hook(
+    _app: tauri::AppHandle,
+    tx: Sender<Msg>,
+    _on_permission: impl Fn(Permission) + Send + 'static,
+) {
     let _ = TX.set(tx);
     std::thread::Builder::new()
         .name("space-hook".into())

@@ -13,8 +13,10 @@ use klat_core::cat::CatState;
 #[cfg(windows)]
 use std::sync::atomic::{AtomicU64, Ordering};
 #[cfg(windows)]
+use std::sync::Arc;
+#[cfg(windows)]
 use std::time::Duration;
-use tauri::AppHandle;
+use tauri::WebviewWindow;
 use tokio::sync::watch::Receiver;
 
 /// Browser arguments for every webview: wry's defaults (it drops them when you pass your own) plus the
@@ -45,60 +47,53 @@ pub fn scrub_env() {
 #[cfg(windows)]
 const SETTLE: Duration = Duration::from_millis(3000);
 
-/// Bumped on every awake change, so a trim scheduled before the cat woke up again is dropped.
+/// Follows the cat: normal memory while it is awake, low once it has settled asleep. Starts from the state now
+/// (asleep at launch, so the page is trimmed once it has settled).
 #[cfg(windows)]
-static GENERATION: AtomicU64 = AtomicU64::new(0);
-
-/// Follows the cat: normal memory while it is awake, low once it has settled asleep.
-#[cfg(windows)]
-pub fn follow(app: &AppHandle, mut state: Receiver<CatState>) {
-    let app = app.clone();
+pub fn follow(win: WebviewWindow, mut state: Receiver<CatState>) {
+    // Bumped on every awake change, so a trim scheduled before the cat woke up again is dropped.
+    let generation = Arc::new(AtomicU64::new(0));
+    let mut awake = state.borrow().awake;
+    awake_changed(&win, &generation, awake);
     tauri::async_runtime::spawn(async move {
-        let mut awake = state.borrow().awake;
         while state.changed().await.is_ok() {
             let now = state.borrow_and_update().awake;
             if now != awake {
                 awake = now;
-                awake_changed(&app, awake);
+                awake_changed(&win, &generation, awake);
             }
         }
     });
 }
 
 #[cfg(not(windows))]
-pub fn follow(_app: &AppHandle, _state: Receiver<CatState>) {}
+pub fn follow(_win: WebviewWindow, _state: Receiver<CatState>) {}
 
-/// Called when the cat wakes up or falls asleep (and once at startup, asleep).
+/// The cat woke up or fell asleep.
 #[cfg(windows)]
-pub fn awake_changed(app: &AppHandle, awake: bool) {
-    let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
+fn awake_changed(win: &WebviewWindow, generation: &Arc<AtomicU64>, awake: bool) {
+    let current = generation.fetch_add(1, Ordering::SeqCst) + 1;
     if awake {
-        set_low(app, false);
+        set_low(win, false);
         return;
     }
-    let app = app.clone();
+    let (win, generation) = (win.clone(), generation.clone());
     std::thread::spawn(move || {
         std::thread::sleep(SETTLE);
-        if GENERATION.load(Ordering::SeqCst) == generation {
-            set_low(&app, true);
+        if generation.load(Ordering::SeqCst) == current {
+            set_low(&win, true);
         }
     });
 }
 
-#[cfg(not(windows))]
-pub fn awake_changed(_app: &AppHandle, _awake: bool) {}
-
 #[cfg(windows)]
-fn set_low(app: &AppHandle, low: bool) {
+fn set_low(win: &WebviewWindow, low: bool) {
     use webview2_com::Microsoft::Web::WebView2::Win32::{
         ICoreWebView2_19, COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW,
         COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL,
     };
     use windows_core::Interface;
 
-    let Some(win) = crate::ui::overlay::get(app) else {
-        return;
-    };
     let level = if low {
         COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW
     } else {

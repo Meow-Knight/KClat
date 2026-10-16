@@ -16,7 +16,6 @@ pub const EVENT_CURSOR: &str = "cat://cursor";
 /// Dragging the cat with Space: "idle" | "armed" | "dragging" (see tasks::drag_loop).
 pub const EVENT_GRAB: &str = "cat://grab";
 /// macOS: the Accessibility permission the Space hook needs changed (payload: `platform::Permission`).
-#[allow(dead_code)] // only macOS emits it
 pub const EVENT_PERMISSION: &str = "cat://drag-permission";
 /// Size slider being dragged: the scale to show, as a factor of the page's size at `PREVIEW_ZOOM`; null when
 /// the drag ends.

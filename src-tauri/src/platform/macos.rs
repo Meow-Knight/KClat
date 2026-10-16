@@ -7,7 +7,6 @@
 //! 2s and installs the tap as soon as the permission is there, without a restart.
 
 use super::{Msg, Permission, GRABBING, ZONE};
-use crate::ipc::events::EVENT_PERMISSION;
 use core_foundation::base::TCFType;
 use core_foundation::boolean::CFBoolean;
 use core_foundation::dictionary::{CFDictionary, CFDictionaryRef};
@@ -24,7 +23,7 @@ use std::sync::atomic::{AtomicPtr, AtomicU8, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::OnceLock;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
 /// kVK_Space.
 const SPACE: i64 = 49;
@@ -33,11 +32,16 @@ const OUR_EVENT: i64 = 0x4b4c_4154; // "KLAT"
 const RECHECK: Duration = Duration::from_secs(2);
 const PANE: &str = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
 
+// Statics (docs/ARCHITECTURE.md §7.2): the tap callback and the free functions of the platform API (`cursor`,
+// `permission`) are called without any state of ours to hand them, so what they read is kept here.
+
+/// For the cursor position, which `cursor()` reads through Tauri.
 static APP: OnceLock<AppHandle> = OnceLock::new();
+/// Where the tap callback reports grabs.
 static TX: OnceLock<Sender<Msg>> = OnceLock::new();
 /// The tap's mach port, to switch it back on when macOS disables it (slow callback, secure input).
 static TAP_PORT: AtomicPtr<c_void> = AtomicPtr::new(std::ptr::null_mut());
-/// 0 = not known yet, 1 = granted, 2 = missing.
+/// 0 = not known yet, 1 = granted, 2 = missing. Read by `permission()`, which the Settings window asks.
 static PERMISSION: AtomicU8 = AtomicU8::new(0);
 
 #[link(name = "ApplicationServices", kind = "framework")]
@@ -103,12 +107,10 @@ pub fn request_permission() {
     let _ = std::process::Command::new("open").arg(PANE).spawn();
 }
 
-fn set_permission(granted: bool) {
+fn set_permission(on_permission: &impl Fn(Permission), granted: bool) {
     let value = if granted { 1 } else { 2 };
     if PERMISSION.swap(value, Ordering::Relaxed) != value {
-        if let Some(app) = APP.get() {
-            let _ = app.emit(EVENT_PERMISSION, permission());
-        }
+        on_permission(permission());
     }
 }
 
@@ -172,18 +174,22 @@ fn on_event(kind: CGEventType, event: &CGEvent) -> CallbackResult {
     CallbackResult::Keep
 }
 
-pub fn install_hook(app: AppHandle, tx: Sender<Msg>) {
+pub fn install_hook(
+    app: AppHandle,
+    tx: Sender<Msg>,
+    on_permission: impl Fn(Permission) + Send + 'static,
+) {
     let _ = APP.set(app);
     let _ = TX.set(tx);
     std::thread::Builder::new()
         .name("space-hook".into())
-        .spawn(|| {
+        .spawn(move || {
             // SAFETY: plain ApplicationServices call.
             while !unsafe { AXIsProcessTrusted() } {
-                set_permission(false);
+                set_permission(&on_permission, false);
                 std::thread::sleep(RECHECK);
             }
-            set_permission(true);
+            set_permission(&on_permission, true);
             let tap = match CGEventTap::new(
                 CGEventTapLocation::Session,
                 CGEventTapPlacement::HeadInsertEventTap,

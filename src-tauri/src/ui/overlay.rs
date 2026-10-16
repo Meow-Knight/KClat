@@ -14,7 +14,6 @@
 use crate::ipc::events::EVENT_SCALE_PREVIEW;
 use crate::platform;
 use crate::services::cat_service::CatService;
-use crate::tasks::drag_loop;
 use klat_core::geometry::{self, Css, Logical, Physical, Point, Rect, WindowPos};
 use klat_core::settings::CAT_SCALE;
 use serde::Serialize;
@@ -36,21 +35,28 @@ const MARGIN: f64 = 16.0;
 /// The window's zoom while the size slider is dragged: the largest cat size, so every preview is a shrink.
 const PREVIEW_ZOOM: f64 = CAT_SCALE.1 as f64 / 100.0;
 
-/// The webview zoom in effect (f64 bits): the cat scale, or `PREVIEW_ZOOM` during a preview.
-static ZOOM: AtomicU64 = AtomicU64::new(0x3FF0_0000_0000_0000); // 1.0
-/// The size slider is being dragged (set by `preview`, cleared by `end_preview`).
-static PREVIEWING: AtomicBool = AtomicBool::new(false);
-
-/// The webview zoom in effect, for converting between the page's CSS px and the window's logical px.
-pub fn zoom() -> f64 {
-    f64::from_bits(ZOOM.load(Ordering::Relaxed))
-}
-
-/// What the overlay page reports about itself.
-#[derive(Default)]
+/// The overlay window's own state, shared by the commands, the cursor poller and the drag loop (managed by Tauri
+/// and handed to the tasks at setup).
 pub struct OverlayState {
     /// Clickable regions of the overlay as the page reports them; see `hitboxes()`.
     page_hitboxes: Mutex<Vec<Rect<Css>>>,
+    /// The webview zoom in effect (f64 bits): the cat scale, or `PREVIEW_ZOOM` during a preview.
+    zoom: AtomicU64,
+    /// The size slider is being dragged (set by `preview`, cleared by `end_preview`).
+    previewing: AtomicBool,
+    /// The window is following the cursor (see tasks::drag_loop).
+    dragging: AtomicBool,
+}
+
+impl Default for OverlayState {
+    fn default() -> Self {
+        Self {
+            page_hitboxes: Mutex::default(),
+            zoom: AtomicU64::new(1.0_f64.to_bits()),
+            previewing: AtomicBool::new(false),
+            dragging: AtomicBool::new(false),
+        }
+    }
 }
 
 impl OverlayState {
@@ -60,13 +66,35 @@ impl OverlayState {
 
     /// Clickable regions relative to the overlay's top-left corner.
     pub fn hitboxes(&self) -> Vec<Rect<Logical>> {
-        let zoom = zoom();
+        let zoom = self.zoom();
         let rects = self.page_hitboxes.lock().unwrap();
         rects.iter().map(|r| r.to_logical(zoom)).collect()
     }
+
+    /// The webview zoom in effect, for converting between the page's CSS px and the window's logical px.
+    pub fn zoom(&self) -> f64 {
+        f64::from_bits(self.zoom.load(Ordering::Relaxed))
+    }
+
+    fn set_zoom(&self, zoom: f64) {
+        self.zoom.store(zoom.to_bits(), Ordering::Relaxed);
+    }
+
+    pub fn dragging(&self) -> bool {
+        self.dragging.load(Ordering::Relaxed)
+    }
+
+    /// Returns whether it was being dragged before.
+    pub fn set_dragging(&self, on: bool) -> bool {
+        self.dragging.swap(on, Ordering::Relaxed)
+    }
 }
 
-pub fn create(app: &AppHandle, cat: &CatService) -> tauri::Result<WebviewWindow> {
+pub fn create(
+    app: &AppHandle,
+    cat: &CatService,
+    overlay: &OverlayState,
+) -> tauri::Result<WebviewWindow> {
     let settings = cat.settings();
     let zoom = settings.zoom();
     let size = logical_size(zoom);
@@ -92,7 +120,7 @@ pub fn create(app: &AppHandle, cat: &CatService) -> tauri::Result<WebviewWindow>
     }
     let win = builder.build()?;
     win.set_zoom(zoom)?;
-    ZOOM.store(zoom.to_bits(), Ordering::Relaxed);
+    overlay.set_zoom(zoom);
     place(&win, settings.position)?;
     // Click-through by default; the cursor poller turns it off over the cat and the bubble.
     win.set_ignore_cursor_events(true)?;
@@ -127,14 +155,19 @@ fn logical_size(zoom: f64) -> LogicalSize<f64> {
 /// The cat scale changed: resize the window and zoom its page to match. The bottom-right corner stays where it
 /// is, so the cat (on the right, standing on the bottom) stays put and the window grows up and to the left.
 /// Returns the new top-left when the cat had been dragged somewhere, for the caller to save.
-pub fn rescale(app: &AppHandle, cat: &CatService, zoom: f64) -> Option<WindowPos> {
-    let pos = resize(app, zoom)?;
+pub fn rescale(
+    app: &AppHandle,
+    cat: &CatService,
+    overlay: &OverlayState,
+    zoom: f64,
+) -> Option<WindowPos> {
+    let pos = resize(app, overlay, zoom)?;
     let dragged = cat.settings().position.is_some();
     dragged.then_some(pos)
 }
 
 /// Sets the window's size and zoom for `zoom`, keeping its bottom-right corner. Returns the new top-left.
-fn resize(app: &AppHandle, zoom: f64) -> Option<WindowPos> {
+fn resize(app: &AppHandle, overlay: &OverlayState, zoom: f64) -> Option<WindowPos> {
     let win = get(app)?;
     let (pos, old, scale) = (
         win.outer_position().ok()?,
@@ -144,7 +177,7 @@ fn resize(app: &AppHandle, zoom: f64) -> Option<WindowPos> {
     let size = logical_size(zoom);
     let new = size.to_physical::<u32>(scale);
     let _ = win.set_zoom(zoom);
-    ZOOM.store(zoom.to_bits(), Ordering::Relaxed);
+    overlay.set_zoom(zoom);
     let _ = win.set_size(size);
     let pos = geometry::keep_bottom_right(
         screen_pos(pos),
@@ -156,16 +189,16 @@ fn resize(app: &AppHandle, zoom: f64) -> Option<WindowPos> {
 }
 
 /// The size slider moved to `scale` percent: show it in the overlay without touching the window.
-pub fn preview(app: &AppHandle, scale: u32) {
-    PREVIEWING.store(true, Ordering::SeqCst);
+pub fn preview(app: &AppHandle, overlay: &OverlayState, scale: u32) {
+    overlay.previewing.store(true, Ordering::SeqCst);
     let factor = f64::from(scale.clamp(CAT_SCALE.0, CAT_SCALE.1)) / 100.0 / PREVIEW_ZOOM;
     let _ = app.emit_to(LABEL, EVENT_SCALE_PREVIEW, Some(factor));
 }
 
 /// The drag is over (the value was saved, or the Settings window went away): the overlay hides the cat and asks
 /// for its real size through `preview_zoom(false)`. Returns false when no preview was running.
-pub fn end_preview(app: &AppHandle) -> bool {
-    if !PREVIEWING.swap(false, Ordering::SeqCst) {
+pub fn end_preview(app: &AppHandle, overlay: &OverlayState) -> bool {
+    if !overlay.previewing.swap(false, Ordering::SeqCst) {
         return false;
     }
     let _ = app.emit_to(LABEL, EVENT_SCALE_PREVIEW, None::<f64>);
@@ -188,15 +221,16 @@ pub struct ZoomChange {
 pub fn preview_zoom(
     app: &AppHandle,
     cat: &CatService,
+    overlay: &OverlayState,
     preview: bool,
 ) -> (ZoomChange, Option<WindowPos>) {
-    let from = zoom();
+    let from = overlay.zoom();
     let (to, saved) = if preview {
-        resize(app, PREVIEW_ZOOM);
+        resize(app, overlay, PREVIEW_ZOOM);
         (PREVIEW_ZOOM, None)
     } else {
         let to = cat.settings().zoom();
-        (to, rescale(app, cat, to))
+        (to, rescale(app, cat, overlay, to))
     };
     let change = ZoomChange {
         from,
@@ -237,7 +271,7 @@ pub fn place(win: &WebviewWindow, saved: Option<WindowPos>) -> tauri::Result<()>
 /// A dragged cat keeps the window's bottom-right corner, where it stands: keeping the saved top-left would grow
 /// the window (150% DPI: half as big again) right and down, off the screen and under the taskbar.
 pub fn on_scale_changed(win: &WebviewWindow, cat: Arc<CatService>, overlay: Arc<OverlayState>) {
-    if drag_loop::dragging() {
+    if overlay.dragging() {
         return;
     }
     // Still the old geometry here.

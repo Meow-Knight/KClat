@@ -2,7 +2,7 @@
 
 use crate::services::cat_service::CatService;
 use crate::services::settings_service;
-use crate::ui::overlay;
+use crate::ui::overlay::{self, OverlayState};
 use klat_core::settings::{Settings, SettingsPatch};
 use std::sync::Arc;
 use tauri::{AppHandle, State};
@@ -18,15 +18,16 @@ pub fn get_settings(cat: State<'_, Arc<CatService>>) -> Settings {
 pub fn set_settings(
     app: AppHandle,
     cat: State<'_, Arc<CatService>>,
+    overlay_state: State<'_, Arc<OverlayState>>,
     patch: SettingsPatch,
 ) -> Settings {
     let scale_before = cat.settings().cat_scale;
     let next = cat.update_settings(|s| *s = s.apply(&patch));
     // After a slider drag the overlay resizes itself (with the cat hidden) through `overlay_preview_zoom`.
-    if overlay::end_preview(&app) || next.cat_scale == scale_before {
+    if overlay::end_preview(&app, &overlay_state) || next.cat_scale == scale_before {
         return next;
     }
-    match overlay::rescale(&app, &cat, next.zoom()) {
+    match overlay::rescale(&app, &cat, &overlay_state, next.zoom()) {
         // A dragged cat keeps its spot: save the window's new top-left.
         Some(pos) => cat.update_settings(|s| s.position = Some(pos)),
         None => next,

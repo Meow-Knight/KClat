@@ -12,8 +12,8 @@ const MAX_HITBOXES: usize = 8;
 /// The size slider is being dragged: show `scale` (percent) in the overlay; nothing is saved until
 /// `set_settings`.
 #[tauri::command]
-pub fn preview_cat_scale(app: AppHandle, scale: u32) {
-    overlay::preview(&app, scale);
+pub fn preview_cat_scale(app: AppHandle, overlay: State<'_, Arc<OverlayState>>, scale: u32) {
+    overlay::preview(&app, &overlay, scale);
 }
 
 /// The overlay page, with the cat hidden, switches its window to the preview size (`preview`) or back to the
@@ -22,9 +22,10 @@ pub fn preview_cat_scale(app: AppHandle, scale: u32) {
 pub fn overlay_preview_zoom(
     app: AppHandle,
     cat: State<'_, Arc<CatService>>,
+    overlay_state: State<'_, Arc<OverlayState>>,
     preview: bool,
 ) -> overlay::ZoomChange {
-    let (change, saved) = overlay::preview_zoom(&app, &cat, preview);
+    let (change, saved) = overlay::preview_zoom(&app, &cat, &overlay_state, preview);
     if let Some(pos) = saved {
         cat.update_settings(|s| s.position = Some(pos));
     }

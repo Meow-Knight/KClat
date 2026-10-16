@@ -315,6 +315,24 @@ await check('Cat size 150%: the overlay zooms by 1.5, back at 100%', async () =>
   }, 5000);
   return `devicePixelRatio ${dpr0} → ${dpr1} → ${dpr2}`;
 });
+await check('Size slider: preview at the largest zoom, released at the chosen size', async () => {
+  // The page answers cat://scale-preview by switching its window to the preview zoom (2×), and the end of the
+  // preview (set_settings) by switching back to the saved size.
+  const dpr0 = await evaluate('window.devicePixelRatio');
+  await invoke('preview_cat_scale', { scale: 80 });
+  const previewing = await until('preview zoom', async () => {
+    const d = await evaluate('window.devicePixelRatio');
+    return Math.abs(d / dpr0 - 2) < 0.02 && d;
+  }, 5000);
+  await invoke('set_settings', { patch: { catScale: 80 } });
+  const released = await until('zoom 0.8', async () => {
+    const d = await evaluate('window.devicePixelRatio');
+    return Math.abs(d / dpr0 - 0.8) < 0.02 && d;
+  }, 5000);
+  await invoke('set_settings', { patch: { catScale: 100 } });
+  await until('zoom back', async () => Math.abs((await evaluate('window.devicePixelRatio')) - dpr0) < 0.02, 5000);
+  return `devicePixelRatio ${dpr0} → ${previewing} (preview) → ${released} → ${dpr0}`;
+});
 await check('Event server rejects: wrong token 401, Origin 403, GET 405, unknown hook 422', async () => {
   const body = JSON.stringify({ eventId: '1', hookEventName: 'Stop', sessionId: 'x', occurredAt: 1 });
   const auth = `Authorization: Bearer ${runtime.token}\r\n`;

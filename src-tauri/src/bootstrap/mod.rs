@@ -68,7 +68,7 @@ pub fn run() {
                 }
                 // Closed in the middle of a size slider drag: put the cat back at its saved size.
                 tauri::WindowEvent::Destroyed if window.label() == settings_window::LABEL => {
-                    overlay::end_preview(window.app_handle());
+                    overlay::end_preview(window.app_handle(), &overlay_state);
                 }
                 _ => {}
             }
@@ -77,16 +77,20 @@ pub fn run() {
             // Logged here, not before the builder: a second launch exits inside the single-instance plugin.
             log::info!("Klat {} starting", env!("CARGO_PKG_VERSION"));
             platform::menu_bar_app(app);
-            // Subscribed before anything can change the state (the event server starts below).
+            // Every subscriber is in place before the event server starts (below), so no change is missed.
             let handle = app.handle();
             events::forward(handle, cat.subscribe(), cat.subscribe_settings());
-            platform::webview_memory::follow(handle, cat.subscribe());
-            tray::follow(handle, cat.subscribe(), cat.subscribe_settings());
             settings_window::follow(handle, cat.subscribe_settings());
-            overlay::create(app.handle(), &cat)?;
-            platform::webview_memory::awake_changed(app.handle(), false);
+            let win = overlay::create(app.handle(), &cat, &overlay_state)?;
+            platform::webview_memory::follow(win, cat.subscribe());
             settings_service::reconcile_start_at_login(app.handle(), &cat);
-            tray::create(app.handle(), cat.clone())?;
+            let tray = tray::create(app.handle(), cat.clone())?;
+            tray::follow(
+                app.handle(),
+                tray,
+                cat.subscribe(),
+                cat.subscribe_settings(),
+            );
             cursor_poller::start(app.handle().clone(), cat.subscribe(), overlay_state.clone());
             drag_loop::start(app.handle().clone(), cat.clone(), overlay_state);
             start_event_server(cat.clone())?;

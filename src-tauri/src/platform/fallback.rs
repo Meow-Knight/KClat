@@ -15,4 +15,9 @@ pub fn permission() -> Permission {
     Permission::NotNeeded
 }
 pub fn request_permission() {}
-pub fn install_hook(_app: tauri::AppHandle, _tx: Sender<Msg>) {}
+pub fn install_hook(
+    _app: tauri::AppHandle,
+    _tx: Sender<Msg>,
+    _on_permission: impl Fn(Permission) + Send + 'static,
+) {
+}
