@@ -107,7 +107,7 @@ fn start_event_server(app: &AppHandle) -> std::io::Result<()> {
     };
     let token = event_server::new_token()?;
     let handle = app.clone();
-    let port = event_server::start(token.clone(), move |ev| {
+    let port = event_server::start(token.clone(), state::now_ms, move |ev| {
         state::apply_hook_event(&handle, &ev)
     })?;
     log::info!("event server listening on 127.0.0.1:{port}");

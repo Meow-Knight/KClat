@@ -16,7 +16,7 @@ use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 const MAX_HEADER_BYTES: usize = 8 * 1024;
 const MAX_CONNECTIONS: usize = 16;
@@ -33,15 +33,66 @@ pub fn new_token() -> io::Result<String> {
     Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
 }
 
-/// Starts the server thread and returns the bound port. `on_event` runs on a connection thread.
-pub fn start<F>(token: String, on_event: F) -> io::Result<u16>
+/// Why a request was refused. Each answers with its own 4xx.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Reject {
+    /// Not HTTP as the adapter sends it: a broken head, chunked body, short body, bad JSON. 400
+    BadRequest,
+    /// Missing or wrong bearer token. 401
+    Unauthorized,
+    /// Sent by a browser page (it has an `Origin`). 403
+    Forbidden,
+    /// Not `/event`. 404
+    NotFound,
+    /// Not POST. 405
+    MethodNotAllowed,
+    /// No `Content-Length`. 411
+    LengthRequired,
+    /// A body over 64 KB. 413
+    PayloadTooLarge,
+    /// Valid JSON, but a hook this version does not know, or fields out of bounds. 422
+    Unprocessable,
+}
+
+impl Reject {
+    pub const fn status(self) -> u16 {
+        match self {
+            Reject::BadRequest => 400,
+            Reject::Unauthorized => 401,
+            Reject::Forbidden => 403,
+            Reject::NotFound => 404,
+            Reject::MethodNotAllowed => 405,
+            Reject::LengthRequired => 411,
+            Reject::PayloadTooLarge => 413,
+            Reject::Unprocessable => 422,
+        }
+    }
+}
+
+/// What every connection of one server shares.
+struct Server<C, F> {
+    token: String,
+    clock: C,
+    on_event: F,
+    /// Rate limit for the rejection warnings of this server.
+    rejects: Mutex<RejectLog>,
+}
+
+/// Starts the server thread and returns the bound port. `on_event` runs on a connection thread; `clock` gives
+/// the time for the rejection log's rate limit.
+pub fn start<C, F>(token: String, clock: C, on_event: F) -> io::Result<u16>
 where
+    C: Fn() -> UnixMs + Send + Sync + 'static,
     F: Fn(HookEvent) + Send + Sync + 'static,
 {
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
     let port = listener.local_addr()?.port();
-    let token = Arc::new(token);
-    let on_event = Arc::new(on_event);
+    let server = Arc::new(Server {
+        token,
+        clock,
+        on_event,
+        rejects: Mutex::new(RejectLog::new()),
+    });
     let active = Arc::new(AtomicUsize::new(0));
     thread::Builder::new()
         .name("event-server".into())
@@ -51,11 +102,11 @@ where
                     continue; // dropping the stream closes it
                 }
                 active.fetch_add(1, Ordering::Relaxed);
-                let (token, on_event, counter) = (token.clone(), on_event.clone(), active.clone());
+                let (server, counter) = (server.clone(), active.clone());
                 let spawned = thread::Builder::new()
                     .name("event-conn".into())
                     .spawn(move || {
-                        let _ = serve(stream, &token, &*on_event);
+                        let _ = serve(stream, &server);
                         counter.fetch_sub(1, Ordering::Relaxed);
                     });
                 if spawned.is_err() {
@@ -84,31 +135,25 @@ impl Read for Deadline {
     }
 }
 
-static REJECTS: Mutex<RejectLog> = Mutex::new(RejectLog::new());
-
-fn now_ms() -> UnixMs {
-    UnixMs(
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_millis() as u64)
-            .unwrap_or(0),
-    )
-}
-
-fn serve(stream: TcpStream, token: &str, on_event: &dyn Fn(HookEvent)) -> io::Result<()> {
+fn serve<C, F>(stream: TcpStream, server: &Server<C, F>) -> io::Result<()>
+where
+    C: Fn() -> UnixMs,
+    F: Fn(HookEvent),
+{
     stream.set_write_timeout(Some(IO_TIMEOUT))?;
     let mut reader = BufReader::new(Deadline {
         stream: stream.try_clone()?,
         until: Instant::now() + REQUEST_DEADLINE,
     });
-    let status = match handle(&mut reader, token) {
+    let status = match handle(&mut reader, &server.token) {
         Ok(ev) => {
-            on_event(ev);
+            (server.on_event)(ev);
             204
         }
-        Err(status) => {
-            let lines = match REJECTS.lock() {
-                Ok(mut log) => log.on_reject(status, now_ms()),
+        Err(reject) => {
+            let status = reject.status();
+            let lines = match server.rejects.lock() {
+                Ok(mut log) => log.on_reject(status, (server.clock)()),
                 Err(_) => Vec::new(),
             };
             for line in lines {
@@ -148,8 +193,8 @@ fn reason(status: u16) -> &'static str {
     }
 }
 
-/// Parses and validates one request. Err carries the HTTP status to answer with.
-pub fn handle(reader: &mut impl BufRead, token: &str) -> Result<HookEvent, u16> {
+/// Parses and validates one request.
+pub fn handle(reader: &mut impl BufRead, token: &str) -> Result<HookEvent, Reject> {
     let head = read_head(reader)?;
     let mut lines = head.lines();
     let mut request_line = lines.next().unwrap_or("").split(' ');
@@ -162,65 +207,69 @@ pub fn handle(reader: &mut impl BufRead, token: &str) -> Result<HookEvent, u16> 
     let mut authorization = None;
     for line in lines {
         let Some((name, value)) = line.split_once(':') else {
-            return Err(400);
+            return Err(Reject::BadRequest);
         };
         let value = value.trim();
         match name.trim().to_ascii_lowercase().as_str() {
-            "content-length" => content_length = Some(value.parse::<usize>().map_err(|_| 400u16)?),
+            "content-length" => {
+                content_length = Some(value.parse::<usize>().map_err(|_| Reject::BadRequest)?)
+            }
             "authorization" => authorization = Some(value.to_owned()),
             // Browsers always send Origin on cross-site POSTs; the hook adapter never does.
-            "origin" => return Err(403),
-            "transfer-encoding" => return Err(400),
+            "origin" => return Err(Reject::Forbidden),
+            "transfer-encoding" => return Err(Reject::BadRequest),
             _ => {}
         }
     }
 
     if path != EVENT_PATH {
-        return Err(404);
+        return Err(Reject::NotFound);
     }
     if method != "POST" {
-        return Err(405);
+        return Err(Reject::MethodNotAllowed);
     }
     let presented = authorization
         .as_deref()
         .and_then(|v| v.strip_prefix("Bearer "))
         .unwrap_or("");
     if !constant_time_eq(presented.as_bytes(), token.as_bytes()) {
-        return Err(401);
+        return Err(Reject::Unauthorized);
     }
-    let len = content_length.ok_or(411u16)?;
+    let len = content_length.ok_or(Reject::LengthRequired)?;
     if len > MAX_BODY {
-        return Err(413);
+        return Err(Reject::PayloadTooLarge);
     }
     let mut body = vec![0u8; len];
-    reader.read_exact(&mut body).map_err(|_| 400u16)?;
+    reader
+        .read_exact(&mut body)
+        .map_err(|_| Reject::BadRequest)?;
 
-    let ev: HookEvent = serde_json::from_slice(&body).map_err(|_| 400u16)?;
+    let ev: HookEvent = serde_json::from_slice(&body).map_err(|_| Reject::BadRequest)?;
     validate(&ev)?;
     Ok(ev)
 }
 
-fn validate(ev: &HookEvent) -> Result<(), u16> {
+fn validate(ev: &HookEvent) -> Result<(), Reject> {
     if ev.hook().is_none() {
-        return Err(422);
+        return Err(Reject::Unprocessable);
     }
     let too_long = |s: &str| s.chars().count() > MAX_FIELD;
     if ev.session_id.is_empty() || too_long(&ev.session_id) || too_long(&ev.event_id) {
-        return Err(422);
+        return Err(Reject::Unprocessable);
     }
     for field in [&ev.project_name, &ev.tool_name, &ev.notification_type]
         .into_iter()
         .flatten()
     {
         if too_long(field) {
-            return Err(422);
+            return Err(Reject::Unprocessable);
         }
     }
     Ok(())
 }
 
 /// Request line + headers, up to the blank line.
-fn read_head(reader: &mut impl BufRead) -> Result<String, u16> {
+fn read_head(reader: &mut impl BufRead) -> Result<String, Reject> {
     let mut head = Vec::new();
     loop {
         let mut line = Vec::new();
@@ -228,20 +277,20 @@ fn read_head(reader: &mut impl BufRead) -> Result<String, u16> {
             .by_ref()
             .take((MAX_HEADER_BYTES + 1 - head.len()) as u64)
             .read_until(b'\n', &mut line)
-            .map_err(|_| 400u16)?;
+            .map_err(|_| Reject::BadRequest)?;
         if n == 0 {
-            return Err(400);
+            return Err(Reject::BadRequest);
         }
         if line == b"\r\n" || line == b"\n" {
             break;
         }
         head.extend_from_slice(&line);
         if head.len() > MAX_HEADER_BYTES {
-            return Err(400);
+            return Err(Reject::BadRequest);
         }
     }
     // str::lines() later splits on "\n" and drops a trailing "\r", so CRLF and bare LF both work.
-    String::from_utf8(head).map_err(|_| 400u16)
+    String::from_utf8(head).map_err(|_| Reject::BadRequest)
 }
 
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
@@ -284,8 +333,13 @@ mod tests {
         )
     }
 
+    /// The status a request gets, as the tests have always stated it.
     fn run(raw: Vec<u8>) -> Result<HookEvent, u16> {
-        handle(&mut Cursor::new(raw), TOKEN)
+        handle(&mut Cursor::new(raw), TOKEN).map_err(Reject::status)
+    }
+
+    fn clock() -> UnixMs {
+        UnixMs(0)
     }
 
     #[test]
@@ -406,6 +460,119 @@ mod tests {
         assert_eq!(run(raw.into_bytes()), Err(400));
     }
 
+    /// xorshift64*: a fixed seed gives the same requests on every run and every machine, without a dependency.
+    struct Rng(u64);
+
+    impl Rng {
+        fn next(&mut self) -> u64 {
+            self.0 ^= self.0 >> 12;
+            self.0 ^= self.0 << 25;
+            self.0 ^= self.0 >> 27;
+            self.0.wrapping_mul(0x2545_F491_4F6C_DD1D)
+        }
+        fn below(&mut self, n: usize) -> usize {
+            (self.next() % n as u64) as usize
+        }
+    }
+
+    /// Pieces of requests, valid and not, so the junk gets past the first checks often enough to reach the
+    /// later ones. No piece is a whole valid body, so no request may be accepted.
+    const PIECES: &[&[u8]] = &[
+        b"POST",
+        b"GET",
+        b"post",
+        b" /event",
+        b" /",
+        b" /event?x=1",
+        b" HTTP/1.1",
+        b"\r\n",
+        b"\n",
+        b"\r\n\r\n",
+        b"Content-Length: ",
+        b"content-length:",
+        b"Authorization: Bearer ",
+        b"Authorization: Bearer s3cre",
+        b"Origin: x",
+        b"Transfer-Encoding: chunked",
+        b"X-Pad: ",
+        b": ",
+        b":",
+        b"0",
+        b"17",
+        b"65536",
+        b"65537",
+        b"-1",
+        b"99999999999999999999999",
+        b"{",
+        b"}",
+        br#""hookEventName":"Stop""#,
+        br#""sessionId":"""#,
+        br#""eventId":"1","occurredAt":1"#,
+        b"\xff\xfe",
+        b"\0",
+        "é漢".as_bytes(),
+    ];
+
+    #[test]
+    fn junk_never_panics_and_always_gets_a_4xx() {
+        let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
+        let mut statuses = std::collections::BTreeSet::new();
+        for _ in 0..2000 {
+            // Two in three start like the adapter's requests, half of those with the right token, so the junk
+            // also reaches the token, length and body checks.
+            let mut raw = match rng.below(3) {
+                0 => Vec::new(),
+                1 => b"POST /event HTTP/1.1\r\n".to_vec(),
+                _ => b"POST /event HTTP/1.1\r\nAuthorization: Bearer s3cret\r\n".to_vec(),
+            };
+            for _ in 0..rng.below(40) {
+                if rng.below(4) == 0 {
+                    // Raw bytes, sometimes a long run of them.
+                    let len = if rng.below(10) == 0 {
+                        rng.below(10_000)
+                    } else {
+                        rng.below(16)
+                    };
+                    raw.extend((0..len).map(|_| rng.next() as u8));
+                } else {
+                    raw.extend_from_slice(PIECES[rng.below(PIECES.len())]);
+                }
+            }
+            let got = std::panic::catch_unwind(|| run(raw.clone()));
+            let Ok(got) = got else {
+                panic!("panicked on {:?}", String::from_utf8_lossy(&raw));
+            };
+            match got {
+                Err(status) => {
+                    assert!((400..500).contains(&status), "{status}");
+                    statuses.insert(status);
+                }
+                Ok(ev) => panic!("accepted junk: {ev:?}"),
+            }
+        }
+        // The junk reaches the later checks too (400, 401, 403, 404, 405, 411 with this seed).
+        assert!(statuses.len() >= 6, "{statuses:?}");
+    }
+
+    #[test]
+    fn each_rejection_has_its_own_status() {
+        let all = [
+            Reject::BadRequest,
+            Reject::Unauthorized,
+            Reject::Forbidden,
+            Reject::NotFound,
+            Reject::MethodNotAllowed,
+            Reject::LengthRequired,
+            Reject::PayloadTooLarge,
+            Reject::Unprocessable,
+        ];
+        let statuses: Vec<u16> = all.iter().map(|r| r.status()).collect();
+        assert_eq!(statuses, [400, 401, 403, 404, 405, 411, 413, 422]);
+        for r in all {
+            assert_ne!(reason(r.status()), "Error", "{r:?}");
+        }
+    }
+
     #[test]
     fn the_answer_is_one_complete_message() {
         assert_eq!(
@@ -431,7 +598,7 @@ mod tests {
     #[test]
     fn serves_over_real_loopback_sockets() {
         let (tx, rx) = mpsc::channel();
-        let port = start(TOKEN.into(), move |ev| tx.send(ev).unwrap()).unwrap();
+        let port = start(TOKEN.into(), clock, move |ev| tx.send(ev).unwrap()).unwrap();
         let send = |raw: Vec<u8>| -> String {
             let mut s = TcpStream::connect((Ipv4Addr::LOCALHOST, port)).unwrap();
             s.write_all(&raw).unwrap();
@@ -458,7 +625,7 @@ mod tests {
 
     #[test]
     fn a_slow_drip_is_cut_off_at_the_request_deadline() {
-        let port = start(TOKEN.into(), |_| {}).unwrap();
+        let port = start(TOKEN.into(), clock, |_| {}).unwrap();
         let mut conn = TcpStream::connect((Ipv4Addr::LOCALHOST, port)).unwrap();
         conn.write_all(b"POST /event HTTP/1.1\r\n").unwrap();
         // One header byte every 100ms: each read finishes well inside a per-read timeout.
