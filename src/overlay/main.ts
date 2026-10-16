@@ -2,7 +2,7 @@
 import { bridge, type CatStatePayload, type ZoomChange } from '../bridge/tauriBridge';
 import { CatStage } from '../cat/CatStage';
 import type { CatPhase } from '../cat/CatController';
-import type { AppSettings } from '../settings';
+import { CAT_SCALE, type AppSettings } from '../settings';
 
 const stageEl = document.querySelector<HTMLDivElement>('#stage')!;
 
@@ -50,9 +50,14 @@ function applyState(s: CatStatePayload): void {
   lastAttention = seq;
 }
 
+/** The window's zoom while the size slider is dragged (src-tauri/src/overlay.rs PREVIEW_ZOOM). */
+const PREVIEW_ZOOM = CAT_SCALE.max / 100;
+
 function applySettings(next: AppSettings): void {
+  const rescaled = next.catScale !== settings.catScale;
   settings = next;
   stage.setSettings(next);
+  if (rescaled && !previewing) stage.setZoom(next.catScale / 100);
   stage.setUiLanguage(next.uiLanguage);
   syncHidden();
 }
@@ -99,6 +104,7 @@ async function switchWindow(preview: boolean): Promise<void> {
 function applyScalePreview(factor: number | null): void {
   if (factor !== null) {
     stageEl.style.transform = `scale(${factor})`;
+    stage.setZoom(PREVIEW_ZOOM * factor);
     if (!previewing) {
       previewing = true;
       void switchWindow(true);
@@ -114,6 +120,7 @@ function applyScalePreview(factor: number | null): void {
   }
   stageEl.style.visibility = 'hidden';
   stageEl.style.transform = '';
+  stage.setZoom(settings.catScale / 100);
   void switchWindow(false);
 }
 
@@ -126,6 +133,7 @@ await bridge.onGrab((mode) => stage.setGrab(mode));
 await bridge.onScalePreview(applyScalePreview);
 ready = true;
 stage.setUiLanguage(settings.uiLanguage);
+stage.setZoom(settings.catScale / 100);
 applyState(await bridge.getState());
 syncHidden();
 void bridge.setHitboxes(stage.hitboxes());

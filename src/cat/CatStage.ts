@@ -189,6 +189,12 @@ export class CatStage {
     this.readyButton.setLanguage(lang);
   }
 
+  /** The cat's on-screen scale (cat size zoom, times the size-slider preview transform). */
+  setZoom(zoom: number): void {
+    this.readyButton.setZoom(zoom);
+    this.callbacks.onLayoutChange?.();
+  }
+
   /** Reflects the Ready state (from Rust, or the dev page) on the button and the cat's ears. */
   setReady(on: boolean): void {
     this.readyButton.set(on);
@@ -235,10 +241,10 @@ export class CatStage {
   hitboxes(): StageRect[] {
     if (this.hidden) return [];
     const rects = [this.projectBox(this.rig.hitBounds[this.phase === 'awake' ? 'awake' : 'asleep'])];
-    // Layout boxes, not bounding rects: the bubble's pop-in transform starts at scale(0).
-    for (const el of [this.bubble.visible ? this.bubble.el : null, this.readyButton.visible ? this.readyButton.el : null]) {
-      if (el) rects.push({ x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight });
-    }
+    // Layout box, not bounding rect: the bubble's pop-in transform starts at scale(0).
+    const bubble = this.bubble.el;
+    if (this.bubble.visible) rects.push({ x: bubble.offsetLeft, y: bubble.offsetTop, w: bubble.offsetWidth, h: bubble.offsetHeight });
+    if (this.readyButton.visible) rects.push(this.readyButton.hitbox());
     return rects;
   }
 

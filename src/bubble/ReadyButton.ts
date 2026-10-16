@@ -13,10 +13,18 @@ const ICON = `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
   <circle class="shine" cx="9.6" cy="12" r="1.1"/>
 </svg>`;
 
+/**
+ * The cat size zooms the whole page, button included. Up to this zoom the button grows with the cat; past it
+ * the button is scaled back so it stays at this size and does not crowd the cat.
+ */
+const MAX_ZOOM = 1.2;
+
 export class ReadyButton {
   readonly el: HTMLButtonElement;
   private on = false;
   private lang: UiLanguage = 'en';
+  /** Counter-scale for the page zoom (1 = none); see MAX_ZOOM. */
+  private shrink = 1;
 
   constructor(
     parent: HTMLElement,
@@ -57,6 +65,24 @@ export class ReadyButton {
 
   setVisible(visible: boolean): void {
     this.el.hidden = !visible;
+  }
+
+  /** The cat's on-screen scale (page zoom times any preview transform): caps the button's size at MAX_ZOOM. */
+  setZoom(zoom: number): void {
+    this.shrink = Math.min(1, MAX_ZOOM / zoom);
+    this.el.style.setProperty('--ready-shrink', String(this.shrink));
+  }
+
+  /** The button's clickable box in stage CSS px: its layout box, shrunk about its centre like the drawing. */
+  hitbox(): { x: number; y: number; w: number; h: number } {
+    const w = this.el.offsetWidth * this.shrink;
+    const h = this.el.offsetHeight * this.shrink;
+    return {
+      x: this.el.offsetLeft + (this.el.offsetWidth - w) / 2,
+      y: this.el.offsetTop + (this.el.offsetHeight - h) / 2,
+      w,
+      h,
+    };
   }
 
   /** Centre the button on a stage point (CSS px). */

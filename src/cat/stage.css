@@ -78,6 +78,8 @@
   color: #2b2d42;
   box-shadow: 0 2px 0 rgb(43 45 66 / 0.25);
   cursor: pointer;
+  /* --ready-shrink (ReadyButton.setZoom) keeps the button from growing with a big cat. */
+  transform: scale(var(--ready-shrink, 1));
   transition:
     transform 0.15s,
     background 0.2s,
@@ -85,7 +87,7 @@
 }
 
 .cat-ready:hover {
-  transform: scale(1.1);
+  transform: scale(calc(var(--ready-shrink, 1) * 1.1));
 }
 
 .cat-ready:focus-visible {
