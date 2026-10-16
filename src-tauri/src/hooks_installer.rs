@@ -11,6 +11,7 @@
 //!   so a path with spaces needs no quoting at all.
 //! - Runs only on request (Settings > Hooks), never at start-up.
 
+use klat_protocol::HookName;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::fs;
@@ -18,18 +19,14 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// One entry per hook event the app understands (see session_store.rs).
-pub const HOOK_EVENTS: [&str; 9] = [
-    "Stop",
-    "StopFailure",
-    "PermissionRequest",
-    "Notification",
-    "UserPromptSubmit",
-    "PostToolUse",
-    "PostToolUseFailure",
-    "PermissionDenied",
-    "SessionEnd",
-];
+/// The events Install registers, one entry each: `HookName::is_installed` decides (klat-protocol).
+fn installed_events() -> impl Iterator<Item = &'static str> {
+    HookName::installed().map(HookName::as_str)
+}
+
+fn is_installed_event(event: &str) -> bool {
+    HookName::parse(event).is_some_and(HookName::is_installed)
+}
 /// Our entries run a program with this file name (case-insensitive), with or without `.exe`.
 pub const MARKER: &str = "klat-hook";
 /// The adapter's name when the app was called Claude Cat; such entries are ours too.
@@ -171,7 +168,7 @@ pub fn status(settings: &Value, exe: &str) -> Status {
     };
     let mut any = false;
     let mut all_exact = true;
-    for event in HOOK_EVENTS {
+    for event in installed_events() {
         let ours = ours_in(hooks, event);
         any |= !ours.is_empty();
         all_exact &= ours.len() == 1 && *ours[0] == our_entry(exe, event);
@@ -179,7 +176,7 @@ pub fn status(settings: &Value, exe: &str) -> Status {
     // Leftovers under events we no longer use also need a repair.
     let stray = hooks
         .keys()
-        .filter(|k| !HOOK_EVENTS.contains(&k.as_str()))
+        .filter(|k| !is_installed_event(k))
         .any(|k| !ours_in(hooks, k).is_empty());
     match (any || stray, all_exact && !stray) {
         (false, _) => Status::NotInstalled,
@@ -203,14 +200,14 @@ pub fn install_into(settings: &mut Value, exe: &str) -> Result<(), InstallError>
     // Entries of ours under events we no longer install (from an older version) go away.
     let stale: Vec<String> = hooks
         .keys()
-        .filter(|k| !HOOK_EVENTS.contains(&k.as_str()))
+        .filter(|k| !is_installed_event(k))
         .cloned()
         .collect();
     for event in stale {
         remove_ours(hooks, &event);
     }
 
-    for event in HOOK_EVENTS {
+    for event in installed_events() {
         let wanted = our_entry(exe, event);
         let groups = hooks
             .entry(event)
@@ -508,7 +505,7 @@ mod tests {
     fn install_adds_one_exec_form_entry_per_event() {
         let mut v = existing();
         install_into(&mut v, EXE).unwrap();
-        assert_eq!(count_ours(&v), HOOK_EVENTS.len());
+        assert_eq!(count_ours(&v), installed_events().count());
         let notif = &v["hooks"]["Notification"][0]["hooks"][0];
         assert_eq!(notif["command"], EXE); // spaces in the path need no quoting: there is no shell
         assert_eq!(notif["args"], json!(["Notification"]));
@@ -554,7 +551,7 @@ mod tests {
         v["hooks"]["SubagentStop"] = json!([{ "hooks": [{"type":"command","command":"\"C:\\a\\Claude-Cat-Hook.EXE\" SubagentStop"}] }]);
         install_into(&mut v, EXE).unwrap();
         assert_eq!(status(&v, EXE), Status::Installed);
-        assert_eq!(count_ours(&v), HOOK_EVENTS.len());
+        assert_eq!(count_ours(&v), installed_events().count());
         assert_eq!(v["hooks"]["Stop"].as_array().unwrap().len(), 2); // theirs + ours, updated in place
         assert!(v["hooks"].get("SubagentStop").is_none());
     }

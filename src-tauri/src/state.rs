@@ -9,9 +9,10 @@
 
 use crate::cursor::Rect;
 use crate::log;
-use crate::session_store::{Gate, HookEvent, Outcome, SessionStore};
+use crate::session_store::{Gate, Outcome, SessionStore};
 pub use crate::session_store::{SessionView, WakeReason};
 use crate::settings::{self, Settings};
+use klat_protocol::HookEvent;
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};

@@ -10,38 +10,9 @@
 //! - `PermissionDenied` (auto mode only) → clears a permission wait. `SessionEnd` → session removed.
 //! - Anything else (including `SubagentStop`) is ignored.
 
-use serde::{Deserialize, Serialize};
+use klat_protocol::{HookEvent, HookName};
+use serde::Serialize;
 use std::collections::HashMap;
-
-/// Body of `POST /event` (spec §8.3). The adapter never sends tool input, commands or transcripts.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HookEvent {
-    pub event_id: String,
-    pub hook_event_name: String,
-    #[serde(default)]
-    pub notification_type: Option<String>,
-    pub session_id: String,
-    #[serde(default)]
-    pub project_name: Option<String>,
-    #[serde(default)]
-    pub tool_name: Option<String>,
-    pub occurred_at: u64,
-}
-
-/// Hook names the server accepts; everything else is rejected before it reaches the store.
-pub const ALLOWED_HOOKS: [&str; 10] = [
-    "Stop",
-    "StopFailure",
-    "PermissionRequest",
-    "Notification",
-    "UserPromptSubmit",
-    "PostToolUse",
-    "PostToolUseFailure",
-    "PermissionDenied",
-    "SessionEnd",
-    "SubagentStop",
-];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -69,13 +40,15 @@ pub enum Signal {
     SessionEnded,
 }
 
+/// What a hook means for the cat. Every `HookName` is matched by name, so a hook added to klat-protocol does not
+/// compile until it is decided here.
 pub fn classify(ev: &HookEvent) -> Option<Signal> {
     use Signal::*;
     let needed = |reason, fallback| Some(AttentionNeeded { reason, fallback });
-    match ev.hook_event_name.as_str() {
-        "Stop" | "StopFailure" => needed(WakeReason::Done, false),
-        "PermissionRequest" => needed(WakeReason::Permission, false),
-        "Notification" => match ev.notification_type.as_deref()? {
+    match ev.hook()? {
+        HookName::Stop | HookName::StopFailure => needed(WakeReason::Done, false),
+        HookName::PermissionRequest => needed(WakeReason::Permission, false),
+        HookName::Notification => match ev.notification_type.as_deref()? {
             "permission_prompt" => needed(WakeReason::Permission, true),
             "idle_prompt"
             | "agent_needs_input"
@@ -83,11 +56,13 @@ pub fn classify(ev: &HookEvent) -> Option<Signal> {
             | "elicitation_url_dialog" => needed(WakeReason::Input, true),
             _ => None,
         },
-        "UserPromptSubmit" => Some(AttentionCleared(ClearCause::PromptSubmitted)),
-        "PostToolUse" | "PostToolUseFailure" => Some(AttentionCleared(ClearCause::ToolResumed)),
-        "PermissionDenied" => Some(AttentionCleared(ClearCause::PermissionDenied)),
-        "SessionEnd" => Some(SessionEnded),
-        _ => None,
+        HookName::UserPromptSubmit => Some(AttentionCleared(ClearCause::PromptSubmitted)),
+        HookName::PostToolUse | HookName::PostToolUseFailure => {
+            Some(AttentionCleared(ClearCause::ToolResumed))
+        }
+        HookName::PermissionDenied => Some(AttentionCleared(ClearCause::PermissionDenied)),
+        HookName::SessionEnd => Some(SessionEnded),
+        HookName::SubagentStop => None,
     }
 }
 

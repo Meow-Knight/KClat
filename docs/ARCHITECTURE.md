@@ -452,7 +452,7 @@ design, acceptance và OUTPUT cụ thể; quy trình chất lượng bắt buộ
 | Phase | Bead | Nội dung | Tiêu chí xong | Trạng thái |
 |---|---|---|---|---|
 | 0 | `ClauCat-dv6.1` | Baseline: chốt thay đổi đang dở, gate một lệnh `pnpm check` (§12), đo `klat-hook` + số test, kịch bản hồi quy | Test xanh, có số liệu baseline và kịch bản hồi quy | Xong 2026-10-16 |
-| 1 | `ClauCat-dv6.2` | `klat-protocol`; bỏ `#[path]`; `HookName` | Hook và app dùng chung type; hook không tăng > 10% | Chưa bắt đầu |
+| 1 | `ClauCat-dv6.2` | `klat-protocol`; bỏ `#[path]`; `HookName` | Hook và app dùng chung type; hook không tăng > 10% | Xong 2026-10-16 |
 | 2 | `ClauCat-dv6.3` | `klat-core`: `session`, `geometry` (newtype đơn vị), `settings` (phần thuần), `claude_hooks`, `i18n`, `CatModel` | `cargo test -p klat-core` không compile Tauri | Chưa bắt đầu |
 | 3 | `ClauCat-dv6.4` | `klat-infra`: facade `log`, `event_server`, `runtime_file`, `settings_repo`, `claude_settings` | Không còn `crate::` trong event server; test socket xanh | Chưa bắt đầu |
 | 4 | `ClauCat-dv6.5` | `klat`: `CatService` + `watch`, subscriber, xoá `static`, chia `ipc/ui/tasks/platform` | Không còn `crate::tray::` trong service; hồi quy Windows pass, macOS do owner | Chưa bắt đầu |

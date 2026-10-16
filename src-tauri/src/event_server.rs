@@ -9,8 +9,7 @@
 //!   sending a byte now and then, and rejections are logged in short bursts, so a flood cannot rotate the
 //!   real entries out of the capped log.
 
-use crate::session_store::{HookEvent, ALLOWED_HOOKS};
-use serde::{Deserialize, Serialize};
+use klat_protocol::{HookEvent, RuntimeInfo, EVENT_PATH, MAX_BODY};
 use std::fs;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{Ipv4Addr, TcpListener, TcpStream};
@@ -20,7 +19,6 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-pub const MAX_BODY: usize = 64 * 1024;
 const MAX_HEADER_BYTES: usize = 8 * 1024;
 const MAX_CONNECTIONS: usize = 16;
 /// For writing the answer.
@@ -33,19 +31,7 @@ const REJECT_LOG_BURST: u32 = 5;
 const REJECT_LOG_WINDOW_MS: u64 = 60_000;
 const MAX_FIELD: usize = 200;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RuntimeInfo {
-    pub port: u16,
-    pub token: String,
-    pub pid: u32,
-}
-
-/// `runtime.json` in the data folder; the hook adapter reads the same path (data_dir.rs is shared). None when
-/// there is no data folder.
-pub fn runtime_path() -> Option<PathBuf> {
-    klat_protocol::runtime_path()
-}
-
+/// Writes `runtime.json` (`klat_protocol::runtime_path`, where the hook adapter reads it).
 pub fn write_runtime(path: &Path, info: &RuntimeInfo) -> io::Result<()> {
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir)?;
@@ -259,7 +245,7 @@ pub fn handle(reader: &mut impl BufRead, token: &str) -> Result<HookEvent, u16> 
         }
     }
 
-    if path != "/event" {
+    if path != EVENT_PATH {
         return Err(404);
     }
     if method != "POST" {
@@ -285,7 +271,7 @@ pub fn handle(reader: &mut impl BufRead, token: &str) -> Result<HookEvent, u16> 
 }
 
 fn validate(ev: &HookEvent) -> Result<(), u16> {
-    if !ALLOWED_HOOKS.contains(&ev.hook_event_name.as_str()) {
+    if ev.hook().is_none() {
         return Err(422);
     }
     let too_long = |s: &str| s.chars().count() > MAX_FIELD;
@@ -338,6 +324,7 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use klat_protocol::HookName;
     use std::io::Cursor;
     use std::sync::mpsc;
 
@@ -432,7 +419,7 @@ mod tests {
     fn rejects_unknown_events() {
         assert_eq!(run(ok_request(&body("PreToolUse"))), Err(422));
         assert_eq!(run(ok_request(&body("rm -rf"))), Err(422));
-        for name in ALLOWED_HOOKS {
+        for name in HookName::ALL.map(HookName::as_str) {
             assert!(run(ok_request(&body(name))).is_ok(), "{name}");
         }
     }
@@ -506,6 +493,7 @@ mod tests {
     fn tokens_are_256_bit_hex_and_unique() {
         let (a, b) = (new_token().unwrap(), new_token().unwrap());
         assert_eq!(a.len(), 64);
+        assert!(klat_protocol::is_valid_token(&a));
         assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
         assert_ne!(a, b);
     }

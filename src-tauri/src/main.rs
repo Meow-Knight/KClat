@@ -90,7 +90,7 @@ fn main() {
 
     app.run(|_app, event| {
         if let RunEvent::Exit = event {
-            if let Some(path) = event_server::runtime_path() {
+            if let Some(path) = klat_protocol::runtime_path() {
                 event_server::remove_runtime(&path);
             }
             log::info("exiting");
@@ -100,7 +100,7 @@ fn main() {
 
 fn start_event_server(app: &AppHandle) -> std::io::Result<()> {
     // Without a data folder there is nowhere private to hand the token to the hooks.
-    let Some(runtime) = event_server::runtime_path() else {
+    let Some(runtime) = klat_protocol::runtime_path() else {
         log::warn("no data folder (APPDATA / HOME unset): hook events are off");
         return Ok(());
     };
@@ -112,7 +112,7 @@ fn start_event_server(app: &AppHandle) -> std::io::Result<()> {
     log::info(format!("event server listening on 127.0.0.1:{port}"));
     event_server::write_runtime(
         &runtime,
-        &event_server::RuntimeInfo {
+        &klat_protocol::RuntimeInfo {
             port,
             token,
             pid: std::process::id(),
