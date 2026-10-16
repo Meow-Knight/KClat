@@ -70,7 +70,10 @@ _Add your build and test commands here_
 
 ## Architecture Overview
 
-_Add a brief overview of your project architecture_
+**Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) before adding a feature or refactoring.** It is the
+standard structure: layers (`klat-protocol` → `klat-core` → `klat-infra` → `src-tauri`), dependency rules, required
+patterns, where each kind of code goes (§8), step-by-step recipes for common features (§9), and the migration state
+(§11, the current code does not match the target yet; new code follows the target).
 
 ## Conventions & Patterns
 

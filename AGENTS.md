@@ -2,6 +2,9 @@
 
 This project uses **bd** (beads) for issue tracking. Run `bd prime` for full workflow context.
 
+**Code structure:** read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) before adding a feature or refactoring. It
+defines the layers, dependency rules, where code goes (§8), feature recipes (§9) and the migration state (§11).
+
 > **Architecture in one line:** Issues live in a local Dolt database
 > (`.beads/dolt/`); cross-machine sync uses `bd dolt push/pull` (a
 > git-compatible protocol), stored under `refs/dolt/data` on your git
