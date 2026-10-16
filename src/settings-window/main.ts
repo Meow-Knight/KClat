@@ -3,7 +3,7 @@
 import type { HooksStatus, SettingsPatch } from '../bridge/tauriBridge';
 import { t as translate, type UiKey } from '../i18n';
 import type { AppSettings } from '../settings';
-import { mockApi, tauriApi } from './api';
+import { mockApi, tauriApi } from '../bridge/settingsApi';
 import type { Ctx, SectionView } from './context';
 import { h, svg } from './controls';
 import klatIcon from '../assets/klat-icon.png';

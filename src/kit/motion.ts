@@ -1,7 +1,7 @@
 // Motion every Klat character shares (spec §6.3): jump with squash & stretch, breathing, and how the head
 // turns, droops and tilts. A character applies these to its own root and head; species parts do the rest.
 import type * as THREE from 'three';
-import type { CatPose } from '../cat/CatController';
+import type { CatPose } from './pose';
 
 /** Jump height and volume-preserving squash. The root's origin is at the feet, so squashing never sinks. */
 export function applyJumpSquash(root: THREE.Object3D, pose: CatPose): void {

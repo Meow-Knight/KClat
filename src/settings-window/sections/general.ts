@@ -34,7 +34,7 @@ export function generalSection(ctx: Ctx): SectionView {
     (v) => ctx.patch({ character: v }),
   );
   // Drawn from the real rigs once the window is up; without WebGL the cards keep just their names.
-  void import('../../characters/pictures')
+  void import('../../cat/pictures')
     .then((m) => m.characterPictures())
     .then((pictures) => character.setPictures(pictures))
     .catch(() => {});

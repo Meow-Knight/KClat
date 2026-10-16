@@ -2,7 +2,7 @@
 import type { HooksStatus, SettingsPatch } from '../bridge/tauriBridge';
 import type { UiKey } from '../i18n';
 import type { AppSettings, UiLanguage } from '../settings';
-import type { SettingsApi } from './api';
+import type { SettingsApi } from '../bridge/settingsApi';
 
 export interface Ctx {
   api: SettingsApi;

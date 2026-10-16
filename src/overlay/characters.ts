@@ -4,7 +4,7 @@
 // ?poses=0,1 only those poses (0 = asleep, 1 = awake and grumpy).
 import * as THREE from 'three';
 import { createRig } from '../characters';
-import { PICTURE_T, poseWith, SHEET_POSES } from '../characters/poses';
+import { PICTURE_T, poseWith, SHEET_POSES } from '../cat/poses';
 import { CHARACTERS, type CharacterId } from '../settings';
 
 const W = 360;

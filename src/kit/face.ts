@@ -3,7 +3,7 @@
 // dark oval, blush, and an optional muzzle and nose. A character only places it on its head (FaceLayout);
 // what is inside each eye and how expressions map onto it stay fixed.
 import * as THREE from 'three';
-import type { CatPose } from '../cat/CatController';
+import type { CatPose } from './pose';
 import { HIGHLIGHT, MOUTH, PUPIL, type CharacterPalette } from './palette';
 import { OUTLINE, type ToonBuilder, type V3 } from './ToonBuilder';
 

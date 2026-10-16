@@ -3,6 +3,18 @@
 import type { WakeReason } from '../phrases/PhrasePicker';
 import { Ballistic, SpringSet, type SpringSpec } from './springs';
 import { DEFAULT_LOOK, lookFromOffset, type Look } from './lookTarget';
+import {
+  KNOCKOUT_FLIGHT_END_S,
+  KNOCKOUT_IMPACT_MS,
+  KNOCKOUT_OBJECTS,
+  type CatPose,
+  type KnockoutObject,
+  type PoseParam,
+} from '../kit/pose';
+
+// The rig's side of the pose lives in kit/pose.ts; these names stay importable from here.
+export { KNOCKOUT_FLIGHT_END_S, KNOCKOUT_IMPACT_MS, KNOCKOUT_IMPACT_S, KNOCKOUT_OBJECTS } from '../kit/pose';
+export type { CatPose, KnockoutObject } from '../kit/pose';
 
 export type CatState = 'sleep' | 'active';
 
@@ -30,37 +42,13 @@ export const SPRINGS = {
   dizzy: [0, 160, 12],
   /** Knocked out: the bump on the head (impulse makes it pop). */
   bump: [0, 220, 9],
-} as const satisfies Record<string, SpringSpec>;
+} as const satisfies Record<PoseParam, SpringSpec>;
 
-export type ParamName = keyof typeof SPRINGS;
-
-/** Everything the rig needs for one frame. Mutated in place by `update()`. */
-export type CatPose = Record<ParamName, number> & {
-  jumpY: number;
-  tapping: boolean;
-  purring: boolean;
-  /** Show the floating Zzz: asleep with the sleep sequence finished, and motion allowed. */
-  zzz: boolean;
-  /** Animate the aura flames (off under reduceMotion: a steady glow instead). */
-  auraFlicker: boolean;
-  /** The object thrown at the cat (index into KNOCKOUT_OBJECTS), or -1 when nothing is flying. */
-  bonkKind: number;
-  /** Seconds since the throw started; the rig draws the flight and the bounce from it. */
-  bonkT: number;
-};
-
-/** What can fly at the cat's head, in the order the rig builds them. */
-export const KNOCKOUT_OBJECTS = ['stick', 'slipper', 'durian', 'pan'] as const;
-export type KnockoutObject = (typeof KNOCKOUT_OBJECTS)[number];
+export type ParamName = PoseParam;
 
 /** How the cat falls asleep: a yawn, or knocked out by a flying object (when you did something). */
 export type SleepStyle = 'yawn' | 'knockout';
 
-/** Knockout timeline, in ms from the throw. The rig uses KNOCKOUT_IMPACT_S for the hit point. */
-export const KNOCKOUT_IMPACT_MS = 380;
-export const KNOCKOUT_IMPACT_S = KNOCKOUT_IMPACT_MS / 1000;
-/** After the hit the object bounces away; it is hidden once it has left the frame. */
-export const KNOCKOUT_FLIGHT_END_S = KNOCKOUT_IMPACT_S + 1.1;
 const KNOCKOUT_COLLAPSE_MS = 1050;
 const KNOCKOUT_SETTLED_MS = 2100;
 const KNOCKOUT_BUMP_MS = 4200;

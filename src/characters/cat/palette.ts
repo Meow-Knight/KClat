@@ -1,5 +1,5 @@
 // The cat's own colours (spec §5.2). Ink, pupil and mouth are shared by every character: see kit/palette.
-import type { CharacterPalette } from '../kit/palette';
+import type { CharacterPalette } from '../../kit/palette';
 
 export const FUR = 0x9aa6bd;
 export const FUR2 = 0x6b7690;

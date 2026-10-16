@@ -2,7 +2,7 @@
 // cat's ears perk up, its rattle buzzes where the cat's tail wags, and it flicks its forked tongue where the
 // cat taps its paw. Asleep it lays its cheek on its coils and blows a snot bubble.
 import * as THREE from 'three';
-import type { CatPose } from '../../cat/CatController';
+import type { CatPose } from '../../kit/pose';
 import { projectToScreen, type CharacterRig } from '../../kit/CharacterRig';
 import { Face, type FaceLayout } from '../../kit/face';
 import { CharacterFx, type FxLayout } from '../../kit/fx';

@@ -3,7 +3,7 @@
 // context open. Loaded on demand, so three.js stays out of the Settings window's first paint.
 import * as THREE from 'three';
 import { CHARACTERS, type CharacterId } from '../settings';
-import { createRig } from '.';
+import { createRig } from '../characters';
 import { ASLEEP_POSE, GRUMPY_POSE, PICTURE_T, poseWith } from './poses';
 
 export interface CharacterPictures {

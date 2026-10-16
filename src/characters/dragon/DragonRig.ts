@@ -2,7 +2,7 @@
 // where the cat's ears do, its wings flap where the cat's tail wags, it thumps its spade tail where the cat
 // taps its paw, and it puffs smoke from its nostrils while it yells.
 import * as THREE from 'three';
-import type { CatPose } from '../../cat/CatController';
+import type { CatPose } from '../../kit/pose';
 import { projectToScreen, type CharacterRig } from '../../kit/CharacterRig';
 import { Face, type FaceLayout } from '../../kit/face';
 import { CharacterFx, type FxLayout } from '../../kit/fx';

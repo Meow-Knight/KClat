@@ -1,7 +1,7 @@
 // What the stage needs from a character's rig. CatController (the shared brain) drives every rig with the
 // same CatPose; a rig only decides how its body shows it.
 import * as THREE from 'three';
-import type { CatPose } from '../cat/CatController';
+import type { CatPose } from './pose';
 
 export interface CharacterRig {
   /** Add this to the scene. */

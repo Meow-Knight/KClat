@@ -2,7 +2,7 @@
 // mark, and the knockout (a thrown object, the impact burst, stars circling the head, a bump).
 // A character only says where they go around its body (FxLayout); their look stays fixed.
 import * as THREE from 'three';
-import { KNOCKOUT_IMPACT_S, type CatPose } from '../cat/CatController';
+import { KNOCKOUT_IMPACT_S, type CatPose } from './pose';
 import { SHADOW_OPACITY, type CharacterPalette } from './palette';
 import { angerTexture, burstTexture, glyphTexture, starTexture } from './textures';
 import { OUTLINE, type ToonBuilder, type V3 } from './ToonBuilder';

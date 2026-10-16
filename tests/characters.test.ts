@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { CatPose } from '../src/cat/CatController';
+import type { CatPose } from '../src/kit/pose';
 import { createRig } from '../src/characters';
-import { PICTURE_T, poseWith, SHEET_POSES } from '../src/characters/poses';
+import { PICTURE_T, poseWith, SHEET_POSES } from '../src/cat/poses';
 import { CHARACTERS, DEFAULT_SETTINGS, type CharacterId } from '../src/settings';
 
 /** Every sheet pose, plus each knockout object after the hit and the tapping beat at its peak. */

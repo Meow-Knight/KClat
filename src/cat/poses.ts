@@ -1,6 +1,7 @@
 // Fixed poses for pictures of a character: the dev sheet (characters.html) and the Settings previews.
 // Each one puts every part in a known state, at a fixed time, so a picture is the same on every run.
-import { CatController, type CatPose } from '../cat/CatController';
+import type { CatPose } from '../kit/pose';
+import { CatController } from './CatController';
 
 /** Seconds: the time every picture is drawn at (breathing, sway, aura flicker). */
 export const PICTURE_T = 1.234;

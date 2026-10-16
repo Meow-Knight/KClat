@@ -2,14 +2,14 @@
 // come from the character kit (src/kit); this file builds and moves what only the cat has: its body, head,
 // stripes, whiskers, ears and tail.
 import * as THREE from 'three';
-import type { CatPose } from './CatController';
+import type { CatPose } from '../../kit/pose';
 import { CAT_PALETTE, CREAM, FUR, FUR2, PINK } from './palette';
-import { projectToScreen, type CharacterRig } from '../kit/CharacterRig';
-import { Face, type FaceLayout } from '../kit/face';
-import { CharacterFx, type FxLayout } from '../kit/fx';
-import { applyHeadTurn, applyJumpSquash, BREATH_BODY, BREATH_HEAD, BREATH_HEAD_PHASE, breathRate, tapBeat } from '../kit/motion';
-import { OUTLINE, ToonBuilder, type V3 } from '../kit/ToonBuilder';
-import { ToonTube } from '../kit/tube';
+import { projectToScreen, type CharacterRig } from '../../kit/CharacterRig';
+import { Face, type FaceLayout } from '../../kit/face';
+import { CharacterFx, type FxLayout } from '../../kit/fx';
+import { applyHeadTurn, applyJumpSquash, BREATH_BODY, BREATH_HEAD, BREATH_HEAD_PHASE, breathRate, tapBeat } from '../../kit/motion';
+import { OUTLINE, ToonBuilder, type V3 } from '../../kit/ToonBuilder';
+import { ToonTube } from '../../kit/tube';
 
 /** Tail control points: A = awake pose, Z = curled around the paws while asleep. */
 const TAIL_A: readonly V3[] = [[0.55, 0.45, -0.75], [1.25, 0.55, -0.7], [1.62, 1.15, -0.55], [1.45, 1.8, -0.45]];

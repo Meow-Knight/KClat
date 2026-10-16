@@ -10,7 +10,7 @@ import {
   type IpcError,
   type Message,
   type SettingsPatch,
-} from '../bridge/tauriBridge';
+} from './tauriBridge';
 import { DEFAULT_SETTINGS, type AppSettings, type UiLanguage } from '../settings';
 
 export interface SettingsApi {

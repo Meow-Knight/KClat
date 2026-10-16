@@ -128,6 +128,7 @@ ClauCat/
 - `[workspace.lints]`: `unsafe_code = "forbid"` cho `klat-protocol`, `klat-core`, `klat-infra`, `klat-hook`; trong `klat` chỉ `platform/` có `#![allow(unsafe_code)]`.
 - `clippy.toml` của `klat-core`: `disallowed-methods` cho `std::time::SystemTime::now`, `std::time::Instant::now`, `std::thread::spawn`.
 - Trong `klat`: chưa có công cụ ép giữa các module, nên review theo bảng 4.1 (checklist §12).
+- Frontend: `no-restricted-imports` trong `eslint.config.js` sinh luật từ bảng §4.3 (`LAYERS`), chạy trong `pnpm lint`. Thêm thư mục cấp cao mới trong `src/` thì thêm nó vào `LAYERS`.
 
 ### 4.3 Frontend (`src/`)
 
@@ -136,8 +137,8 @@ Thứ tự tầng, trong ra ngoài. Một thư mục chỉ được import từ 
 | Tầng | Thư mục | Vai trò | Ghi chú |
 |---|---|---|---|
 | 0 | `settings.ts`, `i18n/`, `phrases/` | Dữ liệu và hàm thuần | Không DOM, không Three.js, không Tauri |
-| 1 | `kit/` | Bộ dựng toon dùng chung: mesh, viền, mặt, fx, chuyển động, kiểu `CharacterRig` và `CatPose` | Không biết nhân vật cụ thể nào |
-| 2 | `characters/` (bao gồm `CatRig`) | Mỗi nhân vật một rig + registry `characters/index.ts` | Chỉ import `kit/` + tầng 0 |
+| 1 | `kit/` | Bộ dựng toon dùng chung: mesh, viền, mặt, fx, chuyển động, kiểu `CharacterRig`; `kit/pose.ts`: `CatPose`, `POSE_PARAMS`, mốc thời gian knockout | Không biết nhân vật cụ thể nào |
+| 2 | `characters/` (`cat/`, `snake/`, `dragon/`) | Mỗi nhân vật một rig + registry `characters/index.ts` | Chỉ import `kit/` + tầng 0 |
 | 3 | `cat/` (bộ não + stage), `bubble/` | `CatController` (thuần), `CatStage`, `RenderLoop`, bong bóng | Lấy rig qua registry, không import rig cụ thể |
 | 4 | `bridge/` | **Nơi duy nhất** import `@tauri-apps/*`; type sinh từ Rust | `bridge/generated.ts` chỉ có type, không code: mọi tầng được `import type` từ nó (coi như tầng 0) |
 | 5 | `overlay/`, `settings-window/` | Entry point, composition root của từng cửa sổ | Nối bridge với tầng 0–3 |
@@ -374,7 +375,7 @@ là entry của OS).
 | Chữ hiển thị (tray, dialog, Settings) | `src/i18n/{en,vi}.json` (Rust đọc chung) |
 | Câu mèo chửi | `src/phrases/phrases.ts` |
 | Nhân vật mới | `src/characters/<id>/` (§9.5) |
-| Hoạt ảnh/biểu cảm dùng chung mọi nhân vật | `src/cat/CatController.ts` (param) + `src/kit/` |
+| Hoạt ảnh/biểu cảm dùng chung mọi nhân vật | `src/kit/pose.ts` (`POSE_PARAMS`) + spring trong `src/cat/CatController.ts` (`SPRINGS`, compiler bắt thiếu) + `src/kit/` |
 
 ---
 
@@ -420,7 +421,8 @@ Luôn theo thứ tự trong → ngoài; mỗi bước có test ở tầng của 
 2. `src/characters/<id>/<Id>Rig.ts` implement `CharacterRig`, chỉ dùng `kit/`.
 3. Đăng ký trong `characters/index.ts`; thêm id vào `CharacterId` (TS) và `enum Character` (`klat-core::settings`).
 4. Test trong `tests/characters.test.ts`.
-5. Không sửa `CatController` trừ khi cần param pose mới cho mọi nhân vật.
+5. Không sửa `CatController` trừ khi cần param pose mới cho mọi nhân vật (thêm vào `kit/pose.ts` `POSE_PARAMS`, rồi spring trong `SPRINGS`).
+6. Kiểm ảnh: `pnpm dev` → `/characters.html?c=<id>` in hash pixel từng ô; refactor không được đổi hash của nhân vật khác.
 
 ### 9.6 Thêm hỗ trợ một hệ điều hành
 
