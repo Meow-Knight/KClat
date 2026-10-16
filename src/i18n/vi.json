@@ -33,7 +33,7 @@
   "settings.general.lead": "Cách Klat chạy trên máy bạn.",
   "settings.general.startup": "Khởi động",
   "settings.general.startAtLogin": "Khởi động cùng máy",
-  "settings.general.startAtLogin.desc": "Mở Klat khi bạn đăng nhập.",
+  "settings.general.startAtLogin.desc": "Tự mở Klat khi bạn bật máy.",
   "settings.general.startAtLogin.error": "Không đổi được: {error}",
   "settings.general.cat": "Klat của bạn",
   "settings.general.character": "Nhân vật",

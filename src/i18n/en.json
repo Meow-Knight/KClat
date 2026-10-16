@@ -33,7 +33,7 @@
   "settings.general.lead": "How Klat runs on this computer.",
   "settings.general.startup": "Startup",
   "settings.general.startAtLogin": "Start at login",
-  "settings.general.startAtLogin.desc": "Open Klat when you sign in.",
+  "settings.general.startAtLogin.desc": "Open Klat when you start your computer.",
   "settings.general.startAtLogin.error": "Could not change this: {error}",
   "settings.general.cat": "Your Klat",
   "settings.general.character": "Character",
