@@ -7,8 +7,6 @@
 //!   file changed on disk while we were working (Claude Code edits it too).
 //! - Runs only on request (Settings > Hooks), never at start-up.
 
-// target: klat-infra::claude_settings
-
 pub use klat_core::claude_hooks::Status;
 use klat_core::claude_hooks::{install_into, status, uninstall_from, UnexpectedShape, MARKER};
 use serde::Deserialize;
@@ -18,43 +16,23 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[derive(Debug)]
+/// Why Install or Uninstall did nothing. The text is for the log; the Settings window shows its own,
+/// translated, per variant.
+#[derive(Debug, thiserror::Error)]
 pub enum InstallError {
     /// settings.json is not valid JSON; nothing was written.
+    #[error("settings.json is not valid JSON ({0}). Nothing was changed.")]
     BrokenJson(String),
     /// settings.json (or its "hooks") is not a JSON object; nothing was written.
+    #[error("{0} in settings.json is not a JSON object. Nothing was changed.")]
     UnexpectedShape(&'static str),
+    #[error("The hook program was not found at {}.", .0.display())]
     ExeMissing(PathBuf),
     /// Someone else wrote settings.json while we were working; nothing was written.
+    #[error("settings.json changed while installing. Nothing was changed; try again.")]
     ChangedConcurrently,
-    Io(io::Error),
-}
-
-impl std::fmt::Display for InstallError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::BrokenJson(e) => write!(
-                f,
-                "settings.json is not valid JSON ({e}). Nothing was changed."
-            ),
-            Self::UnexpectedShape(what) => write!(
-                f,
-                "{what} in settings.json is not a JSON object. Nothing was changed."
-            ),
-            Self::ExeMissing(p) => write!(f, "The hook program was not found at {}.", p.display()),
-            Self::ChangedConcurrently => write!(
-                f,
-                "settings.json changed while installing. Nothing was changed; try again."
-            ),
-            Self::Io(e) => write!(f, "Could not update settings.json: {e}"),
-        }
-    }
-}
-
-impl From<io::Error> for InstallError {
-    fn from(e: io::Error) -> Self {
-        Self::Io(e)
-    }
+    #[error("Could not update settings.json: {0}")]
+    Io(#[from] io::Error),
 }
 
 impl From<UnexpectedShape> for InstallError {
@@ -227,6 +205,39 @@ mod tests {
         let name = adapter_file_name();
         assert_eq!(name.ends_with(".exe"), cfg!(windows));
         assert!(name.starts_with(MARKER));
+    }
+
+    #[test]
+    fn error_texts_for_the_log_are_unchanged() {
+        let cases = [
+            (
+                InstallError::BrokenJson("line 1".into()),
+                "settings.json is not valid JSON (line 1). Nothing was changed.",
+            ),
+            (
+                InstallError::UnexpectedShape("\"hooks\""),
+                "\"hooks\" in settings.json is not a JSON object. Nothing was changed.",
+            ),
+            (
+                InstallError::ExeMissing(PathBuf::from("/x/klat-hook")),
+                "The hook program was not found at /x/klat-hook.",
+            ),
+            (
+                InstallError::ChangedConcurrently,
+                "settings.json changed while installing. Nothing was changed; try again.",
+            ),
+            (
+                InstallError::Io(io::Error::other("disk full")),
+                "Could not update settings.json: disk full",
+            ),
+        ];
+        for (e, text) in cases {
+            assert_eq!(e.to_string(), text);
+        }
+        assert!(matches!(
+            InstallError::from(UnexpectedShape("The top level")),
+            InstallError::UnexpectedShape("The top level")
+        ));
     }
 
     #[test]
@@ -406,7 +417,7 @@ mod tests {
     }
 }
 
-/// Dry run against a copy of a real settings file: `KLAT_DRYRUN=<copy> cargo test -- --ignored dry_run`.
+/// Dry run against a copy of a real settings file: `KLAT_DRYRUN=<copy> cargo test -p klat-infra -- --ignored dry_run`.
 #[cfg(test)]
 mod dry_run {
     use super::*;

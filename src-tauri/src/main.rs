@@ -5,7 +5,6 @@ mod autostart;
 mod commands;
 mod cursor;
 mod drag;
-mod hooks_installer;
 mod hooks_ui;
 mod i18n;
 mod overlay;

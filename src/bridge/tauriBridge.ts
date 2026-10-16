@@ -43,7 +43,7 @@ export interface HitRect {
   h: number;
 }
 
-/** Claude Code hooks, as src-tauri/src/hooks_installer.rs reports them. */
+/** Claude Code hooks, as crates/klat-infra/src/claude_settings.rs reports them. */
 export type HooksStatus = 'installed' | 'needs-repair' | 'not-installed';
 
 export interface HooksInfo {

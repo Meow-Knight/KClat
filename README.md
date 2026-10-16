@@ -244,11 +244,8 @@ With the app running and the hook built:
 | `src-tauri/src/hooks_ui.rs` | Hook status and install/uninstall messages for the tray and the Settings window |
 | `src-tauri/src/cursor.rs` | Cursor poller: click-through and `cat://cursor` |
 | `src-tauri/src/state.rs` | Shared state, `cat://state` / `cat://settings` |
-| `crates/klat-core/` | The rules, pure (no Tauri, no I/O, no clock): `session` (hook mapping, per-session state), `geometry`, `settings` model, `claude_hooks` edits, `i18n` |
-| `src-tauri/src/event_server.rs` | Loopback HTTP endpoint, token, `runtime.json` |
-| `src-tauri/src/hooks_installer.rs` | Install / repair / uninstall in `~/.claude/settings.json` |
-| `src-tauri/src/settings.rs` | Settings load/save |
-| `src-tauri/src/log.rs` | Capped local log |
+| `crates/klat-core/` | The rules, pure (no Tauri, no I/O, no clock): `session` (hook mapping, per-session state), `cat` (when the cat is awake), `geometry`, `settings` model, `claude_hooks` edits, `i18n` |
+| `crates/klat-infra/` | I/O without Tauri: `event_server` (loopback HTTP endpoint, token), `runtime_file` (`runtime.json`), `claude_settings` (install / repair / uninstall in `~/.claude/settings.json`), `settings_repo` (settings load/save), `log` (capped local log behind the `log` facade) |
 | `crates/klat-hook/` | Hook adapter |
 | `scripts/` | `send-test-event.ps1`, `stage-sidecar.mjs` |
 | `docs/` | Prototype, [hooks troubleshooting](docs/hooks-troubleshooting.md), [verification log](docs/verification.md) |
