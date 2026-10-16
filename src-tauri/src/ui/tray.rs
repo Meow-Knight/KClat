@@ -2,15 +2,15 @@
 //! window. Labels and tooltip follow the Platform Language and change as soon as it does.
 
 use crate::platform;
-use crate::services::cat_service::{self, AppState};
-use crate::services::i18n;
+use crate::services::cat_service::CatService;
+use klat_core::cat::Command;
 use klat_core::i18n::{t, tf};
 use klat_core::settings::{Settings, UiLanguage};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use tauri::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager, Wry};
+use tauri::{AppHandle, Wry};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 const READY: &str = "ready";
@@ -48,16 +48,15 @@ impl Items {
     }
 }
 
-pub fn create(app: &AppHandle) -> tauri::Result<()> {
-    let state = app.state::<AppState>();
-    let s = state.settings();
+pub fn create(app: &AppHandle, cat: Arc<CatService>) -> tauri::Result<()> {
+    let s = cat.settings();
     let lang = s.ui_language;
     let check = |id: &str, key: &str, on: bool| {
         CheckMenuItem::with_id(app, id, t(lang, key), true, on, None::<&str>)
     };
     let plain = |id: &str, key: &str| MenuItem::with_id(app, id, t(lang, key), true, None::<&str>);
     let items = Items {
-        ready: check(READY, "tray.ready", state.snapshot().ready)?,
+        ready: check(READY, "tray.ready", cat.snapshot().ready)?,
         pause: check(PAUSE, "tray.pause", !s.notifications_enabled)?,
         dismiss: plain(DISMISS_ALL, "tray.dismissAll")?,
         settings: plain(SETTINGS, "tray.settings")?,
@@ -81,15 +80,18 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .tooltip(tooltip(lang, 0))
         .menu(&menu)
-        .on_menu_event(|app, event| on_menu(app, &event))
+        .on_menu_event({
+            let cat = cat.clone();
+            move |app, event| on_menu(app, &cat, &event)
+        })
         // Windows: double-clicking the tray icon opens Settings.
-        .on_tray_icon_event(|tray, event| {
+        .on_tray_icon_event(move |tray, event| {
             if let TrayIconEvent::DoubleClick {
                 button: MouseButton::Left,
                 ..
             } = event
             {
-                open_settings(tray.app_handle());
+                open_settings(tray.app_handle(), &cat);
             }
         });
     builder = platform::tray_icon(app, builder);
@@ -135,33 +137,40 @@ fn tooltip(lang: UiLanguage, count: usize) -> String {
 /// Tooltip shows how many sessions are waiting.
 pub fn set_waiting(app: &AppHandle, count: usize) {
     WAITING.store(count, Ordering::Relaxed);
-    let lang = ITEMS.get().map_or_else(|| i18n::current(app), Items::lang);
+    // The items are made before the tray icon: without them there is no tooltip to set yet.
+    let Some(items) = ITEMS.get() else {
+        return;
+    };
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        let _ = tray.set_tooltip(Some(tooltip(lang, count)));
+        let _ = tray.set_tooltip(Some(tooltip(items.lang(), count)));
     }
 }
 
-fn on_menu(app: &AppHandle, event: &MenuEvent) {
+fn on_menu(app: &AppHandle, cat: &CatService, event: &MenuEvent) {
     let Some(items) = ITEMS.get() else {
         return;
     };
     // Check items flip themselves before this runs; read the new state from the item.
     let checked = |item: &CheckMenuItem<Wry>| item.is_checked().unwrap_or(false);
     match event.id().as_ref() {
-        READY => cat_service::set_ready(app, checked(&items.ready)),
+        READY => {
+            cat.dispatch(Command::SetReady(checked(&items.ready)));
+        }
         PAUSE => {
             let paused = checked(&items.pause);
-            cat_service::update_settings(app, |s| s.notifications_enabled = !paused);
+            cat.update_settings(|s| s.notifications_enabled = !paused);
         }
-        DISMISS_ALL => cat_service::dismiss_all(app),
-        SETTINGS => open_settings(app),
+        DISMISS_ALL => {
+            cat.dispatch(Command::DismissAll);
+        }
+        SETTINGS => open_settings(app, cat),
         QUIT => app.exit(0),
         _ => {}
     }
 }
 
-fn open_settings(app: &AppHandle) {
-    if let Err(e) = crate::ui::settings_window::open(app) {
+fn open_settings(app: &AppHandle, cat: &CatService) {
+    if let Err(e) = crate::ui::settings_window::open(app, cat.settings().ui_language) {
         log::warn!("could not open settings: {e}");
     }
 }

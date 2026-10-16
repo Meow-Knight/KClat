@@ -19,6 +19,8 @@ serde_json = { workspace = true, features = ["preserve_order"] }
 tauri-plugin-dialog = "2.8.2"
 tauri-plugin-single-instance = "2.5.3"
 tauri-plugin-autostart = "2.7.0"
+# watch channels for the services' snapshots (docs/ARCHITECTURE.md §7.1). Same version Tauri already pulls in.
+tokio = { version = "1.53.2", features = ["sync"] }
 
 # The macOS Space hook (platform/macos.rs). Same versions Tauri already pulls in.
 [target.'cfg(target_os = "macos")'.dependencies]

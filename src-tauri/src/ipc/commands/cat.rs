@@ -1,32 +1,34 @@
 //! The cat: its state, waking it for a test, Ready, Dismiss and Sleep.
 
-use crate::services::cat_service::{self, AppState, CatState};
-use tauri::{AppHandle, State};
+use crate::services::cat_service::CatService;
+use klat_core::cat::{CatState, Command};
+use std::sync::Arc;
+use tauri::State;
 
 #[tauri::command]
-pub fn get_state(state: State<'_, AppState>) -> CatState {
-    state.snapshot()
+pub fn get_state(cat: State<'_, Arc<CatService>>) -> CatState {
+    cat.snapshot()
 }
 
 #[tauri::command]
-pub fn wake_test(app: AppHandle) {
-    cat_service::wake_test(&app);
+pub fn wake_test(cat: State<'_, Arc<CatService>>) {
+    cat.dispatch(Command::WakeTest);
 }
 
 /// Same as the tray's Sleep: dismisses whatever is waiting. Sends nothing to Claude Code.
 #[tauri::command]
-pub fn sleep(app: AppHandle) {
-    cat_service::dismiss_all(&app);
+pub fn sleep(cat: State<'_, Arc<CatService>>) {
+    cat.dispatch(Command::DismissAll);
 }
 
 /// Bubble clicked: same as tray "Dismiss all".
 #[tauri::command]
-pub fn dismiss(app: AppHandle) {
-    cat_service::dismiss_all(&app);
+pub fn dismiss(cat: State<'_, Arc<CatService>>) {
+    cat.dispatch(Command::DismissAll);
 }
 
 /// The Ready button next to the cat.
 #[tauri::command]
-pub fn set_ready(app: AppHandle, on: bool) {
-    cat_service::set_ready(&app, on);
+pub fn set_ready(cat: State<'_, Arc<CatService>>, on: bool) {
+    cat.dispatch(Command::SetReady(on));
 }

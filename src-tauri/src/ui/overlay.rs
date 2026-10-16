@@ -3,7 +3,7 @@
 //!
 //! Cat size (`catScale`): the window is WIDTH×HEIGHT times the scale and its webview is zoomed by the same
 //! factor, so the page always lays out at WIDTH×HEIGHT CSS px and everything in it grows together. Hitboxes
-//! and cursor points are converted between the two (with `zoom()`) in `AppState::hitboxes` and the cursor poller.
+//! and cursor points are converted between the two (with `zoom()`) in `OverlayState::hitboxes` and the cursor poller.
 //!
 //! Dragging the size slider (ClauCat-jds): resizing, moving and zooming the window are separate asynchronous
 //! steps, and doing them on every step of a drag made the cat flicker and jump. While the slider is dragged the
@@ -13,12 +13,13 @@
 
 use crate::ipc::events::EVENT_SCALE_PREVIEW;
 use crate::platform;
-use crate::services::cat_service::{self, AppState};
+use crate::services::cat_service::CatService;
 use crate::tasks::drag_loop;
-use klat_core::geometry::{self, Physical, Point, Rect, WindowPos};
+use klat_core::geometry::{self, Css, Logical, Physical, Point, Rect, WindowPos};
 use klat_core::settings::CAT_SCALE;
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use tauri::{
@@ -45,8 +46,29 @@ pub fn zoom() -> f64 {
     f64::from_bits(ZOOM.load(Ordering::Relaxed))
 }
 
-pub fn create(app: &AppHandle) -> tauri::Result<WebviewWindow> {
-    let zoom = app.state::<AppState>().settings().zoom();
+/// What the overlay page reports about itself.
+#[derive(Default)]
+pub struct OverlayState {
+    /// Clickable regions of the overlay as the page reports them; see `hitboxes()`.
+    page_hitboxes: Mutex<Vec<Rect<Css>>>,
+}
+
+impl OverlayState {
+    pub fn set_page_hitboxes(&self, rects: Vec<Rect<Css>>) {
+        *self.page_hitboxes.lock().unwrap() = rects;
+    }
+
+    /// Clickable regions relative to the overlay's top-left corner.
+    pub fn hitboxes(&self) -> Vec<Rect<Logical>> {
+        let zoom = zoom();
+        let rects = self.page_hitboxes.lock().unwrap();
+        rects.iter().map(|r| r.to_logical(zoom)).collect()
+    }
+}
+
+pub fn create(app: &AppHandle, cat: &CatService) -> tauri::Result<WebviewWindow> {
+    let settings = cat.settings();
+    let zoom = settings.zoom();
     let size = logical_size(zoom);
     let mut builder = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::default())
         .title("Klat")
@@ -71,7 +93,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     let win = builder.build()?;
     win.set_zoom(zoom)?;
     ZOOM.store(zoom.to_bits(), Ordering::Relaxed);
-    place(&win, app.state::<AppState>().settings().position)?;
+    place(&win, settings.position)?;
     // Click-through by default; the cursor poller turns it off over the cat and the bubble.
     win.set_ignore_cursor_events(true)?;
     Ok(win)
@@ -105,9 +127,9 @@ fn logical_size(zoom: f64) -> LogicalSize<f64> {
 /// The cat scale changed: resize the window and zoom its page to match. The bottom-right corner stays where it
 /// is, so the cat (on the right, standing on the bottom) stays put and the window grows up and to the left.
 /// Returns the new top-left when the cat had been dragged somewhere, for the caller to save.
-pub fn rescale(app: &AppHandle, zoom: f64) -> Option<WindowPos> {
+pub fn rescale(app: &AppHandle, cat: &CatService, zoom: f64) -> Option<WindowPos> {
     let pos = resize(app, zoom)?;
-    let dragged = app.state::<AppState>().settings().position.is_some();
+    let dragged = cat.settings().position.is_some();
     dragged.then_some(pos)
 }
 
@@ -163,14 +185,18 @@ pub struct ZoomChange {
 /// Called by the overlay page with the cat hidden: `true` sets the window to `PREVIEW_ZOOM` for a preview,
 /// `false` back to the cat scale (saving the spot of a dragged cat). The second returns the new settings to
 /// save, if any.
-pub fn preview_zoom(app: &AppHandle, preview: bool) -> (ZoomChange, Option<WindowPos>) {
+pub fn preview_zoom(
+    app: &AppHandle,
+    cat: &CatService,
+    preview: bool,
+) -> (ZoomChange, Option<WindowPos>) {
     let from = zoom();
     let (to, saved) = if preview {
         resize(app, PREVIEW_ZOOM);
         (PREVIEW_ZOOM, None)
     } else {
-        let to = app.state::<AppState>().settings().zoom();
-        (to, rescale(app, to))
+        let to = cat.settings().zoom();
+        (to, rescale(app, cat, to))
     };
     let change = ZoomChange {
         from,
@@ -210,7 +236,7 @@ pub fn place(win: &WebviewWindow, saved: Option<WindowPos>) -> tauri::Result<()>
 ///
 /// A dragged cat keeps the window's bottom-right corner, where it stands: keeping the saved top-left would grow
 /// the window (150% DPI: half as big again) right and down, off the screen and under the taskbar.
-pub fn on_scale_changed(win: &WebviewWindow) {
+pub fn on_scale_changed(win: &WebviewWindow, cat: Arc<CatService>, overlay: Arc<OverlayState>) {
     if drag_loop::dragging() {
         return;
     }
@@ -222,30 +248,31 @@ pub fn on_scale_changed(win: &WebviewWindow) {
     let win = win.clone();
     thread::spawn(move || {
         thread::sleep(Duration::from_millis(150));
-        let app = win.app_handle();
-        if app.state::<AppState>().settings().position.is_none() {
+        if cat.settings().position.is_none() {
             let _ = place(&win, None);
             return;
         }
-        if let Some(pos) = reanchor(&win, before) {
+        if let Some(pos) = reanchor(&win, &overlay, before) {
             log::info!("DPI changed: cat moved to {},{}", pos.x, pos.y);
-            cat_service::update_settings(app, |s| s.position = Some(pos));
+            cat.update_settings(|s| s.position = Some(pos));
         }
     });
 }
 
 /// Puts a dragged window back with the bottom-right corner it had `before` (or where it is, without that) at its
 /// new size, with the cat inside the work area. Returns the new top-left.
-fn reanchor(win: &WebviewWindow, before: Option<(WindowPos, (u32, u32))>) -> Option<WindowPos> {
+fn reanchor(
+    win: &WebviewWindow,
+    overlay: &OverlayState,
+    before: Option<(WindowPos, (u32, u32))>,
+) -> Option<WindowPos> {
     let size = win.outer_size().ok()?;
     let scale = win.scale_factor().ok()?;
     let pos = match before {
         Some((pos, old)) => geometry::keep_bottom_right(pos, old, (size.width, size.height)),
         None => screen_pos(win.outer_position().ok()?),
     };
-    let cat = win
-        .app_handle()
-        .state::<AppState>()
+    let cat = overlay
         .hitboxes()
         .first()
         .map(|r| r.to_physical(Point::new(0.0, 0.0), scale));

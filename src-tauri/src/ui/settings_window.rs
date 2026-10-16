@@ -2,7 +2,6 @@
 //! destroyed when closed, so its webview costs no memory while it is not open.
 
 use crate::platform;
-use crate::services::i18n;
 use klat_core::i18n::t;
 use klat_core::settings::UiLanguage;
 use tauri::{
@@ -19,14 +18,14 @@ const MIN_HEIGHT: f64 = 480.0;
 const MAX_WIDTH: f64 = 960.0;
 
 /// Shows the Settings window, creating it if needed, and brings it to the front.
-pub fn open(app: &AppHandle) -> tauri::Result<()> {
+pub fn open(app: &AppHandle, lang: UiLanguage) -> tauri::Result<()> {
     if let Some(win) = app.get_webview_window(LABEL) {
         let _ = win.unminimize();
         win.show()?;
         return win.set_focus();
     }
     let win = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("settings.html".into()))
-        .title(t(i18n::current(app), "settings.windowTitle"))
+        .title(t(lang, "settings.windowTitle"))
         .inner_size(WIDTH, HEIGHT)
         .inner_size_constraints(WindowSizeConstraints {
             min_width: Some(logical(MIN_WIDTH)),

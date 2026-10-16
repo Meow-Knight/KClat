@@ -267,6 +267,30 @@ await check('Wake test wakes; Sleep puts it back', async () => {
   expect(!b.awake, summary(b));
   return `${summary(a)} → ${summary(b)}`;
 });
+await check('Events: cat://state and cat://settings reach the overlay page', async () => {
+  // Listens the way @tauri-apps/api's listen() does, so this sees what the page's own listeners see.
+  await evaluate(`(async () => {
+    const t = window.__TAURI_INTERNALS__;
+    window.__regress = { state: [], settings: [] };
+    const on = (event, list) => t.invoke('plugin:event|listen', {
+      event, target: { kind: 'Any' }, handler: t.transformCallback((e) => window.__regress[list].push(e.payload)),
+    });
+    await on('cat://state', 'state');
+    await on('cat://settings', 'settings');
+    return true;
+  })()`);
+  const last = (list) => evaluate(`window.__regress.${list}.at(-1) ?? null`);
+  await invoke('wake_test');
+  const woke = await until('cat://state awake', async () => (await last('state'))?.awake && last('state'), 3000);
+  await invoke('sleep');
+  const slept = await until('cat://state asleep', async () => (await last('state'))?.awake === false && last('state'), 3000);
+  const before = await invoke('get_settings');
+  const yells = before.maxYellsPerWake === 10 ? 9 : 10;
+  await invoke('set_settings', { patch: { maxYellsPerWake: yells } });
+  const changed = await until('cat://settings', async () => (await last('settings'))?.maxYellsPerWake === yells, 3000);
+  await invoke('set_settings', { patch: { maxYellsPerWake: before.maxYellsPerWake } });
+  return `${summary(await woke)} → ${summary(await slept)}; settings maxYellsPerWake ${yells}${changed ? '' : '?'}`;
+});
 await check('Settings: patch saved to settings.json; non-patchable keys ignored', async () => {
   const before = await invoke('get_settings');
   const after = await invoke('set_settings', { patch: { uiLanguage: 'vi', position: { x: 1, y: 2 }, startAtLogin: !before.startAtLogin } });

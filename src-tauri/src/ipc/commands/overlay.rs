@@ -1,8 +1,9 @@
 //! The overlay window: its clickable regions and the size slider preview.
 
-use crate::services::cat_service::{self, AppState};
-use crate::ui::overlay;
+use crate::services::cat_service::CatService;
+use crate::ui::overlay::{self, OverlayState};
 use klat_core::geometry::{Css, Rect};
+use std::sync::Arc;
 use tauri::{AppHandle, State};
 
 /// Upper bound on reported hitboxes; the overlay sends at most cat + bubble.
@@ -18,20 +19,24 @@ pub fn preview_cat_scale(app: AppHandle, scale: u32) {
 /// The overlay page, with the cat hidden, switches its window to the preview size (`preview`) or back to the
 /// cat scale. See `overlay::preview_zoom`.
 #[tauri::command]
-pub fn overlay_preview_zoom(app: AppHandle, preview: bool) -> overlay::ZoomChange {
-    let (change, saved) = overlay::preview_zoom(&app, preview);
+pub fn overlay_preview_zoom(
+    app: AppHandle,
+    cat: State<'_, Arc<CatService>>,
+    preview: bool,
+) -> overlay::ZoomChange {
+    let (change, saved) = overlay::preview_zoom(&app, &cat, preview);
     if let Some(pos) = saved {
-        cat_service::update_settings(&app, |s| s.position = Some(pos));
+        cat.update_settings(|s| s.position = Some(pos));
     }
     change
 }
 
 #[tauri::command]
-pub fn set_hitboxes(state: State<'_, AppState>, rects: Vec<Rect<Css>>) {
+pub fn set_hitboxes(overlay: State<'_, Arc<OverlayState>>, rects: Vec<Rect<Css>>) {
     let rects = rects
         .into_iter()
         .filter(|r| [r.x, r.y, r.w, r.h].iter().all(|v| v.is_finite()) && r.w > 0.0 && r.h > 0.0)
         .take(MAX_HITBOXES)
         .collect();
-    *state.page_hitboxes.lock().unwrap() = rects;
+    overlay.set_page_hitboxes(rects);
 }

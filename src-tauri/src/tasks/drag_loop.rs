@@ -14,12 +14,13 @@
 
 use crate::ipc::events::EVENT_GRAB;
 use crate::platform::{self, Msg};
-use crate::services::cat_service::{self, AppState};
-use crate::ui::overlay;
+use crate::services::cat_service::CatService;
+use crate::ui::overlay::{self, OverlayState};
 use klat_core::geometry::{clamp_window, Logical, Point, WindowPos};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 
 const DRAG_PERIOD: Duration = Duration::from_millis(8);
 
@@ -30,7 +31,7 @@ pub fn dragging() -> bool {
     DRAGGING.load(Ordering::Relaxed)
 }
 
-pub fn start(app: AppHandle) {
+pub fn start(app: AppHandle, service: Arc<CatService>, overlay_state: Arc<OverlayState>) {
     let (tx, rx) = std::sync::mpsc::channel::<Msg>();
     let worker = app.clone();
     std::thread::Builder::new()
@@ -38,7 +39,7 @@ pub fn start(app: AppHandle) {
         .spawn(move || {
             while let Ok(msg) = rx.recv() {
                 if let Msg::GrabStarted = msg {
-                    run_grab(&worker, &rx);
+                    run_grab(&worker, &service, &overlay_state, &rx);
                 }
             }
         })
@@ -47,7 +48,12 @@ pub fn start(app: AppHandle) {
 }
 
 /// One Space hold: wait for the mouse button, follow the cursor, save on release.
-fn run_grab(app: &AppHandle, rx: &std::sync::mpsc::Receiver<Msg>) {
+fn run_grab(
+    app: &AppHandle,
+    service: &CatService,
+    overlay_state: &OverlayState,
+    rx: &std::sync::mpsc::Receiver<Msg>,
+) {
     let _ = app.emit(EVENT_GRAB, "armed");
     let mut pressed = false;
     // Logical px from the window's top-left to the grab point, so a DPI change mid-drag keeps the cat in hand.
@@ -75,8 +81,7 @@ fn run_grab(app: &AppHandle, rx: &std::sync::mpsc::Receiver<Msg>) {
         if let Some(grip) = grip {
             let scale = win.scale_factor().unwrap_or(1.0);
             let mut pos = grip.window_at(cursor, scale);
-            let cat = app
-                .state::<AppState>()
+            let cat = overlay_state
                 .hitboxes()
                 .first()
                 .map(|r| r.to_physical(Point::new(0.0, 0.0), scale));
@@ -97,7 +102,7 @@ fn run_grab(app: &AppHandle, rx: &std::sync::mpsc::Receiver<Msg>) {
     if moved {
         if let Some(Ok(p)) = win.as_ref().map(|w| w.outer_position()) {
             log::info!("cat moved to {},{}", p.x, p.y);
-            cat_service::update_settings(app, |s| s.position = Some(WindowPos::new(p.x, p.y)));
+            service.update_settings(|s| s.position = Some(WindowPos::new(p.x, p.y)));
         }
     } else if !pressed {
         // A plain tap while the pointer rested on the cat: give it back to the app you were typing in.

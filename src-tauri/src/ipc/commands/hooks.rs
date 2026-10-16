@@ -1,9 +1,11 @@
 //! The Claude Code hooks: whether they are installed, installing and removing them.
 
-use crate::services::{hooks_service, i18n};
+use crate::services::cat_service::CatService;
+use crate::services::hooks_service;
 use klat_infra::claude_settings::{Action, Status};
 use serde::Serialize;
-use tauri::AppHandle;
+use std::sync::Arc;
+use tauri::{AppHandle, Manager};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,7 +33,7 @@ pub struct HooksResult {
 /// the Platform Language.
 #[tauri::command]
 pub async fn hooks_apply(app: AppHandle, action: Action) -> HooksResult {
-    let lang = i18n::current(&app);
+    let lang = app.state::<Arc<CatService>>().settings().ui_language;
     let result = tauri::async_runtime::spawn_blocking(move || hooks_service::apply(lang, action))
         .await
         .unwrap_or_else(|e| Err(e.to_string()));

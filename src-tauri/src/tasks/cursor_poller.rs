@@ -10,19 +10,19 @@
 
 use crate::ipc::events::EVENT_CURSOR;
 use crate::platform;
-use crate::services::cat_service::AppState;
+use crate::services::cat_service::CatService;
 use crate::tasks::drag_loop;
-use crate::ui::overlay;
+use crate::ui::overlay::{self, OverlayState};
 use klat_core::geometry::{hit_test, to_overlay, LookTracker, OverlayFrame, Point, Rect};
-use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 
 const AWAKE_PERIOD: Duration = Duration::from_millis(33);
 const ASLEEP_PERIOD: Duration = Duration::from_millis(200);
 
-pub fn start(app: AppHandle) {
+pub fn start(app: AppHandle, cat: Arc<CatService>, overlay_state: Arc<OverlayState>) {
     thread::Builder::new()
         .name("cursor-poller".into())
         .spawn(move || {
@@ -30,14 +30,13 @@ pub fn start(app: AppHandle) {
             let mut interactive = false;
             let mut tracker = LookTracker::default();
             loop {
-                let state = app.state::<AppState>();
-                let period = if state.awake.load(Ordering::Relaxed) {
+                let period = if cat.awake() {
                     AWAKE_PERIOD
                 } else {
                     ASLEEP_PERIOD
                 };
                 thread::sleep(period);
-                let awake = state.awake.load(Ordering::Relaxed);
+                let awake = cat.awake();
 
                 let Some(win) = overlay::get(&app) else {
                     continue;
@@ -61,7 +60,7 @@ pub fn start(app: AppHandle) {
                 let point = to_overlay(Point::new(cursor.x, cursor.y), &frame);
 
                 let inside = {
-                    let rects = state.hitboxes();
+                    let rects = overlay_state.hitboxes();
                     platform::set_zone(frame.origin, scale, &rects);
                     // Never turn click-through on under a cat that is being dragged: the release must land on it.
                     drag_loop::dragging() || hit_test(point, &rects)
