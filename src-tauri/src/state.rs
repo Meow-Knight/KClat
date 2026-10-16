@@ -5,13 +5,13 @@
 
 // target: services::cat_service
 
-use crate::settings;
 pub use klat_core::cat::CatState;
 use klat_core::cat::{CatModel, Command, Ctx, Handled};
 use klat_core::geometry::{Css, Logical, Rect};
 use klat_core::session::Outcome;
 use klat_core::settings::Settings;
 use klat_core::time::UnixMs;
+use klat_infra::settings_repo;
 use klat_protocol::HookEvent;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -50,8 +50,8 @@ pub fn now_ms() -> UnixMs {
 impl AppState {
     pub fn load() -> Self {
         let settings_path = data_dir().join("settings.json");
-        let (settings, outcome) = settings::load(&settings_path);
-        if let settings::LoadOutcome::RecoveredCorrupt(moved) = &outcome {
+        let (settings, outcome) = settings_repo::load(&settings_path);
+        if let settings_repo::LoadOutcome::RecoveredCorrupt(moved) = &outcome {
             log::warn!(
                 "settings were corrupt; moved to {} and reset to defaults",
                 moved.display()
@@ -168,7 +168,7 @@ pub fn update_settings(app: &AppHandle, change: impl FnOnce(&mut Settings)) -> S
         change(&mut s);
         s.clone()
     };
-    if let Err(e) = settings::save(&state.settings_path, &next) {
+    if let Err(e) = settings_repo::save(&state.settings_path, &next) {
         log::warn!("could not save settings: {e}");
     }
     handle(app, Command::SettingsChanged);

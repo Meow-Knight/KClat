@@ -4,3 +4,4 @@
 pub mod event_server;
 pub mod log;
 pub mod runtime_file;
+pub mod settings_repo;

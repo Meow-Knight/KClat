@@ -9,13 +9,12 @@ mod hooks_installer;
 mod hooks_ui;
 mod i18n;
 mod overlay;
-mod settings;
 mod settings_window;
 mod state;
 mod tray;
 mod webview_memory;
 
-use klat_infra::{event_server, runtime_file};
+use klat_infra::{event_server, runtime_file, settings_repo};
 use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Manager, RunEvent};
@@ -25,7 +24,7 @@ const STALE_CHECK: Duration = Duration::from_secs(30);
 
 fn main() {
     webview_memory::scrub_env();
-    settings::migrate_legacy_dir();
+    settings_repo::migrate_legacy_dir();
     klat_infra::log::init(&state::data_dir());
 
     let app = tauri::Builder::default()

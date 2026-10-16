@@ -2,8 +2,8 @@
 //!
 //! Loading never fails: a missing or invalid field falls back to its default, and a file that is not a
 //! JSON object is renamed to `settings.json.corrupt.<unix-seconds>` and replaced with defaults.
-
-// target: klat-infra::settings_repo (load, save, recovery, the legacy folder). The model is klat_core::settings.
+//!
+//! The model (fields, defaults, lenient reading) is klat_core::settings; this is the file around it.
 
 use klat_core::settings::Settings;
 use serde_json::Value;
