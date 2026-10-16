@@ -43,7 +43,7 @@ pub struct RuntimeInfo {
 /// `runtime.json` in the data folder; the hook adapter reads the same path (data_dir.rs is shared). None when
 /// there is no data folder.
 pub fn runtime_path() -> Option<PathBuf> {
-    crate::data_dir::runtime_path()
+    klat_protocol::runtime_path()
 }
 
 pub fn write_runtime(path: &Path, info: &RuntimeInfo) -> io::Result<()> {

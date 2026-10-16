@@ -1,5 +1,5 @@
-//! Where Klat keeps its files (settings.json, runtime.json, the log). Shared word for word by the app and the
-//! hook adapter: the app includes this file with `#[path]`, so both always look in the same folder.
+//! Where Klat keeps its files (settings.json, runtime.json, the log). The app and the hook adapter both call
+//! this, so they always look in the same folder.
 //!
 //! - Windows: `%APPDATA%\Klat`
 //! - macOS: `~/Library/Application Support/Klat`

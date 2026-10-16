@@ -4,9 +4,7 @@
 //! app over loopback. Whatever happens it prints nothing and exits 0, so Claude Code can never read its
 //! output as a decision, and an app that is not running costs at most ~300ms.
 
-mod data_dir;
-
-use data_dir::runtime_path;
+use klat_protocol::runtime_path;
 use serde_json::{json, Value};
 use std::collections::hash_map::RandomState;
 use std::hash::{BuildHasher, Hasher};

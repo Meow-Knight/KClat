@@ -92,7 +92,7 @@ pub struct AppState {
 
 /// The data folder (settings, runtime.json, log): see data_dir.rs. The temp folder if the base is unknown.
 pub fn data_dir() -> PathBuf {
-    crate::data_dir::data_dir().unwrap_or_else(|| std::env::temp_dir().join("Klat"))
+    klat_protocol::data_dir().unwrap_or_else(|| std::env::temp_dir().join("Klat"))
 }
 
 pub fn now_ms() -> u64 {
