@@ -12,7 +12,7 @@ use crate::settings;
 use klat_core::geometry::{Css, Logical, Rect};
 pub use klat_core::session::{Gate, Outcome, SessionStore, SessionView, WakeReason};
 use klat_core::settings::Settings;
-use klat_core::time::{DurationMs, UnixMs};
+use klat_core::time::UnixMs;
 use klat_protocol::HookEvent;
 use serde::Serialize;
 use std::path::PathBuf;
@@ -256,7 +256,7 @@ pub fn expire_stale(app: &AppHandle) {
     let stale_after = state.settings.lock().unwrap().stale_after_ms;
     let changed = {
         let mut inner = state.inner.lock().unwrap();
-        let changed = inner.store.expire(now_ms(), DurationMs(stale_after));
+        let changed = inner.store.expire(now_ms(), stale_after);
         if changed {
             inner.sleep_cause = SleepCause::Auto;
         }

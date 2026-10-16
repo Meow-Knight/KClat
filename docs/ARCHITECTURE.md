@@ -265,7 +265,7 @@ Frontend click / tray menu
 
 ```
 Settings window ─invoke set_settings(patch: SettingsPatch)─▶ ipc → SettingsService
-  ├─ core::settings::apply_patch (validate + clamp)
+  ├─ core::settings::Settings::apply (đọc khoan dung + clamp)
   ├─ infra::settings_repo::save (atomic)
   ├─ CatService::dispatch(Command::SettingsChanged)   // cùng transaction với sleep_cause
   └─ watch<Settings> → tray (nhãn, ngôn ngữ), settings_window (tiêu đề), emit cat://settings
@@ -320,7 +320,7 @@ Settings window ─invoke set_settings(patch: SettingsPatch)─▶ ipc → Setti
 |---|---|
 | `hook_event_name: String` | `HookName` |
 | `corner: String` | `enum Corner` |
-| `Map<String, Value>` + `PATCHABLE` | `struct SettingsPatch { field: Option<T>, … }` + `#[serde(deny_unknown_fields)]` |
+| `Map<String, Value>` + `PATCHABLE` | `struct SettingsPatch { field: Option<T>, … }`, đọc khoan dung như file (key lạ bỏ qua, giá trị sai kiểu thành default): không `deny_unknown_fields`, để cửa sổ Settings khác phiên bản vẫn lưu được |
 | `Result<_, u16>` cho HTTP | `enum Reject` → `fn status(self) -> u16` |
 | `u64` cho thời gian | `UnixMs`, `DurationMs` |
 | `f64`/tuple cho toạ độ | `Css<Point>`, `Logical<Point>`, `Physical<Point>`; chuyển đổi chỉ qua hàm có tên nhận `zoom`/`scale` |

@@ -86,6 +86,7 @@ pub fn save(path: &Path, settings: &Settings) -> io::Result<()> {
 mod tests {
     use super::*;
     use klat_core::settings::{Character, KlatLanguage, UiLanguage};
+    use klat_core::time::DurationMs;
 
     fn temp() -> (tempfile::TempDir, PathBuf) {
         let dir = tempfile::tempdir().unwrap();
@@ -127,7 +128,7 @@ mod tests {
         let (s, outcome) = load(&path);
         assert_eq!(outcome, LoadOutcome::Loaded);
         assert!(s.sfw_mode);
-        assert_eq!(s.yell_interval_ms, 6000);
+        assert_eq!(s.yell_interval_ms, DurationMs(6000));
         assert_eq!(s.max_yells_per_wake, 10);
         assert_eq!(s.ui_language, UiLanguage::En);
         assert_eq!(s.klat_language, KlatLanguage::Auto);

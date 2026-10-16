@@ -7,9 +7,8 @@ use crate::i18n;
 use crate::overlay;
 use crate::state::{self, AppState, CatState};
 use klat_core::geometry::{Css, Rect};
-use klat_core::settings::{self, Settings};
+use klat_core::settings::{Settings, SettingsPatch};
 use serde::Serialize;
-use serde_json::{Map, Value};
 use tauri::{AppHandle, Manager, State};
 
 /// Upper bound on reported hitboxes; the overlay sends at most cat + bubble.
@@ -25,12 +24,12 @@ pub fn get_settings(state: State<'_, AppState>) -> Settings {
     state.settings()
 }
 
-/// Settings window edits. Only the fields in `klat_core::settings::PATCHABLE` are taken, and they are validated like a
+/// Settings window edits: only the fields of `SettingsPatch`, read and clamped like a
 /// loaded file. Returns the settings now in effect.
 #[tauri::command]
-pub fn set_settings(app: AppHandle, patch: Map<String, Value>) -> Settings {
+pub fn set_settings(app: AppHandle, patch: SettingsPatch) -> Settings {
     let scale_before = app.state::<AppState>().settings().cat_scale;
-    let next = state::update_settings(&app, |s| *s = settings::apply_patch(s, &patch));
+    let next = state::update_settings(&app, |s| *s = s.apply(&patch));
     // After a slider drag the overlay resizes itself (with the cat hidden) through `overlay_preview_zoom`.
     if overlay::end_preview(&app) || next.cat_scale == scale_before {
         return next;

@@ -70,7 +70,7 @@ export interface ZoomChange {
   height: number;
 }
 
-/** What the Settings window may change (src-tauri/src/settings.rs `PATCHABLE`); Rust validates it again. */
+/** What the Settings window may change (`SettingsPatch` in crates/klat-core/src/settings.rs); Rust validates it again. */
 export type SettingsPatch = Partial<
   Pick<
     AppSettings,
