@@ -3,6 +3,7 @@ name = "klat-protocol"
 version = "0.1.0"
 description = "What klat-hook and the Klat app agree on: the event body, hook names, runtime.json, the data folder"
 edition = "2021"
+license = "MIT"
 publish = false
 
 # klat-hook links this: keep it to serde, nothing that grows the hook or slows its start.

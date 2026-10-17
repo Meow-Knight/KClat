@@ -3,6 +3,7 @@ name = "klat"
 version = "0.1.0"
 description = "Grumpy desktop cat that yells when Claude Code needs you"
 edition = "2021"
+license = "MIT"
 publish = false
 
 [build-dependencies]

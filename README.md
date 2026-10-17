@@ -9,6 +9,8 @@ Everything runs locally: no telemetry, no cloud. The hooks only report to the ap
 
 > **Status:** MVP complete (spec phases 0–6).
 
+Klat is an independent fan project. It is not made by, affiliated with or endorsed by Anthropic; "Claude" and "Claude Code" are Anthropic's trademarks.
+
 ## Install
 
 0. Klat is not code-signed yet, so Windows SmartScreen warns about the installer. Check the download first: in PowerShell, `Get-FileHash Klat_<version>_x64-setup.exe -Algorithm SHA256` must print the same hash as `SHA256SUMS.txt` from the release. If it differs, do not run it.
@@ -271,7 +273,7 @@ Small decisions made during implementation, as the spec asks (§11).
   - The overlay window is created in Rust (`src-tauri/src/ui/overlay.rs`) rather than declared in `tauri.conf.json`. This way it is placed at the work-area corner and created with `focused(false)`, so it never needs a `show()` call that could steal focus.
   - A minimal tray with only **Quit** is already included, because the overlay has no taskbar button and no decorations. The full tray menu (§2.3) comes in Phase 2.
   - The app icon is a generated placeholder cat head (`src-tauri/icons/`).
-  - The bundle identifier is `vn.ema.klat`.
+  - The bundle identifier is `io.github.meow-knight.klat` (`vn.ema.klat` until 2026-10-17).
   - The spike uses `THREE.Timer` instead of `THREE.Clock`, which is deprecated in three r186.
 
 - **Phase 1**
@@ -395,3 +397,7 @@ Small decisions made during implementation, as the spec asks (§11).
   - The cat (not the whole window, which is mostly transparent) is kept inside the work area of the monitor under the cursor, so it can sit flush against any edge.
   - The spot is saved as `position` in settings.json (window top-left, physical px). At start it is used only if the window's centre is still on a monitor; otherwise the cat goes back to the corner. (A tray item "Move the cat back to the corner" existed until 2026-10-13; it was dropped because you can drag the cat.)
   - The press that moves the cat is swallowed in the capture phase (`cat://grab`), so it never pets, dismisses or toggles Ready. Click-through is never turned on under a cat that is being dragged.
+
+## License
+
+[MIT](LICENSE). The bundled fonts (Grandstander, Nunito) are under the SIL Open Font License; see `src/assets/fonts/OFL-*.txt`.

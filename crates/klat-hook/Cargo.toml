@@ -3,6 +3,7 @@ name = "klat-hook"
 version = "0.1.0"
 description = "Claude Code hook adapter: forwards hook events to the Klat app over loopback"
 edition = "2021"
+license = "MIT"
 publish = false
 
 [dependencies]

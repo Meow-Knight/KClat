@@ -150,7 +150,7 @@ Spec: [docs/specs/settings-i18n-macos.md](specs/settings-i18n-macos.md). Driven 
 | Stepper steps and clamps | ✅ | + gave 35 s (35000); typing 2 gave 5 s (5000) |
 | Platform Language switches without restart | ✅ | Vietnamese: page text, native window title "Cài đặt Klat", overlay Ready tooltip; owner saw tray labels and tooltip change |
 | Changes made elsewhere show up in the window | ✅ | `set_settings` from the overlay page: the Klat Language segment and the preview bubble followed |
-| Hooks section reads the real status and path | ✅ | "Đã cài", `C:\Users\ADMIN\.claude\settings.json`. Install/Uninstall not pressed (it would point the hooks at the dev build) |
+| Hooks section reads the real status and path | ✅ | "Đã cài", `C:\Users\you\.claude\settings.json`. Install/Uninstall not pressed (it would point the hooks at the dev build) |
 | Closing Settings frees its webview | ✅ | 7 → 6 processes, 474 → 401 MB working set (dev build with the debug port, so only the difference counts) |
 | Tray has the 5 quick actions; Pause tick follows Settings; double-click opens Settings | ✅ | Owner, on the dev build |
 | Klat Language Vietnamese on the real overlay | ✅ | Wake test: "Dậy dậy dậy, dầu nhớt đây!!!" with the aura (screenshot below) |

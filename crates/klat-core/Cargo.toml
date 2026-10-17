@@ -3,6 +3,7 @@ name = "klat-core"
 version = "0.1.0"
 description = "Klat's rules, with no Tauri, no I/O and no clock: which sessions need you, when the cat wakes"
 edition = "2021"
+license = "MIT"
 publish = false
 
 # docs/ARCHITECTURE.md §4.1: no tauri, no I/O crates. Time comes in as an argument (clippy.toml forbids reading it).
