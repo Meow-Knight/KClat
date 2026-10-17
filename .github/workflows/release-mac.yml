@@ -1,0 +1,111 @@
+# Builds the universal (Apple Silicon + Intel) .dmg on a GitHub macOS runner with `pnpm release:mac`
+# (docs/macos-build.md#building-the-dmg).
+#
+#   - Actions tab → "Release macOS" → Run workflow: builds the .dmg and keeps it as a workflow artifact.
+#   - Push a tag v<version> (the version in src-tauri/tauri.conf.json): also attaches the .dmg and SHA256SUMS.txt to a
+#     draft GitHub release, which you publish by hand.
+#
+# The .dmg is ad-hoc signed and not notarized, like a local build. For a Developer ID signature, add the repository
+# secrets APPLE_CERTIFICATE (base64 .p12), APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY and, to notarize,
+# APPLE_ID, APPLE_PASSWORD (app-specific), APPLE_TEAM_ID: Tauri picks them up from the environment of the build step.
+name: Release macOS
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-mac-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dmg:
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      DMG_DIR: target/universal-apple-darwin/release/bundle/dmg
+      APP: target/universal-apple-darwin/release/bundle/macos/Klat.app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match tauri.conf.json version $version"
+            exit 1
+          fi
+
+      # pnpm version comes from packageManager in package.json.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+
+      - run: pnpm install --frozen-lockfile
+
+      # Tauri imports APPLE_CERTIFICATE into a temporary keychain itself. Unset secrets arrive as empty strings, and an
+      # empty APPLE_SIGNING_IDENTITY would override the ad-hoc "-" in tauri.macos.conf.json, so drop the empty ones.
+      - name: Build the universal .dmg
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          [ -n "$APPLE_CERTIFICATE" ] || unset APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD
+          [ -n "$APPLE_SIGNING_IDENTITY" ] || unset APPLE_SIGNING_IDENTITY
+          [ -n "$APPLE_ID" ] || unset APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID
+          pnpm release:mac
+
+      - name: Check the bundle
+        run: |
+          archs=$(lipo -archs "$APP/Contents/MacOS/klat-hook")
+          echo "klat-hook: $archs"
+          case "$archs" in *x86_64*arm64*|*arm64*x86_64*) ;; *) echo "::error::klat-hook is not universal"; exit 1 ;; esac
+          codesign -dv "$APP" 2>&1 | grep -E 'Identifier|Signature|TeamIdentifier'
+          ls -l "$DMG_DIR"
+          cat "$DMG_DIR/SHA256SUMS.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: klat-macos-universal
+          path: |
+            ${{ env.DMG_DIR }}/Klat_*.dmg
+            ${{ env.DMG_DIR }}/SHA256SUMS.txt
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: dmg
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: klat-macos-universal
+          path: dist
+      - name: Attach to a draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # The Windows build also writes a SHA256SUMS.txt; name this one after the platform so both fit on a release.
+          mv dist/SHA256SUMS.txt dist/SHA256SUMS-macos.txt
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 ||
+            gh release create "$GITHUB_REF_NAME" --draft --title "Klat $GITHUB_REF_NAME" --notes "See README.md and docs/macos-install.md."
+          gh release upload "$GITHUB_REF_NAME" dist/* --clobber

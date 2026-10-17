@@ -82,6 +82,11 @@ Or use Settings → **Advanced** → **Wake test**.
 
 One `.dmg` for Apple Silicon and Intel ("universal"). It has to be built on a Mac.
 
+No Mac? GitHub builds it: [`.github/workflows/release-mac.yml`](../.github/workflows/release-mac.yml) runs the
+steps below on a macOS runner. **Actions → Release macOS → Run workflow** leaves the `.dmg` and `SHA256SUMS.txt`
+as the run's artifact (`klat-macos-universal`). Pushing a tag `v<version>` (the version in
+`src-tauri/tauri.conf.json`, e.g. `v0.1.0`) also attaches them to a draft release, which you then publish.
+
 ```bash
 rustup target add aarch64-apple-darwin x86_64-apple-darwin   # once; the script also does it
 pnpm release:mac

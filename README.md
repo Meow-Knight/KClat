@@ -195,7 +195,7 @@ Requirements: Node.js ≥ 20.19, pnpm 10.34.6+ (`corepack enable` picks the pinn
 | `pnpm release` | Build the hook (release), stage it as a sidecar, build the app and the NSIS installer → `target/release/bundle/nsis/`, plus `SHA256SUMS.txt` to publish with it |
 | `pnpm dev` | Vite only; the dev page is at http://localhost:1420/dev.html |
 | `pnpm build` | Typecheck and build the frontend into `dist/` |
-| `pnpm release:mac` | macOS only: universal `klat-hook` (lipo), then the universal app and `.dmg` → `target/universal-apple-darwin/release/bundle/dmg/` ([details](docs/macos-build.md#building-the-dmg)) |
+| `pnpm release:mac` | macOS only: universal `klat-hook` (lipo), then the universal app and `.dmg` → `target/universal-apple-darwin/release/bundle/dmg/` ([details](docs/macos-build.md#building-the-dmg)). Without a Mac, the GitHub workflow **Release macOS** runs it |
 | `pnpm build:hook` | Build `klat-hook` (release) for the target being built and copy it to `src-tauri/binaries/` |
 | `pnpm check` | Every gate below plus `cargo audit`, then a pass/fail table; exits 1 if any fails. `--mac` adds `check:mac`, `--skip audit` for offline, `--fail-fast`, `--verbose` |
 | `pnpm regress` | Windows: starts the debug app in a temp data folder and checks its behaviour end to end through the real hook (quit an installed Klat first); see [docs/verification.md](docs/verification.md) |
