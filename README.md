@@ -195,7 +195,7 @@ Requirements: Node.js ≥ 20.19, pnpm 10.34.6+ (`corepack enable` picks the pinn
 | `pnpm release` | Build the hook (release), stage it as a sidecar, build the app and the NSIS installer → `target/release/bundle/nsis/`, plus `SHA256SUMS.txt` to publish with it |
 | `pnpm dev` | Vite only; the dev page is at http://localhost:1420/dev.html |
 | `pnpm build` | Typecheck and build the frontend into `dist/` |
-| `pnpm release:mac` | macOS only: universal `klat-hook` (lipo), then the universal app and `.dmg` → `target/universal-apple-darwin/release/bundle/dmg/` ([details](docs/macos-build.md#building-the-dmg)). Without a Mac, the GitHub workflow **Release macOS** runs it |
+| `pnpm release:mac` | macOS only: universal `klat-hook` (lipo), then the universal app and `.dmg` → `target/universal-apple-darwin/release/bundle/dmg/` ([details](docs/macos-build.md#building-the-dmg)). Without a Mac, the GitHub workflow **Release** runs it ([Publishing a release](#publishing-a-release)) |
 | `pnpm build:hook` | Build `klat-hook` (release) for the target being built and copy it to `src-tauri/binaries/` |
 | `pnpm check` | Every gate below plus `cargo audit`, then a pass/fail table; exits 1 if any fails. `--mac` adds `check:mac`, `--skip audit` for offline, `--fail-fast`, `--verbose` |
 | `pnpm regress` | Windows: starts the debug app in a temp data folder and checks its behaviour end to end through the real hook (quit an installed Klat first); see [docs/verification.md](docs/verification.md) |
@@ -207,6 +207,16 @@ Requirements: Node.js ≥ 20.19, pnpm 10.34.6+ (`corepack enable` picks the pinn
 | `pnpm check:mac` | Type-check (clippy `-D warnings`) the workspace for macOS. From Windows it uses `scripts/fake-cc` in place of Apple's clang, so it proves the Rust compiles but not that it runs |
 
 `pnpm tauri build` without the release config builds the app without the bundled hook. Use `pnpm release`, which adds `src-tauri/tauri.release.conf.json` (sidecar plus `build:hook`).
+
+### Publishing a release
+
+The GitHub workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) builds the Windows installer and the universal macOS `.dmg` on GitHub's runners, so no Mac is needed.
+
+1. Set the new version in `src-tauri/tauri.conf.json` (and `package.json`, the `Cargo.toml`s), commit and push.
+2. Tag it and push the tag: `git tag v0.1.0`, `git push origin v0.1.0`. The tag must be `v` plus that version, or the workflow stops.
+3. When the run under **Actions → Release** is green, **Releases** has a draft `v0.1.0` with `Klat_0.1.0_x64-setup.exe`, `Klat_0.1.0_universal.dmg` and one `SHA256SUMS.txt`. Edit the notes and click **Publish release**.
+
+**Actions → Release → Run workflow** (no tag) builds both and leaves them as the run's artifacts, without a release.
 
 ### Signing a release
 

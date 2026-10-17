@@ -1,14 +1,14 @@
-# Builds the universal (Apple Silicon + Intel) .dmg on a GitHub macOS runner with `pnpm release:mac`
-# (docs/macos-build.md#building-the-dmg).
+# Builds the Windows installer (`pnpm release`) and the universal macOS .dmg (`pnpm release:mac`) on GitHub runners.
 #
-#   - Actions tab → "Release macOS" → Run workflow: builds the .dmg and keeps it as a workflow artifact.
-#   - Push a tag v<version> (the version in src-tauri/tauri.conf.json): also attaches the .dmg and SHA256SUMS.txt to a
-#     draft GitHub release, which you publish by hand.
+#   - Actions tab → "Release" → Run workflow: builds both and keeps them as workflow artifacts.
+#   - Push a tag v<version> (the version in src-tauri/tauri.conf.json): also attaches Klat_<version>_x64-setup.exe,
+#     Klat_<version>_universal.dmg and one SHA256SUMS.txt to a draft GitHub release, which you publish by hand.
 #
-# The .dmg is ad-hoc signed and not notarized, like a local build. For a Developer ID signature, add the repository
-# secrets APPLE_CERTIFICATE (base64 .p12), APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY and, to notarize,
-# APPLE_ID, APPLE_PASSWORD (app-specific), APPLE_TEAM_ID: Tauri picks them up from the environment of the build step.
-name: Release macOS
+# Neither build is code-signed, like a local build (the .dmg is ad-hoc signed and not notarized). For a Developer ID
+# signature on macOS, add the repository secrets APPLE_CERTIFICATE (base64 .p12), APPLE_CERTIFICATE_PASSWORD,
+# APPLE_SIGNING_IDENTITY and, to notarize, APPLE_ID, APPLE_PASSWORD (app-specific), APPLE_TEAM_ID: Tauri picks them up
+# from the environment of the macOS build step.
+name: Release
 
 on:
   workflow_dispatch:
@@ -19,19 +19,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-mac-${{ github.ref }}
+  group: release-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  dmg:
-    runs-on: macos-15
-    timeout-minutes: 60
-    env:
-      DMG_DIR: target/universal-apple-darwin/release/bundle/dmg
-      APP: target/universal-apple-darwin/release/bundle/macos/Klat.app
+  version:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Tag matches the app version
         if: startsWith(github.ref, 'refs/tags/')
         run: |
@@ -41,13 +36,56 @@ jobs:
             exit 1
           fi
 
+  windows:
+    needs: version
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      NSIS_DIR: target/release/bundle/nsis
+    steps:
+      - uses: actions/checkout@v4
+
       # pnpm version comes from packageManager in package.json.
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
 
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm release
+
+      - name: Check the bundle
+        shell: bash
+        run: |
+          ls -l "$NSIS_DIR"
+          cat "$NSIS_DIR/SHA256SUMS.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: klat-windows-x64
+          path: |
+            ${{ env.NSIS_DIR }}/Klat_*-setup.exe
+            ${{ env.NSIS_DIR }}/SHA256SUMS.txt
+          if-no-files-found: error
+
+  macos:
+    needs: version
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      DMG_DIR: target/universal-apple-darwin/release/bundle/dmg
+      APP: target/universal-apple-darwin/release/bundle/macos/Klat.app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
@@ -90,22 +128,24 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: dmg
+    needs: [windows, macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: klat-macos-universal
+          pattern: klat-*
           path: dist
       - name: Attach to a draft release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          # The Windows build also writes a SHA256SUMS.txt; name this one after the platform so both fit on a release.
-          mv dist/SHA256SUMS.txt dist/SHA256SUMS-macos.txt
+          # One SHA256SUMS.txt for both files: the README tells users to check the download against it.
+          cat dist/*/SHA256SUMS.txt > SHA256SUMS.txt
+          cat SHA256SUMS.txt
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 ||
-            gh release create "$GITHUB_REF_NAME" --draft --title "Klat $GITHUB_REF_NAME" --notes "See README.md and docs/macos-install.md."
-          gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+            gh release create "$GITHUB_REF_NAME" --draft --title "Klat $GITHUB_REF_NAME" \
+              --notes "Windows: Klat_*_x64-setup.exe. macOS (Apple Silicon and Intel): Klat_*_universal.dmg, first open: docs/macos-install.md. Check downloads against SHA256SUMS.txt."
+          gh release upload "$GITHUB_REF_NAME" dist/*/*.exe dist/*/*.dmg SHA256SUMS.txt --clobber
