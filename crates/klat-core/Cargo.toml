@@ -16,7 +16,7 @@ ts-rs = { workspace = true, optional = true }
 
 [features]
 # TypeScript declarations of the types that cross IPC (src-tauri's tests write src/bridge/generated.ts).
-ts = ["dep:ts-rs"]
+ts = ["dep:ts-rs", "klat-protocol/ts"]
 
 [lints]
 workspace = true

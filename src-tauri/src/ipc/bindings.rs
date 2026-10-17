@@ -7,13 +7,13 @@ use crate::ipc::error::{ErrorCode, IpcError, Message};
 use crate::ipc::events::GrabMode;
 use crate::platform::Permission;
 use crate::ui::overlay::ZoomChange;
+use klat_core::agent_hooks::Status;
 use klat_core::cat::{Attention, CatState, SleepCause};
-use klat_core::claude_hooks::Status;
 use klat_core::geometry::{self, wire, Css, Rect};
 use klat_core::session::{SessionView, WakeReason};
 use klat_core::settings::{Character, Corner, KlatLanguage, Settings, SettingsPatch, UiLanguage};
 use klat_core::time::DurationMs;
-use klat_infra::claude_settings::Action;
+use klat_infra::hook_files::{Action, Agent};
 use std::path::PathBuf;
 use ts_rs::{Config, TS};
 
@@ -53,6 +53,7 @@ fn generated() -> String {
         declare::<ErrorCode>(&cfg),
         // Hooks (hooks_status, hooks_apply)
         declare::<HooksInfo>(&cfg),
+        declare::<Agent>(&cfg),
         declare::<Status>(&cfg),
         declare::<Action>(&cfg),
         // The overlay window (set_hitboxes, cat://cursor, cat://grab, overlay_preview_zoom, drag_permission)

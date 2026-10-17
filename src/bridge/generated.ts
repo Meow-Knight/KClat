@@ -63,9 +63,9 @@ export type Character = "cat" | "snake" | "dragon";
 export type UiLanguage = "en" | "vi";
 
 /**
- * Klat Language: what the cat says. Auto mixes both languages.
+ * Klat Language: what the cat says. Auto mixes every language.
  */
-export type KlatLanguage = "en" | "vi" | "auto";
+export type KlatLanguage = "en" | "vi" | "zh" | "ja" | "ko" | "auto";
 
 /**
  * Where the cat sits until you drag it. Only one corner so far.
@@ -92,11 +92,23 @@ export type IpcError = { code: ErrorCode, message: Message, };
  */
 export type ErrorCode = "hooks-not-found" | "hooks-broken-json" | "hooks-unexpected-shape" | "hooks-exe-missing" | "hooks-changed-concurrently" | "hooks-io" | "start-at-login" | "window";
 
-export type HooksInfo = { status: HooksStatus,
+export type HooksInfo = { agent: HooksAgent, status: HooksStatus,
 /**
- * `~/.claude/settings.json`; None when the home folder is unknown.
+ * `~/.claude/settings.json` or `~/.codex/hooks.json`; None when the home folder is unknown.
  */
-settingsPath: string | null, };
+filePath: string | null,
+/**
+ * The agent's folder (`~/.claude`, `~/.codex`) exists, so it looks set up for this user. Install works
+ * either way.
+ */
+agentFound: boolean, };
+
+/**
+ * The coding agents whose hooks Klat installs. Both spell their hooks the same way and send the same fields
+ * (`session_id`, `cwd`, `hook_event_name`, `tool_name`), so one adapter serves both; Codex entries tell it
+ * which agent runs it (`klat-hook --agent codex Stop`).
+ */
+export type HooksAgent = "claude-code" | "codex";
 
 export type HooksStatus = "not-installed" | "needs-repair" | "installed";
 

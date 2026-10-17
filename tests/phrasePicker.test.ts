@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { PHRASES, type Phrase } from '../src/phrases/phrases';
+import { PHRASE_LANGS, PHRASES, type Phrase } from '../src/phrases/phrases';
 import { PhrasePicker, type PickRequest, type PickerOptions } from '../src/phrases/PhrasePicker';
+import { phraseLanguages } from '../src/settings';
 
 const ALL: PickerOptions = { sfwMode: false, languages: ['en', 'vi'] };
 const EN: PickerOptions = { sfwMode: false, languages: ['en'] };
@@ -150,6 +151,49 @@ describe('PhrasePicker', () => {
     const picker = new PhrasePicker(PHRASES, ALL, seeded(2));
     for (const reason of ['done', 'permission', 'input'] as const) {
       expect(picker.pool(later(5, reason)).some((p) => p.tags.includes('ready'))).toBe(false);
+    }
+  });
+
+  it.each(['zh', 'ja', 'ko'] as const)('in %s the first yell is its own wake phrase, the explicit one unless SFW', (lang) => {
+    const rude = new PhrasePicker(PHRASES, { sfwMode: false, languages: [lang] }, seeded(8));
+    const first = rude.pick(FIRST);
+    expect(first).toMatchObject({ lang, explicit: true, tags: ['wake'] });
+    const sfw = new PhrasePicker(PHRASES, { sfwMode: true, languages: [lang] }, seeded(8));
+    expect(sfw.pick(FIRST)).toMatchObject({ lang, explicit: false, tags: ['wake'] });
+    for (let i = 0; i < 40; i++) expect(rude.pick(later(4)).lang).toBe(lang);
+  });
+
+  it.each(PHRASE_LANGS)('%s has lines for every reason, with and without SFW', (lang) => {
+    for (const sfwMode of [false, true]) {
+      const picker = new PhrasePicker(PHRASES, { sfwMode, languages: [lang] });
+      for (const reason of ['done', 'permission', 'input'] as const) {
+        expect(picker.pool(later(2, reason)).some((p) => p.tags.includes(reason))).toBe(true);
+      }
+      expect(picker.pool(later(3)).some((p) => p.tags.includes('ignored'))).toBe(true);
+      expect(picker.pickReady().lang).toBe(lang);
+    }
+  });
+
+  it('Auto with every language mixes them all', () => {
+    const picker = new PhrasePicker(PHRASES, { sfwMode: false, languages: phraseLanguages('auto') }, seeded(11));
+    const langs = new Set(Array.from({ length: 200 }, () => picker.pick(later(4)).lang));
+    expect([...langs].sort()).toEqual([...PHRASE_LANGS].sort());
+  });
+
+  it('the gasp is "Oh sheeet!" in the chosen language, a clean one under SFW, and never a yell', () => {
+    const expected = { en: 'Oh sheeet!', vi: 'Âu shịt!' } as const;
+    for (const [lang, text] of Object.entries(expected) as [keyof typeof expected, string][]) {
+      expect(new PhrasePicker(PHRASES, { sfwMode: false, languages: [lang] }).pickGasp().text).toBe(text);
+    }
+    for (const lang of PHRASE_LANGS) {
+      const rude = new PhrasePicker(PHRASES, { sfwMode: false, languages: [lang] }).pickGasp();
+      expect(rude).toMatchObject({ lang, explicit: true, tags: ['gasp'] });
+      const sfw = new PhrasePicker(PHRASES, { sfwMode: true, languages: [lang] }).pickGasp();
+      expect(sfw).toMatchObject({ lang, explicit: false, tags: ['gasp'] });
+    }
+    const picker = new PhrasePicker(PHRASES, ALL);
+    for (const reason of ['done', 'permission', 'input'] as const) {
+      expect(picker.pool(later(5, reason)).some((p) => p.tags.includes('gasp'))).toBe(false);
     }
   });
 

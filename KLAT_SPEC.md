@@ -419,7 +419,9 @@ interface HookEvent {
 
 ### 8.5 Hook installer
 
-1. Target duy nhất: `%USERPROFILE%\.claude\settings.json` (cấp user). Không sửa settings cấp project.
+1. Target: `%USERPROFILE%\.claude\settings.json` cho Claude Code và `%USERPROFILE%\.codex\hooks.json` (hoặc
+   `%CODEX_HOME%\hooks.json`) cho Codex, đều cấp user; người dùng cài cho từng agent riêng. Không sửa file cấp project.
+   Codex chạy `command` qua `cmd.exe /C` (không có exec form) và chỉ chạy hook sau khi người dùng trust nó trong `/hooks`.
 2. Trước khi sửa: parse JSON. Nếu hỏng thì **dừng**, báo lỗi, không ghi gì.
 3. Backup sang `settings.json.bak.<timestamp>`.
 4. Merge: thêm entry cho từng event ở §8.1 với command `"<path>\klat-hook.exe" <event>` và `timeout: 1`. Nhận diện entry của mình bằng việc command chứa `klat-hook.exe`, để cài lại không bị trùng.

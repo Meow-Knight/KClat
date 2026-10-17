@@ -14,8 +14,9 @@ Everything runs locally: no telemetry, no cloud. The hooks only report to the ap
 0. Klat is not code-signed yet, so Windows SmartScreen warns about the installer. Check the download first: in PowerShell, `Get-FileHash Klat_<version>_x64-setup.exe -Algorithm SHA256` must print the same hash as `SHA256SUMS.txt` from the release. If it differs, do not run it.
 1. Run `Klat_<version>_x64-setup.exe`. It is a per-user install into `%LOCALAPPDATA%\Klat`, so no admin rights are needed. The installer contains `klat.exe` and the hook program `klat-hook.exe`.
 2. Start **Klat**. A sleeping cat appears in the bottom-right corner, and a cat icon appears in the tray (it may be under the **^** hidden-icons arrow).
-3. Tray → **Settings…** → **Hooks** → **Install**. This adds Klat's hooks to `%USERPROFILE%\.claude\settings.json`, after saving a backup. Your other hooks and settings stay as they are.
-4. Restart any open Claude Code sessions. From now on the cat wakes when Claude asks for permission or input, and when Claude finishes a turn: Ready, the **bell button** to the right of the cat, is on when Klat starts. Click the bell to turn it off if you only want to be woken for permission and input.
+3. Tray → **Settings…** → **Hooks**. There is one card per agent: **Install** under **Claude Code** adds Klat's hooks to `%USERPROFILE%\.claude\settings.json`, **Install** under **Codex** adds them to `%USERPROFILE%\.codex\hooks.json` (or `%CODEX_HOME%\hooks.json`). Install one, the other or both. A backup is saved first, and your other hooks and settings stay as they are.
+4. Codex only: open Codex, type `/hooks` and trust Klat's hooks. Codex skips hooks you have not reviewed, and asks again after **Repair** (the entries change).
+5. Restart any open Claude Code or Codex sessions. From now on the cat wakes when Claude asks for permission or input, and when Claude finishes a turn: Ready, the **bell button** to the right of the cat, is on when Klat starts. Click the bell to turn it off if you only want to be woken for permission and input.
 
 You need Windows 10/11 with the WebView2 runtime, which comes with Windows 11 and recent Windows 10.
 
@@ -34,7 +35,7 @@ once), or build from source with [docs/macos-build.md](docs/macos-build.md), whi
 | Claude finishes a turn | Keeps sleeping, unless Ready is on: then it wakes you as above |
 | You click the bell button (Ready) | Peeks, perks one ear and says "Ok, Claude xong tao gọi" (or similar), then sleeps on. The bell turns gold and stays on, for every turn that finishes, until you click it again |
 | More than one session needs you | Yells again for each new one and names the project under the phrase |
-| You send a prompt, approve the permission, or the session ends | Gets knocked out: a stick, a honeycomb slipper (dép tổ ong), a durian or a frying pan (picked at random) flies in and bonks it on the head; X eyes, stars and a bump, then it slumps asleep. Ready stays on |
+| You send a prompt, approve the permission, or the session ends | Gets knocked out: one of ten objects (a stick, a honeycomb slipper (dép tổ ong), a durian, a frying pan, a fish, a rubber duck, a coffee mug, a bánh mì, a nón lá or an anvil; picked at random, never the same twice in a row) flies in and bonks it on the head; X eyes, stars and a bump, then it slumps asleep. Ready stays on |
 | You click the bubble, or double-click the awake cat | Knocked out the same way ("not now"). This marks those sessions as seen and sends nothing to Claude Code |
 | A waiting session expires, or you turn on Pause | Nobody did anything, so it just yawns and goes back to sleep |
 | You click the cat | Asleep: keeps its eyes shut, frowns, an angry mark pops up on the top-right corner of its head and its tail swishes, then it calms down. Awake: purrs (^ ^) |
@@ -60,8 +61,8 @@ The tray tooltip shows how many sessions are waiting.
 | Section | What is in it |
 |---|---|
 | General | Start at login (off by default; an entry in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`), Pause notifications, Hide the cat while it sleeps, SFW mode (no swearing; the English first line becomes "Wake up, human!!!", the Vietnamese one is already clean), Reduce motion, Cat size (a slider, 50–200%), and how to move the cat |
-| Language | Platform Language (menus, dialogs, this window) and Klat Language (what the cat says: English, Tiếng Việt, or Auto for both), with a sample line |
-| Hooks | Whether Claude Code is wired to Klat, the `settings.json` it uses, and Install / Repair / Uninstall (see [Hooks](#hooks)) |
+| Language | Platform Language (menus, dialogs, this window) and Klat Language (what the cat says: English, Tiếng Việt, 中文, 日本語, 한국어, or Auto for all of them), with a sample line |
+| Hooks | For Claude Code and for Codex, each on its own: whether it is wired to Klat, the file it uses (`settings.json`, `hooks.json`), and Install / Repair / Uninstall (see [Hooks](#hooks)) |
 | Advanced | Time between yells; Wake test and Sleep buttons to try the cat out |
 
 Changes apply at once; there is no Save button.
@@ -74,7 +75,7 @@ Changes apply at once; there is no Save button.
 | `hideWhileSleeping` | `false` | |
 | `sfwMode` | `false` | |
 | `uiLanguage` | `"en"` | Platform Language for the tray, dialogs and the Settings window: `en` or `vi` |
-| `klatLanguage` | `"auto"` | What the cat says: `en`, `vi`, or `auto` (both). Older files with `languages` are converted on load |
+| `klatLanguage` | `"auto"` | What the cat says: `en`, `vi`, `zh`, `ja`, `ko`, or `auto` (every language). Older files with `languages` are converted on load |
 | `yellIntervalMs` | `30000` | 5000 to 600000 |
 | `maxYellsPerWake` | `10` | Includes the first yell; 1 to 50 |
 | `staleAfterMs` | `1800000` | A session waiting longer than this stops counting; 300000 to 14400000 |
@@ -92,21 +93,34 @@ Changes apply at once; there is no Save button.
 ```
 
 - It runs the program directly (exec form), with no shell involved, so paths with spaces are fine.
-- Before any change, the file is saved as `settings.json.bak.<unix-seconds>`.
-- If `settings.json` is not valid JSON, nothing is written and a message box says so.
+
+**Hooks → Codex → Install** adds one entry per event Codex has (`Stop`, `PermissionRequest`, `UserPromptSubmit`, `PostToolUse`, `SessionEnd`, `Interrupt`) to `%USERPROFILE%\.codex\hooks.json` (`%CODEX_HOME%\hooks.json` when that is set). Codex has no exec form: it runs the `command` line through `cmd.exe /C` on Windows (`$SHELL -lc` on macOS), so the program is quoted for that shell:
+
+```json
+{ "type": "command", "command": "\"C:\\Users\\you\\AppData\\Local\\Klat\\klat-hook.exe\" --agent codex Stop", "timeout": 2 }
+```
+
+- Codex runs a hook only after you trust it: type `/hooks` in Codex and trust Klat's entries. Trust is tied to the entry's exact text, so after **Repair** Codex asks again.
+- Codex has no `Notification` event, so with Codex the cat wakes when a turn ends or Codex asks for permission, not when it idles waiting for input. `Interrupt` (you stopped the turn) clears the wait.
+
+For both agents:
+
+- Before any change, the file is saved as `<file>.bak.<unix-seconds>` (the newest three are kept).
+- If the file is not valid JSON, nothing is written and the Settings window says so.
 - Installing again changes nothing. **Repair** re-points the entries after you move or reinstall the app, or switch between a dev build and the installed one.
-- **Uninstall** removes only entries whose command contains `klat-hook` (`klat-hook.exe` on Windows), and keeps everything else, including key order.
+- **Uninstall** removes only entries whose program is `klat-hook` (`klat-hook.exe` on Windows), and keeps everything else, including key order.
+- Project-level files (`.claude/` or `.codex/` inside a repository) are never touched.
 - The app never installs or changes hooks on its own; only the buttons in Settings → Hooks do.
 
-The hook reads the event from stdin and forwards five fields: event name, session id, project folder name, tool name and notification type. It sends them to `127.0.0.1`, prints nothing, and always exits 0. Its budget is 300ms. When the app is not running, it exits in a few milliseconds.
+The hook reads the event from stdin and forwards five fields: event name, session id, project folder name, tool name and notification type, plus which agent ran it (Codex entries pass `--agent codex`). It sends them to `127.0.0.1`, prints nothing, and always exits 0. Its budget is 300ms. When the app is not running, it exits in a few milliseconds.
 
 ## Uninstall
 
-1. Tray → **Settings…** → **Hooks** → **Uninstall**, then tray → **Quit**.
+1. Tray → **Settings…** → **Hooks** → **Uninstall** (under each agent you installed for), then tray → **Quit**.
 2. Windows Settings → Apps → **Klat** → Uninstall.
-3. Optional: delete `%APPDATA%\Klat` (settings and log) and any `%USERPROFILE%\.claude\settings.json.bak.*` backups you no longer need.
+3. Optional: delete `%APPDATA%\Klat` (settings and log) and any `%USERPROFILE%\.claude\settings.json.bak.*` or `%USERPROFILE%\.codex\hooks.json.bak.*` backups you no longer need.
 
-If you uninstall the app first, the hook entries stay in `settings.json`. They are harmless (the program is gone, so the hook just fails quietly), but you can delete them by hand: they are the entries whose `command` contains `klat-hook`.
+If you uninstall the app first, the hook entries stay in `settings.json` and `hooks.json`. They are harmless (the program is gone, so the hook just fails quietly), but you can delete them by hand: they are the entries whose `command` contains `klat-hook`.
 
 ## Privacy
 
@@ -121,8 +135,9 @@ If you uninstall the app first, the hook entries stay in `settings.json`. They a
 | Problem | Try |
 |---|---|
 | The cat doesn't wake when Claude finishes | Check that the bell button (Ready) is on; clicking it toggles it. If it still doesn't wake, open Settings → **Hooks**: does it say **Installed**? If not, click Install or Repair. Then restart the Claude Code session. See [docs/hooks-troubleshooting.md](docs/hooks-troubleshooting.md) for step-by-step checks and how to read the log |
+| The cat doesn't wake for Codex | Settings → **Hooks** → **Codex** must say **Installed**. Then in Codex type `/hooks`: Klat's entries must be trusted (after Repair, trust them again). Check that `[features] hooks = false` is not in `~/.codex/config.toml`. Start a new Codex session |
 | "Hooks (needs repair)" | The entries point at another copy of `klat-hook.exe` (moved or reinstalled app, dev vs installed): run **Repair** |
-| Install says settings.json is invalid | Fix the JSON, or restore a `settings.json.bak.*` backup; nothing was changed |
+| Install says settings.json (or hooks.json) is invalid | Fix the JSON, or restore a `.bak.*` backup; nothing was changed |
 | The cat stays awake | Send a prompt or click the bubble. A session waiting longer than 30 minutes is dropped automatically |
 | Opening the app again shows "already running" | Only one cat runs at a time. Look in the tray |
 | Black or white box instead of a transparent window | Update the WebView2 runtime and your GPU driver |
@@ -239,8 +254,8 @@ With the app running and the hook built:
 | `src/overlay/main.ts`, `dev.ts` | Overlay entry, dev page entry |
 | `src-tauri/src/` | The app shell, laid out as in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §3: `bootstrap/` (builder, setup), `ipc/` (commands by domain, `events.rs` with every `cat://` name), `services/` (`cat_service.rs` the one owner of the cat's state and the settings, publishing on `watch` channels; `settings_service.rs` loading and start at login; `hooks_service.rs` hook messages), `ui/` (`overlay.rs` the transparent, topmost, never-activating window with DPI-correct placement; `tray.rs`; `settings_window.rs`), `tasks/` (`cursor_poller.rs` click-through and `cat://cursor`, `drag_loop.rs`, `stale_ticker.rs`), `platform/` (all OS code: `windows.rs`, `macos.rs`, `fallback.rs`, `webview_memory.rs`) |
 | `crates/klat-core/src/i18n.rs` | Reads the shared `src/i18n` catalogs (the app takes the language from the settings) |
-| `crates/klat-core/` | The rules, pure (no Tauri, no I/O, no clock): `session` (hook mapping, per-session state), `cat` (when the cat is awake), `geometry`, `settings` model, `claude_hooks` edits, `i18n` |
-| `crates/klat-infra/` | I/O without Tauri: `event_server` (loopback HTTP endpoint, token), `runtime_file` (`runtime.json`), `claude_settings` (install / repair / uninstall in `~/.claude/settings.json`), `settings_repo` (settings load/save), `log` (capped local log behind the `log` facade) |
+| `crates/klat-core/` | The rules, pure (no Tauri, no I/O, no clock): `session` (hook mapping, per-session state), `cat` (when the cat is awake), `geometry`, `settings` model, `agent_hooks` edits (Claude Code and Codex), `i18n` |
+| `crates/klat-infra/` | I/O without Tauri: `event_server` (loopback HTTP endpoint, token), `runtime_file` (`runtime.json`), `hook_files` (install / repair / uninstall in `~/.claude/settings.json` and `~/.codex/hooks.json`), `settings_repo` (settings load/save), `log` (capped local log behind the `log` facade) |
 | `crates/klat-hook/` | Hook adapter |
 | `scripts/` | `send-test-event.ps1`, `stage-sidecar.mjs` |
 | `docs/` | Prototype, [hooks troubleshooting](docs/hooks-troubleshooting.md), [verification log](docs/verification.md) |
@@ -361,6 +376,7 @@ Small decisions made during implementation, as the spec asks (§11).
   - **Ready stays on** (2026-10-12): it no longer switches itself off after waking you. Every finished turn wakes the cat until you click the bell again.
   - **Poking the sleeping cat** (2026-10-12): instead of peeking one eye open, it keeps its eyes shut, knits its brows, an anime angry mark (red, white rim, a canvas-drawn sprite on the head) pops up on the head's top-right corner, between the ear and the brow, and throbs, and the tail swishes on top of the sleepy sway for 1.4s. Poking again restarts it; waking clears it. Under reduceMotion the mark shows without the pop, throb or swish. A first version floated beside the head on the left; the user wanted it on the head itself.
 - **Knockout** (2026-10-14, owner request): when you answer or dismiss, the cat no longer just yawns. Rust sends `sleepCause` (`user` for hooks, dismiss and Ready; `auto` for stale expiry and Pause) with `cat://state`, and the overlay picks the sequence. A random object (stick, dép tổ ong, durian, non-stick pan, built from primitives in the toon style) flies in from the left (the durian drops from above), hits the top of the head at 380 ms with a comic burst, then bounces away; the cat gets X eyes, stars circling its head and a bump, slumps over at ~1 s and is settled asleep at ~2.1 s. Under reduce motion nothing flies: a moment of X eyes, then sleep. Frames of each object are in `docs/images/knockout/`.
+- **More lines, more languages, more objects** (2026-10-17, owner request, ClauCat-85c): Klat Language gains 中文, 日本語 and 한국어 (`zh`, `ja`, `ko`; Auto now mixes all five). Each language has an SFW and an explicit wake line and lines for every reason; English and Vietnamese got about twenty more each. The bubble carries the phrase's `lang`, so CJK text uses the system's font for that language (Grandstander has no CJK glyphs). Six more knockout objects: a fish, a rubber duck, a coffee mug and a bánh mì are thrown; a nón lá skims in flat like a frisbee; an anvil drops from above and barely bounces. `characters.html?knockouts=0.3` shows every object at that point of its flight. As the object flies in the cat blurts out a gasp in its language ("Oh sheeet!", "Âu shịt!", 卧槽！, やっべ、クソッ！, 아 씨*!; under SFW "Oh snap!" and the like) until it slumps over dizzy at ~1 s; not under reduce motion, where nothing flies.
 - **Cat size** (2026-10-14, owner request, ClauCat-gra): a slider in Settings → General, 50–200% in steps of 1, stored as `catScale`. The overlay window becomes 360×330 times the scale and its webview is zoomed by the same factor, so the page keeps laying out at 360×330 CSS px and the cat, bubble and Ready button grow together, sharp because `devicePixelRatio` includes the zoom. Rust converts between the two: hitboxes arrive in CSS px and are scaled up on read, cursor points are scaled down before they are sent. Resizing keeps the window's bottom-right corner, so the cat stays where it is; a dragged cat's new top-left is saved. While you drag, the slider ignores late replies, so the thumb never jumps under your hand. **Smooth dragging** (2026-10-15, ClauCat-jds): resizing the window on every step was jerky (size, position and zoom land separately, about 6–8 visible steps a second). Now a drag (or arrow keys) only previews: Rust sets the window once to the 200% size and the page scales the cat with a CSS transform anchored bottom-right, one step per frame; on release (keys: 400 ms after the last press) the value is saved and the window set once to the real size. The page hides the cat while each of those two switches lands (one frame in a screen capture), and the stage redraws right after a resize so the canvas is never blank. The stage now also follows `devicePixelRatio` changes (zoom, or a monitor with another DPI) instead of only CSS resizes.
 - **Memory** (2026-10-14, ClauCat-gwd): the 150 MB goal is met for what Task Manager shows, not for committed memory. The network service moved into the browser process, and the overlay asks WebView2 for its low memory target while the cat sleeps. Both webviews pass the same `BROWSER_ARGS` (wry's defaults plus the feature flag): WebView2 refuses a second webview in the same data folder with different arguments. Software rendering would get committed memory under 150 MB but was rejected for its CPU cost. Numbers under [Performance](#performance).
 - **Security hardening** (2026-10-16, ClauCat-fw3, after a security audit):

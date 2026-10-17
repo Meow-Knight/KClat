@@ -88,6 +88,21 @@ export function hooksView(status: HooksStatus): HooksView {
   }
 }
 
+/**
+ * The sidebar dot for all agents at once. A repair anywhere comes first; otherwise one installed agent is enough,
+ * since the user may want the hooks for only one of them.
+ */
+export function hooksSummary(statuses: readonly HooksStatus[]): HooksStatus {
+  if (statuses.includes('needs-repair')) return 'needs-repair';
+  return statuses.includes('installed') ? 'installed' : 'not-installed';
+}
+
+/** The folder an agent keeps its hooks file in (`~/.codex` for `~/.codex/hooks.json`), on either OS. */
+export function agentFolder(filePath: string): string {
+  const cut = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+  return cut > 0 ? filePath.slice(0, cut) : filePath;
+}
+
 /** The section after (or before) `current`, wrapping around: arrow keys in the sidebar. */
 export function nextSection(current: SectionId, direction: 1 | -1): SectionId {
   const i = SECTIONS.indexOf(current);

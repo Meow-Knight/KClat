@@ -44,9 +44,11 @@ export interface RowParts {
   control?: HTMLElement;
   /** Extra content under the text (errors, previews). */
   below?: HTMLElement;
+  /** The control goes under the text instead of beside it (a control too wide to share the line). */
+  stacked?: boolean;
 }
 
-export function row({ title, desc, control, below }: RowParts): HTMLElement {
+export function row({ title, desc, control, below, stacked }: RowParts): HTMLElement {
   const titleId = uid('row-title');
   const descId = uid('row-desc');
   if (control) {
@@ -56,7 +58,7 @@ export function row({ title, desc, control, below }: RowParts): HTMLElement {
   }
   return h(
     'div',
-    { class: 'row' },
+    { class: stacked ? 'row row-stacked' : 'row' },
     h(
       'div',
       { class: 'row-text' },

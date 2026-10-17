@@ -1,8 +1,8 @@
-//! The Claude Code hooks: whether they are installed, installing and removing them.
+//! The Claude Code and Codex hooks: whether they are installed, installing and removing them, one agent at a time.
 
 use crate::ipc::error::{ErrorCode, IpcError, Message};
 use crate::services::hooks_service::{self, HooksError};
-use klat_infra::claude_settings::{Action, Report, Status};
+use klat_infra::hook_files::{agent_folder_exists, Action, Agent, Report, Status};
 use serde::Serialize;
 use std::path::Path;
 
@@ -10,24 +10,37 @@ use std::path::Path;
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct HooksInfo {
+    pub agent: Agent,
     pub status: Status,
-    /// `~/.claude/settings.json`; None when the home folder is unknown.
-    pub settings_path: Option<String>,
+    /// `~/.claude/settings.json` or `~/.codex/hooks.json`; None when the home folder is unknown.
+    pub file_path: Option<String>,
+    /// The agent's folder (`~/.claude`, `~/.codex`) exists, so it looks set up for this user. Install works
+    /// either way.
+    pub agent_found: bool,
 }
 
+/// Every agent, in the order the window lists them.
 #[tauri::command]
-pub fn hooks_status() -> HooksInfo {
-    HooksInfo {
-        status: hooks_service::current_status(),
-        settings_path: hooks_service::paths().map(|(s, _)| s.display().to_string()),
-    }
+pub fn hooks_status() -> Vec<HooksInfo> {
+    Agent::ALL
+        .into_iter()
+        .map(|agent| {
+            let file = hooks_service::paths(agent).map(|(f, _)| f);
+            HooksInfo {
+                agent,
+                status: hooks_service::current_status(agent),
+                file_path: file.as_ref().map(|f| f.display().to_string()),
+                agent_found: file.as_deref().is_some_and(agent_folder_exists),
+            }
+        })
+        .collect()
 }
 
-/// `action`: "install" (also repairs) or "uninstall". File I/O runs off the main thread. Resolves to what was
-/// done, rejects with why nothing was; the window words both.
+/// `action`: "install" (also repairs) or "uninstall", for one agent. File I/O runs off the main thread. Resolves to
+/// what was done, rejects with why nothing was; the window words both.
 #[tauri::command]
-pub async fn hooks_apply(action: Action) -> Result<Message, IpcError> {
-    let result = tauri::async_runtime::spawn_blocking(move || hooks_service::apply(action))
+pub async fn hooks_apply(agent: Agent, action: Action) -> Result<Message, IpcError> {
+    let result = tauri::async_runtime::spawn_blocking(move || hooks_service::apply(agent, action))
         .await
         .map_err(|e| {
             IpcError::new(
@@ -36,16 +49,18 @@ pub async fn hooks_apply(action: Action) -> Result<Message, IpcError> {
             )
         })?;
     match result {
-        Ok((report, settings)) => Ok(done(action, &report, &settings)),
+        Ok((report, file)) => Ok(done(agent, action, &report, &file)),
         Err(e) => Err(e.into()),
     }
 }
 
-/// What Install or Uninstall did, to which file.
-fn done(action: Action, report: &Report, settings: &Path) -> Message {
-    let prefix = match action {
-        Action::Install => "hooks.install",
-        Action::Uninstall => "hooks.uninstall",
+/// What Install or Uninstall did, to which file. Installing for Codex has its own texts: Codex runs a new hook
+/// only after the user trusts it in `/hooks`.
+fn done(agent: Agent, action: Action, report: &Report, settings: &Path) -> Message {
+    let prefix = match (agent, action) {
+        (Agent::ClaudeCode, Action::Install) => "hooks.install",
+        (Agent::Codex, Action::Install) => "hooks.codex.install",
+        (_, Action::Uninstall) => "hooks.uninstall",
     };
     let path = settings.display().to_string();
     match report {
@@ -65,7 +80,12 @@ impl From<HooksError> for IpcError {
             HooksError::NotFound => {
                 IpcError::new(ErrorCode::HooksNotFound, Message::new("hooks.notFound"))
             }
-            HooksError::Install(e) => e.into(),
+            HooksError::Install(e, file) => {
+                let mut ipc = IpcError::from(e);
+                let name = file.file_name().unwrap_or(file.as_os_str());
+                ipc.message = ipc.message.with("file", name.to_string_lossy());
+                ipc
+            }
         }
     }
 }
@@ -75,7 +95,7 @@ mod tests {
     use super::*;
     use klat_core::i18n::tf;
     use klat_core::settings::UiLanguage;
-    use klat_infra::claude_settings::InstallError;
+    use klat_infra::hook_files::InstallError;
     use serde_json::{json, Value};
     use std::io;
     use std::path::PathBuf;
@@ -96,11 +116,19 @@ mod tests {
     fn outcomes() -> Vec<(String, Result<Message, IpcError>)> {
         let settings = Path::new("/home/me/.claude/settings.json");
         let backup = PathBuf::from("/home/me/.claude/settings.json.bak.1");
+        let codex = Path::new("/home/me/.codex/hooks.json");
+        let codex_backup = PathBuf::from("/home/me/.codex/hooks.json.bak.1");
         let mut out = Vec::new();
-        for (action, name) in [
-            (Action::Install, "install"),
-            (Action::Uninstall, "uninstall"),
+        for (agent, action, name) in [
+            (Agent::ClaudeCode, Action::Install, "install"),
+            (Agent::ClaudeCode, Action::Uninstall, "uninstall"),
+            (Agent::Codex, Action::Install, "codex.install"),
+            (Agent::Codex, Action::Uninstall, "codex.uninstall"),
         ] {
+            let (file, backup) = match agent {
+                Agent::ClaudeCode => (settings, backup.clone()),
+                Agent::Codex => (codex, codex_backup.clone()),
+            };
             let reports = [
                 ("noChange", Report::NoChange),
                 (
@@ -114,7 +142,7 @@ mod tests {
             for (report_name, report) in reports {
                 out.push((
                     format!("{name}.{report_name}"),
-                    Ok(done(action, &report, settings)),
+                    Ok(done(agent, action, &report, file)),
                 ));
             }
         }
@@ -132,8 +160,19 @@ mod tests {
             ("io", InstallError::Io(io::Error::other("disk full"))),
         ];
         for (name, e) in errors {
-            out.push((format!("error.{name}"), Err(HooksError::Install(e).into())));
+            out.push((
+                format!("error.{name}"),
+                Err(HooksError::Install(e, settings.to_path_buf()).into()),
+            ));
         }
+        out.push((
+            "codex.error.brokenJson".into(),
+            Err(HooksError::Install(
+                InstallError::BrokenJson("line 1".into()),
+                codex.to_path_buf(),
+            )
+            .into()),
+        ));
         out.push(("notFound".into(), Err(HooksError::NotFound.into())));
         out
     }

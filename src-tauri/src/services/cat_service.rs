@@ -10,6 +10,7 @@ use klat_core::session::Outcome;
 use klat_core::settings::Settings;
 use klat_core::time::UnixMs;
 use klat_infra::settings_repo;
+use klat_protocol::Agent;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -84,8 +85,14 @@ impl CatService {
         if let Some(ev) = hook {
             // Only names and outcomes: the adapter never forwards prompts, commands or tool input.
             let session: String = ev.session_id.chars().take(8).collect();
+            // The agent as parsed, never the raw string from the body.
+            let agent = match ev.agent() {
+                Some(Agent::ClaudeCode) => "",
+                Some(Agent::Codex) => "codex ",
+                None => "unknown-agent ",
+            };
             log::info!(
-                "hook {}{} session {session} project {:?} -> {}",
+                "hook {agent}{}{} session {session} project {:?} -> {}",
                 ev.hook_event_name,
                 ev.notification_type
                     .as_deref()
@@ -210,6 +217,7 @@ mod tests {
             project_name: Some(format!("proj-{session}")),
             tool_name: None,
             occurred_at: 0,
+            agent: None,
         }
     }
 

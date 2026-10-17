@@ -46,7 +46,7 @@ export type CatPose = Record<PoseParam, number> & {
 };
 
 /** What can fly at the cat's head, in the order the rig builds them. */
-export const KNOCKOUT_OBJECTS = ['stick', 'slipper', 'durian', 'pan'] as const;
+export const KNOCKOUT_OBJECTS = ['stick', 'slipper', 'durian', 'pan', 'fish', 'duck', 'mug', 'banhmi', 'nonla', 'anvil'] as const;
 export type KnockoutObject = (typeof KNOCKOUT_OBJECTS)[number];
 
 /** Knockout timeline, in ms from the throw. The rig uses KNOCKOUT_IMPACT_S for the hit point. */

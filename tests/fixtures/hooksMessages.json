@@ -1,5 +1,5 @@
 {
-  "_": "What Install/Uninstall said before messages moved to the windows (captured from the Rust texts at 4e2a9bf). Checked by src-tauri/src/ipc/commands/hooks.rs (the messages Rust sends) and tests/settingsViewModel.test.ts (how the window renders them).",
+  "_": "What Install/Uninstall say, per agent (first captured from the Rust texts at 4e2a9bf; Codex and the {file} placeholder added with Codex hooks). Checked by src-tauri/src/ipc/commands/hooks.rs (the messages Rust sends) and tests/settingsViewModel.test.ts (how the window renders them).",
   "cases": [
     {
       "case": "install.noChange",
@@ -82,7 +82,8 @@
       "message": {
         "key": "hooks.error.brokenJson",
         "vars": {
-          "detail": "line 1"
+          "detail": "line 1",
+          "file": "settings.json"
         }
       },
       "en": "settings.json is not valid JSON (line 1). Nothing was changed.",
@@ -95,6 +96,7 @@
       "message": {
         "key": "hooks.error.unexpectedShape",
         "vars": {
+          "file": "settings.json",
           "what": "\"hooks\""
         }
       },
@@ -108,6 +110,7 @@
       "message": {
         "key": "hooks.error.exeMissing",
         "vars": {
+          "file": "settings.json",
           "path": "/x/klat-hook"
         }
       },
@@ -120,7 +123,9 @@
       "code": "hooks-changed-concurrently",
       "message": {
         "key": "hooks.error.changedConcurrently",
-        "vars": {}
+        "vars": {
+          "file": "settings.json"
+        }
       },
       "en": "settings.json changed while installing. Nothing was changed; try again.",
       "vi": "settings.json vừa bị thay đổi trong lúc cài. Chưa thay đổi gì; hãy thử lại."
@@ -132,7 +137,8 @@
       "message": {
         "key": "hooks.error.io",
         "vars": {
-          "detail": "disk full"
+          "detail": "disk full",
+          "file": "settings.json"
         }
       },
       "en": "Could not update settings.json: disk full",
@@ -146,8 +152,96 @@
         "key": "hooks.notFound",
         "vars": {}
       },
-      "en": "Could not find your Claude Code settings (.claude/settings.json in your home folder) or the hook program.",
-      "vi": "Không tìm thấy file cài đặt của Claude Code (.claude/settings.json trong thư mục người dùng) hoặc chương trình hook."
+      "en": "Could not find your home folder or the hook program next to Klat.",
+      "vi": "Không tìm thấy thư mục người dùng hoặc chương trình hook cạnh Klat."
+    },
+    {
+      "case": "codex.install.noChange",
+      "ok": true,
+      "message": {
+        "key": "hooks.codex.install.noChange",
+        "vars": {
+          "path": "/home/me/.codex/hooks.json"
+        }
+      },
+      "en": "Klat hooks are installed. Nothing needed to change in /home/me/.codex/hooks.json.\n\nIf the cat stays asleep, open Codex, type /hooks and trust Klat's hooks.",
+      "vi": "Hook của Klat đã được cài. Không cần thay đổi gì trong /home/me/.codex/hooks.json.\n\nNếu mèo vẫn ngủ, hãy mở Codex, gõ /hooks và chọn tin cậy các hook của Klat."
+    },
+    {
+      "case": "codex.install.written",
+      "ok": true,
+      "message": {
+        "key": "hooks.codex.install.written",
+        "vars": {
+          "backup": "/home/me/.codex/hooks.json.bak.1",
+          "path": "/home/me/.codex/hooks.json"
+        }
+      },
+      "en": "Klat hooks are installed in /home/me/.codex/hooks.json.\n\nYour previous file was saved to /home/me/.codex/hooks.json.bak.1.\n\nOne more step: open Codex, type /hooks and trust Klat's hooks. Codex skips hooks you have not reviewed. Then start a new Codex session.",
+      "vi": "Đã cài hook của Klat vào /home/me/.codex/hooks.json.\n\nFile cũ của bạn được lưu ở /home/me/.codex/hooks.json.bak.1.\n\nCòn một bước: mở Codex, gõ /hooks và chọn tin cậy các hook của Klat. Codex bỏ qua hook bạn chưa duyệt. Sau đó mở một phiên Codex mới."
+    },
+    {
+      "case": "codex.install.newFile",
+      "ok": true,
+      "message": {
+        "key": "hooks.codex.install.newFile",
+        "vars": {
+          "path": "/home/me/.codex/hooks.json"
+        }
+      },
+      "en": "Klat hooks are installed in /home/me/.codex/hooks.json (new file).\n\nOne more step: open Codex, type /hooks and trust Klat's hooks. Codex skips hooks you have not reviewed. Then start a new Codex session.",
+      "vi": "Đã cài hook của Klat vào /home/me/.codex/hooks.json (file mới).\n\nCòn một bước: mở Codex, gõ /hooks và chọn tin cậy các hook của Klat. Codex bỏ qua hook bạn chưa duyệt. Sau đó mở một phiên Codex mới."
+    },
+    {
+      "case": "codex.uninstall.noChange",
+      "ok": true,
+      "message": {
+        "key": "hooks.uninstall.noChange",
+        "vars": {
+          "path": "/home/me/.codex/hooks.json"
+        }
+      },
+      "en": "Klat hooks are removed. Nothing needed to change in /home/me/.codex/hooks.json.",
+      "vi": "Hook của Klat đã được gỡ. Không cần thay đổi gì trong /home/me/.codex/hooks.json."
+    },
+    {
+      "case": "codex.uninstall.written",
+      "ok": true,
+      "message": {
+        "key": "hooks.uninstall.written",
+        "vars": {
+          "backup": "/home/me/.codex/hooks.json.bak.1",
+          "path": "/home/me/.codex/hooks.json"
+        }
+      },
+      "en": "Klat hooks are removed from /home/me/.codex/hooks.json.\n\nYour previous settings were saved to /home/me/.codex/hooks.json.bak.1.",
+      "vi": "Đã gỡ hook của Klat khỏi /home/me/.codex/hooks.json.\n\nCài đặt cũ của bạn được lưu ở /home/me/.codex/hooks.json.bak.1."
+    },
+    {
+      "case": "codex.uninstall.newFile",
+      "ok": true,
+      "message": {
+        "key": "hooks.uninstall.newFile",
+        "vars": {
+          "path": "/home/me/.codex/hooks.json"
+        }
+      },
+      "en": "Klat hooks are removed from /home/me/.codex/hooks.json.",
+      "vi": "Đã gỡ hook của Klat khỏi /home/me/.codex/hooks.json."
+    },
+    {
+      "case": "codex.error.brokenJson",
+      "ok": false,
+      "code": "hooks-broken-json",
+      "message": {
+        "key": "hooks.error.brokenJson",
+        "vars": {
+          "detail": "line 1",
+          "file": "hooks.json"
+        }
+      },
+      "en": "hooks.json is not valid JSON (line 1). Nothing was changed.",
+      "vi": "hooks.json không phải JSON hợp lệ (line 1). Chưa thay đổi gì."
     }
   ]
 }

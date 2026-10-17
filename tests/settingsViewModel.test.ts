@@ -3,6 +3,8 @@ import {
   NUMBER_FIELDS,
   failureText,
   fromDisplay,
+  agentFolder,
+  hooksSummary,
   hooksView,
   isIpcError,
   nextSection,
@@ -61,6 +63,20 @@ describe('settings window view model', () => {
       primary: { action: 'install', label: 'settings.hooks.install' },
       canUninstall: false,
     });
+  });
+
+  it('marks the sidebar by every agent at once: one installed is enough, a repair anywhere warns', () => {
+    expect(hooksSummary(['installed', 'not-installed'])).toBe('installed');
+    expect(hooksSummary(['not-installed', 'installed'])).toBe('installed');
+    expect(hooksSummary(['installed', 'needs-repair'])).toBe('needs-repair');
+    expect(hooksSummary(['not-installed', 'not-installed'])).toBe('not-installed');
+    expect(hooksSummary([])).toBe('not-installed');
+  });
+
+  it("names the agent's folder on Windows and macOS", () => {
+    expect(agentFolder('C:\\Users\\you\\.codex\\hooks.json')).toBe('C:\\Users\\you\\.codex');
+    expect(agentFolder('/Users/you/.claude/settings.json')).toBe('/Users/you/.claude');
+    expect(agentFolder('hooks.json')).toBe('hooks.json');
   });
 
   it('moves between sections with wrap-around', () => {

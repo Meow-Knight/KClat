@@ -1,10 +1,10 @@
-//! klat-hook: Claude Code hook adapter (spec §8.3–8.4).
+//! klat-hook: Claude Code and Codex hook adapter (spec §8.3–8.4).
 //!
-//! Reads the hook JSON from stdin, keeps only the fields the cat needs, and POSTs them to the Klat
-//! app over loopback. Whatever happens it prints nothing and exits 0, so Claude Code can never read its
-//! output as a decision, and an app that is not running costs at most ~300ms.
+//! `klat-hook [--agent codex] [<HookName>]`. Reads the hook JSON from stdin, keeps only the fields the cat
+//! needs, and POSTs them to the Klat app over loopback. Whatever happens it prints nothing and exits 0, so the
+//! agent can never read its output as a decision, and an app that is not running costs at most ~300ms.
 
-use klat_protocol::{is_valid_token, runtime_path, HookEvent, RuntimeInfo, EVENT_PATH};
+use klat_protocol::{is_valid_token, runtime_path, Agent, HookEvent, RuntimeInfo, EVENT_PATH};
 use serde_json::Value;
 use std::collections::hash_map::RandomState;
 use std::hash::{BuildHasher, Hasher};
@@ -29,8 +29,8 @@ fn run() {
     let started = Instant::now();
     let mut input = Vec::new();
     let _ = std::io::stdin().take(MAX_STDIN).read_to_end(&mut input);
-    let fallback_name = std::env::args().nth(1);
-    let Some(event) = build_event(&input, fallback_name.as_deref(), now_ms(), &new_id()) else {
+    let args = Args::parse(std::env::args().skip(1));
+    let Some(event) = build_event(&input, &args, now_ms(), &new_id()) else {
         return;
     };
     let Some(runtime) = read_runtime() else {
@@ -42,9 +42,31 @@ fn run() {
     let _ = post(runtime.port, &runtime.token, &body, started + BUDGET);
 }
 
+/// The command line: which agent runs the hook (Claude Code when not given) and the hook name, used only when
+/// stdin does not carry one. Anything else is ignored: an older or newer entry must never make the hook fail.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct Args {
+    agent: Option<Agent>,
+    fallback_name: Option<String>,
+}
+
+impl Args {
+    fn parse(mut args: impl Iterator<Item = String>) -> Self {
+        let mut out = Args::default();
+        while let Some(arg) = args.next() {
+            if arg == "--agent" {
+                out.agent = args.next().as_deref().and_then(Agent::parse);
+            } else if out.fallback_name.is_none() && !arg.starts_with('-') {
+                out.fallback_name = Some(arg);
+            }
+        }
+        out
+    }
+}
+
 /// The §8.3 payload, or None when there is no session id to attribute the event to. The hook name is passed on
 /// as it came: the app decides which names it knows.
-fn build_event(input: &[u8], fallback_name: Option<&str>, now: u64, id: &str) -> Option<HookEvent> {
+fn build_event(input: &[u8], args: &Args, now: u64, id: &str) -> Option<HookEvent> {
     let parsed = serde_json::from_slice::<Value>(input)
         .ok()
         .filter(Value::is_object);
@@ -55,7 +77,7 @@ fn build_event(input: &[u8], fallback_name: Option<&str>, now: u64, id: &str) ->
         }
     };
     let session_id = field("session_id").filter(|s| !s.is_empty())?;
-    let hook_event_name = field("hook_event_name").or_else(|| fallback_name.map(str::to_owned))?;
+    let hook_event_name = field("hook_event_name").or_else(|| args.fallback_name.clone())?;
     Some(HookEvent {
         event_id: id.to_owned(),
         hook_event_name,
@@ -65,6 +87,11 @@ fn build_event(input: &[u8], fallback_name: Option<&str>, now: u64, id: &str) ->
         project_name: field("cwd").as_deref().and_then(basename),
         tool_name: field("tool_name"),
         occurred_at: now,
+        // Claude Code is the default on the wire, so its events look exactly as they always have.
+        agent: args
+            .agent
+            .filter(|a| *a != Agent::ClaudeCode)
+            .map(|a| a.as_str().to_owned()),
     })
 }
 
@@ -172,11 +199,20 @@ mod tests {
         serde_json::to_value(ev).unwrap()
     }
 
+    const NONE: Args = Args {
+        agent: None,
+        fallback_name: None,
+    };
+
+    fn args(list: &[&str]) -> Args {
+        Args::parse(list.iter().map(|s| s.to_string()))
+    }
+
     const STOP: &str = r#"{"session_id":"abc123","transcript_path":"C:\\Users\\me\\.claude\\projects\\x.jsonl","cwd":"D:\\Bohi\\workspace\\ClauCat","permission_mode":"default","hook_event_name":"Stop","stop_hook_active":false,"last_assistant_message":"secret text"}"#;
 
     #[test]
     fn keeps_only_the_contract_fields() {
-        let ev = wire(build_event(STOP.as_bytes(), None, 42, "id-1").unwrap());
+        let ev = wire(build_event(STOP.as_bytes(), &NONE, 42, "id-1").unwrap());
         assert_eq!(
             ev,
             json!({"eventId":"id-1","hookEventName":"Stop","sessionId":"abc123","projectName":"ClauCat","occurredAt":42})
@@ -190,13 +226,13 @@ mod tests {
     #[test]
     fn extracts_tool_and_notification_type_but_never_tool_input() {
         let input = r#"{"session_id":"s","cwd":"/home/me/proj","hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"rm -rf /"}}"#;
-        let ev = wire(build_event(input.as_bytes(), None, 1, "i").unwrap());
+        let ev = wire(build_event(input.as_bytes(), &NONE, 1, "i").unwrap());
         assert_eq!(ev["toolName"], "Bash");
         assert_eq!(ev["projectName"], "proj");
         assert!(!ev.to_string().contains("rm -rf"));
         let note = r#"{"session_id":"s","cwd":"/p","hook_event_name":"Notification","message":"m","notification_type":"idle_prompt"}"#;
         assert_eq!(
-            wire(build_event(note.as_bytes(), None, 1, "i").unwrap())["notificationType"],
+            wire(build_event(note.as_bytes(), &NONE, 1, "i").unwrap())["notificationType"],
             "idle_prompt"
         );
     }
@@ -205,24 +241,72 @@ mod tests {
     fn falls_back_to_the_argument_for_the_event_name() {
         let input = r#"{"session_id":"s","cwd":"/p"}"#;
         assert_eq!(
-            wire(build_event(input.as_bytes(), Some("Stop"), 1, "i").unwrap())["hookEventName"],
+            wire(build_event(input.as_bytes(), &args(&["Stop"]), 1, "i").unwrap())["hookEventName"],
             "Stop"
         );
-        assert!(build_event(input.as_bytes(), None, 1, "i").is_none());
+        assert!(build_event(input.as_bytes(), &NONE, 1, "i").is_none());
+    }
+
+    /// What Codex sends (learn.chatgpt.com/docs/hooks, 2026-10): the same names as Claude Code, plus fields we
+    /// never forward.
+    const CODEX_STOP: &str = r#"{"session_id":"0199a1b2-c3d4","turn_id":"t1","transcript_path":"C:\\Users\\me\\.codex\\sessions\\x.jsonl","cwd":"D:\\Bohi\\workspace\\ClauCat","hook_event_name":"Stop","model":"gpt-5.6","permission_mode":"default","stop_hook_active":false,"last_assistant_message":"secret text"}"#;
+
+    #[test]
+    fn codex_events_carry_the_agent_and_nothing_more() {
+        let ev = wire(
+            build_event(
+                CODEX_STOP.as_bytes(),
+                &args(&["--agent", "codex", "Stop"]),
+                42,
+                "id-1",
+            )
+            .unwrap(),
+        );
+        assert_eq!(
+            ev,
+            json!({"eventId":"id-1","hookEventName":"Stop","sessionId":"0199a1b2-c3d4","projectName":"ClauCat","occurredAt":42,"agent":"codex"})
+        );
+        for leak in ["secret", "transcript", "gpt", "Bohi"] {
+            assert!(!ev.to_string().contains(leak), "{leak}");
+        }
+    }
+
+    #[test]
+    fn reads_the_command_line_leniently() {
+        let codex = Args {
+            agent: Some(Agent::Codex),
+            fallback_name: Some("Stop".into()),
+        };
+        assert_eq!(args(&["--agent", "codex", "Stop"]), codex);
+        assert_eq!(args(&["Stop", "--agent", "codex"]), codex);
+        assert_eq!(args(&["Stop"]).agent, None);
+        // Unknown agents and flags are ignored, never fatal.
+        assert_eq!(args(&["--agent", "cursor", "Stop"]).agent, None);
+        assert_eq!(
+            args(&["--verbose", "Stop"]).fallback_name.as_deref(),
+            Some("Stop")
+        );
+        assert_eq!(args(&["--agent"]), NONE);
+        // Claude Code is the default and is not written on the wire.
+        let claude = args(&["--agent", "claude-code", "Stop"]);
+        assert_eq!(claude.agent, Some(Agent::ClaudeCode));
+        assert!(wire(build_event(STOP.as_bytes(), &claude, 1, "i").unwrap())
+            .get("agent")
+            .is_none());
     }
 
     #[test]
     fn needs_a_session_id() {
-        assert!(build_event(br#"{"hook_event_name":"Stop"}"#, None, 1, "i").is_none());
+        assert!(build_event(br#"{"hook_event_name":"Stop"}"#, &NONE, 1, "i").is_none());
         assert!(build_event(
             br#"{"session_id":"","hook_event_name":"Stop"}"#,
-            None,
+            &NONE,
             1,
             "i"
         )
         .is_none());
-        assert!(build_event(b"", Some("Stop"), 1, "i").is_none());
-        assert!(build_event(b"[1,2]", Some("Stop"), 1, "i").is_none());
+        assert!(build_event(b"", &args(&["Stop"]), 1, "i").is_none());
+        assert!(build_event(b"[1,2]", &args(&["Stop"]), 1, "i").is_none());
     }
 
     #[test]
@@ -230,7 +314,7 @@ mod tests {
         // A PostToolUse whose tool_response blew past MAX_STDIN: the JSON is cut mid-string.
         let mut input = r#"{"session_id":"big","cwd":"C:\\work\\repo","hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{"file_path":"x"},"tool_response":{"content":""#.to_string();
         input.push_str(&"a".repeat(1000));
-        let ev = wire(build_event(input.as_bytes(), None, 1, "i").unwrap());
+        let ev = wire(build_event(input.as_bytes(), &NONE, 1, "i").unwrap());
         assert_eq!(ev["sessionId"], "big");
         assert_eq!(ev["hookEventName"], "PostToolUse");
         assert_eq!(ev["toolName"], "Read");

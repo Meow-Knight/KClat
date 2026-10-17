@@ -1,10 +1,12 @@
 // Character sheet dev page (pnpm dev → /characters.html?c=cat): one rig in ten fixed poses at a fixed time, so
 // the picture is the same on every run. Prints a pixel hash per tile: a refactor that must not change how a
 // character looks keeps every hash. ?bg=dark renders on a dark desktop colour, ?px=2 at twice the resolution,
-// ?poses=0,1 only those poses (0 = asleep, 1 = awake and grumpy).
+// ?poses=0,1 only those poses (0 = asleep, 1 = awake and grumpy). ?knockouts=0.3 instead shows every knockout
+// object at that many seconds into its flight (0.38 is the hit).
 import * as THREE from 'three';
 import { createRig } from '../characters';
 import { PICTURE_T, poseWith, SHEET_POSES } from '../cat/poses';
+import { KNOCKOUT_OBJECTS, type CatPose } from '../kit/pose';
 import { CHARACTERS, type CharacterId } from '../settings';
 
 const W = 360;
@@ -16,7 +18,12 @@ const px = Math.min(4, Math.max(1, Number(params.get('px')) || 1));
 const id = (CHARACTERS as readonly string[]).includes(params.get('c') ?? '') ? (params.get('c') as CharacterId) : 'cat';
 
 const picked = params.get('poses')?.split(',').map(Number).filter((i) => SHEET_POSES[i]);
-const POSES = picked?.length ? picked.map((i) => SHEET_POSES[i]) : SHEET_POSES;
+const knockoutT = Number(params.get('knockouts'));
+const POSES: readonly Partial<CatPose>[] = params.has('knockouts')
+  ? KNOCKOUT_OBJECTS.map((_, bonkKind) => ({ dizzy: 1, bump: 1, bonkKind, bonkT: knockoutT || 0.3 }))
+  : picked?.length
+    ? picked.map((i) => SHEET_POSES[i])
+    : SHEET_POSES;
 const COLS = Math.min(5, POSES.length);
 const ROWS = Math.ceil(POSES.length / COLS);
 

@@ -14,8 +14,9 @@ const OPTS: ControllerOptions = { yellIntervalMs: 30_000, maxYellsPerWake: 10, r
 function setup(opts: Partial<ControllerOptions> = {}, random: () => number = () => 0.5) {
   const says: YellRequest[] = [];
   const hush = vi.fn();
+  const gasp = vi.fn();
   const phases: CatPhase[] = [];
-  const c = new CatController({ say: (r) => says.push(r), hush }, { ...OPTS, ...opts }, (p) => phases.push(p), random);
+  const c = new CatController({ say: (r) => says.push(r), gasp, hush }, { ...OPTS, ...opts }, (p) => phases.push(p), random);
   /** Advance timers and physics together, like the render loop would. */
   const advance = (ms: number): void => {
     for (let t = 0; t < ms; t += 16) {
@@ -23,7 +24,7 @@ function setup(opts: Partial<ControllerOptions> = {}, random: () => number = () 
       c.update(0.016);
     }
   };
-  return { c, says, hush, phases, advance };
+  return { c, says, hush, gasp, phases, advance };
 }
 
 describe('CatController', () => {
@@ -313,10 +314,23 @@ describe('CatController', () => {
       return t;
     }
 
-    it('throws one of the four objects, picked at random', () => {
-      const seen = [0, 0.3, 0.6, 0.99].map((r) => knocked({}, () => r).c.knockoutObject);
-      expect(seen).toEqual(['stick', 'slipper', 'durian', 'pan']);
-      expect(KNOCKOUT_OBJECTS).toHaveLength(4);
+    it('throws one of the objects, picked at random', () => {
+      const n = KNOCKOUT_OBJECTS.length;
+      const seen = KNOCKOUT_OBJECTS.map((_, k) => knocked({}, () => (k + 0.5) / n).c.knockoutObject);
+      expect(seen).toEqual([...KNOCKOUT_OBJECTS]);
+      expect(knocked({}, () => 0.9999).c.knockoutObject).toBe(KNOCKOUT_OBJECTS[n - 1]);
+      expect(n).toBe(10);
+    });
+
+    it('never throws the same object twice in a row', () => {
+      const { c, advance } = knocked({}, () => 0.5);
+      const first = c.knockoutObject;
+      advance(3000);
+      c.wake('done');
+      advance(2000);
+      c.sleep('knockout');
+      expect(c.knockoutObject).not.toBeNull();
+      expect(c.knockoutObject).not.toBe(first);
     });
 
     it('flies in, hits at ~380ms, then the cat sees stars and gets a bump', () => {
@@ -349,8 +363,20 @@ describe('CatController', () => {
       expect(c.spring('bump').t).toBe(0);
     });
 
+    it('gasps as the object is thrown, after the yell is hushed, and goes quiet once it slumps over', () => {
+      const { gasp, hush, advance } = knocked();
+      expect(gasp).toHaveBeenCalledOnce();
+      expect(gasp.mock.invocationCallOrder[0]).toBeGreaterThan(hush.mock.invocationCallOrder[0]);
+      hush.mockClear();
+      advance(1000);
+      expect(hush).not.toHaveBeenCalled();
+      advance(100);
+      expect(hush).toHaveBeenCalledOnce();
+    });
+
     it('under reduceMotion nothing flies: a short dizzy moment, then sleep', () => {
-      const { c, phases, advance } = knocked({ reduceMotion: true });
+      const { c, gasp, phases, advance } = knocked({ reduceMotion: true });
+      expect(gasp).not.toHaveBeenCalled();
       expect(c.pose.bonkKind).toBe(-1);
       expect(c.knockoutObject).toBeNull();
       expect(c.spring('dizzy').t).toBe(1);

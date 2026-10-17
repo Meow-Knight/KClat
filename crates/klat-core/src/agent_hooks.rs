@@ -1,24 +1,29 @@
-//! What Install and Uninstall do to `~/.claude/settings.json` (spec §8.5), as edits of the parsed JSON. Reading,
-//! backing up and writing the file is the app's job.
+//! What Install and Uninstall do to an agent's hooks file (spec §8.5), as edits of the parsed JSON: Claude Code's
+//! `~/.claude/settings.json` and Codex's `~/.codex/hooks.json`, which share one shape
+//! (`{"hooks": {"<Event>": [{"matcher"?, "hooks": [{"type": "command", "command", ...}]}]}}`). Reading, backing
+//! up and writing the file is the app's job.
 //!
 //! - Our entries are recognised by the program their command runs: a file named `klat-hook` (`klat-hook.exe` on
 //!   Windows; or `claude-cat-hook`, the name before the rename to Klat), so reinstalling never duplicates them,
 //!   repairing moves old entries to the new program, and uninstalling removes only them. Everything else keeps
 //!   its content and order.
-//! - Exec form (`command` + `args`): no shell is involved (Git Bash or PowerShell on Windows, zsh on macOS),
-//!   so a path with spaces needs no quoting at all.
+//! - Claude Code: exec form (`command` + `args`). No shell is involved (Git Bash or PowerShell on Windows, zsh on
+//!   macOS), so a path with spaces needs no quoting at all.
+//! - Codex has no exec form: `command` is one line for a shell, `%COMSPEC% /C "<line>"` on Windows and
+//!   `$SHELL -lc '<line>'` elsewhere (codex-rs/hooks command_runner, 2026-10). The program is quoted for that
+//!   shell; the arguments are fixed words that need no quoting.
 
-use klat_protocol::HookName;
+use klat_protocol::{Agent, HookName};
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 
-/// The events Install registers, one entry each: `HookName::is_installed` decides (klat-protocol).
-fn installed_events() -> impl Iterator<Item = &'static str> {
-    HookName::installed().map(HookName::as_str)
+/// The events Install registers for the agent, one entry each: `HookName::is_installed` decides (klat-protocol).
+fn installed_events(agent: Agent) -> impl Iterator<Item = &'static str> {
+    HookName::installed(agent).map(HookName::as_str)
 }
 
-fn is_installed_event(event: &str) -> bool {
-    HookName::parse(event).is_some_and(HookName::is_installed)
+fn is_installed_event(agent: Agent, event: &str) -> bool {
+    HookName::parse(event).is_some_and(|h| h.is_installed(agent))
 }
 
 /// Our entries run a program with this file name (case-insensitive), with or without `.exe`.
@@ -27,9 +32,12 @@ pub const MARKER: &str = "klat-hook";
 const LEGACY_MARKER: &str = "claude-cat-hook";
 /// Seconds. The adapter gives up after 300ms on its own; this is Claude Code's hard stop.
 pub const TIMEOUT_SECS: u64 = 1;
+/// Seconds, for Codex, which also starts a shell first (`cmd.exe` on Windows). Codex caps `SessionEnd` and
+/// `Interrupt` at 3.
+pub const CODEX_TIMEOUT_SECS: u64 = 2;
 
-/// The file (or its `"hooks"`, or an event's list) is not the JSON shape Claude Code writes; nothing was
-/// changed. Names the part, for the message.
+/// The file (or its `"hooks"`, or an event's list) is not the JSON shape the agent writes; nothing was changed.
+/// Names the part, for the message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UnexpectedShape(pub &'static str);
 
@@ -43,26 +51,52 @@ pub enum Status {
     Installed,
 }
 
-fn our_entry(exe: &str, event: &str) -> Value {
-    json!({ "type": "command", "command": exe, "args": [event], "timeout": TIMEOUT_SECS })
+fn our_entry(agent: Agent, exe: &str, event: &str) -> Value {
+    match agent {
+        Agent::ClaudeCode => {
+            json!({ "type": "command", "command": exe, "args": [event], "timeout": TIMEOUT_SECS })
+        }
+        Agent::Codex => json!({
+            "type": "command",
+            "command": shell_line(exe, &["--agent", Agent::Codex.as_str(), event]),
+            "timeout": CODEX_TIMEOUT_SECS,
+        }),
+    }
+}
+
+/// `exe` quoted for the shell Codex runs it with, then `args` (plain words). A path that starts with `/` is for
+/// `sh` (single quotes, which keep everything literal); any other is a Windows path for `cmd.exe` (double quotes;
+/// a Windows path cannot contain `"`).
+fn shell_line(exe: &str, args: &[&str]) -> String {
+    let program = if exe.starts_with('/') {
+        format!("'{}'", exe.replace('\'', r"'\''"))
+    } else {
+        format!("\"{exe}\"")
+    };
+    std::iter::once(program.as_str())
+        .chain(args.iter().copied())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Ours when the program the command runs is named `klat-hook` or `claude-cat-hook`. The program is the whole
-/// command (exec form, where the path may contain spaces) or its first word, quoted or not (the shell form older
-/// versions wrote). A command that only mentions the name, or runs `my-klat-hook-logger.exe`, is someone else's.
+/// command (exec form, where the path may contain spaces) or its first word, quoted (`"` or `'`) or not (the shell
+/// form older versions and the Codex entries write). A command that only mentions the name, or runs
+/// `my-klat-hook-logger.exe`, is someone else's.
 fn is_ours(hook: &Value) -> bool {
     let Some(cmd) = hook.get("command").and_then(Value::as_str) else {
         return false;
     };
     let cmd = cmd.trim();
-    let quoted = cmd
-        .strip_prefix('"')
-        .and_then(|rest| rest.split_once('"'))
+    let quoted = ['"', '\'']
+        .into_iter()
+        .filter_map(|q| cmd.strip_prefix(q)?.split_once(q))
         .map(|(program, _)| program);
     let first_word = cmd.split_whitespace().next();
-    [Some(cmd), quoted, first_word]
+    [Some(cmd), first_word]
         .into_iter()
         .flatten()
+        .chain(quoted)
         .any(is_our_program)
 }
 
@@ -95,21 +129,21 @@ fn ours_in<'a>(hooks: &'a Map<String, Value>, event: &str) -> Vec<&'a Value> {
         .collect()
 }
 
-pub fn status(settings: &Value, exe: &str) -> Status {
+pub fn status(settings: &Value, agent: Agent, exe: &str) -> Status {
     let Ok(Some(hooks)) = hooks_map(settings) else {
         return Status::NotInstalled;
     };
     let mut any = false;
     let mut all_exact = true;
-    for event in installed_events() {
+    for event in installed_events(agent) {
         let ours = ours_in(hooks, event);
         any |= !ours.is_empty();
-        all_exact &= ours.len() == 1 && *ours[0] == our_entry(exe, event);
+        all_exact &= ours.len() == 1 && *ours[0] == our_entry(agent, exe, event);
     }
     // Leftovers under events we no longer use also need a repair.
     let stray = hooks
         .keys()
-        .filter(|k| !is_installed_event(k))
+        .filter(|k| !is_installed_event(agent, k))
         .any(|k| !ours_in(hooks, k).is_empty());
     match (any || stray, all_exact && !stray) {
         (false, _) => Status::NotInstalled,
@@ -120,7 +154,7 @@ pub fn status(settings: &Value, exe: &str) -> Status {
 
 /// Adds or refreshes our entry for every event. An existing entry is updated in place; a missing one is
 /// appended as its own matcher group. Extra copies of ours are removed. Nothing else is touched.
-pub fn install_into(settings: &mut Value, exe: &str) -> Result<(), UnexpectedShape> {
+pub fn install_into(settings: &mut Value, agent: Agent, exe: &str) -> Result<(), UnexpectedShape> {
     let root = settings
         .as_object_mut()
         .ok_or(UnexpectedShape("The top level"))?;
@@ -133,15 +167,15 @@ pub fn install_into(settings: &mut Value, exe: &str) -> Result<(), UnexpectedSha
     // Entries of ours under events we no longer install (from an older version) go away.
     let stale: Vec<String> = hooks
         .keys()
-        .filter(|k| !is_installed_event(k))
+        .filter(|k| !is_installed_event(agent, k))
         .cloned()
         .collect();
     for event in stale {
         remove_ours(hooks, &event);
     }
 
-    for event in installed_events() {
-        let wanted = our_entry(exe, event);
+    for event in installed_events(agent) {
+        let wanted = our_entry(agent, exe, event);
         let groups = hooks
             .entry(event)
             .or_insert_with(|| Value::Array(Vec::new()));
@@ -242,6 +276,8 @@ mod tests {
     }
 
     const EXE: &str = r"C:\Program Files\Klat\klat-hook.exe";
+    const CLAUDE: Agent = Agent::ClaudeCode;
+    const CODEX: Agent = Agent::Codex;
 
     #[test]
     fn our_entries_are_recognised_on_every_platform() {
@@ -265,6 +301,35 @@ mod tests {
         assert!(!is_ours(&cmd("echo klat-hook")));
         assert!(!is_ours(&cmd(r#""C:\klat-hook.exe\other.exe" Stop"#)));
         assert!(!is_ours(&cmd("/home/me/klat-hook.sh")));
+        // The Codex entries, on both shells.
+        assert!(is_ours(&cmd(
+            r#""C:\Users\A B\AppData\Local\Klat\klat-hook.exe" --agent codex Stop"#
+        )));
+        assert!(is_ours(&cmd(
+            "'/Applications/Klat.app/Contents/MacOS/klat-hook' --agent codex Stop"
+        )));
+        assert!(!is_ours(&cmd("'/opt/my-klat-hook' Stop")));
+        assert!(!is_ours(&cmd("bd codex-hook Stop")));
+    }
+
+    #[test]
+    fn codex_lines_quote_the_program_for_its_shell() {
+        assert_eq!(
+            shell_line(EXE, &["--agent", "codex", "Stop"]),
+            r#""C:\Program Files\Klat\klat-hook.exe" --agent codex Stop"#
+        );
+        assert_eq!(
+            shell_line(
+                "/Users/me/Apps/Klat.app/Contents/MacOS/klat-hook",
+                &["Stop"]
+            ),
+            "'/Users/me/Apps/Klat.app/Contents/MacOS/klat-hook' Stop"
+        );
+        // sh: a single quote ends the quoting, so it is written as '\''.
+        assert_eq!(
+            shell_line("/Users/o'neil/klat-hook", &[]),
+            r"'/Users/o'\''neil/klat-hook'"
+        );
     }
 
     /// A realistic settings file with someone else's hooks and other keys, in a deliberate order.
@@ -295,21 +360,68 @@ mod tests {
     #[test]
     fn install_adds_one_exec_form_entry_per_event() {
         let mut v = existing();
-        install_into(&mut v, EXE).unwrap();
-        assert_eq!(count_ours(&v), installed_events().count());
+        install_into(&mut v, CLAUDE, EXE).unwrap();
+        assert_eq!(count_ours(&v), installed_events(CLAUDE).count());
         let notif = &v["hooks"]["Notification"][0]["hooks"][0];
         assert_eq!(notif["command"], EXE); // spaces in the path need no quoting: there is no shell
         assert_eq!(notif["args"], json!(["Notification"]));
         assert_eq!(notif["timeout"], 1);
         assert_eq!(notif["type"], "command");
         assert!(v["hooks"].get("SubagentStop").is_none());
-        assert_eq!(status(&v, EXE), Status::Installed);
+        assert!(v["hooks"].get("Interrupt").is_none());
+        assert_eq!(status(&v, CLAUDE, EXE), Status::Installed);
+        // The same file read as Codex's: wrong entries, wrong events.
+        assert_eq!(status(&v, CODEX, EXE), Status::NeedsRepair);
+    }
+
+    #[test]
+    fn codex_gets_one_shell_line_per_event() {
+        let mut v = json!({});
+        install_into(&mut v, CODEX, EXE).unwrap();
+        assert_eq!(count_ours(&v), installed_events(CODEX).count());
+        assert_eq!(
+            v["hooks"]["Interrupt"][0]["hooks"][0],
+            json!({
+                "type": "command",
+                "command": r#""C:\Program Files\Klat\klat-hook.exe" --agent codex Interrupt"#,
+                "timeout": 2
+            })
+        );
+        for missing in [
+            "Notification",
+            "StopFailure",
+            "PermissionDenied",
+            "PostToolUseFailure",
+        ] {
+            assert!(v["hooks"].get(missing).is_none(), "{missing}");
+        }
+        assert_eq!(status(&v, CODEX, EXE), Status::Installed);
+        assert_eq!(
+            status(&v, CODEX, r"D:\other\klat-hook.exe"),
+            Status::NeedsRepair
+        );
+        let mut again = v.clone();
+        install_into(&mut again, CODEX, EXE).unwrap();
+        assert_eq!(again, v);
+        assert!(uninstall_from(&mut v).unwrap());
+        assert_eq!(v, json!({}));
+    }
+
+    #[test]
+    fn codex_repair_moves_entries_from_a_claude_style_install() {
+        // Someone copied the Claude Code entries into hooks.json: exec form, and events Codex does not have.
+        let mut v = json!({});
+        install_into(&mut v, CLAUDE, EXE).unwrap();
+        install_into(&mut v, CODEX, EXE).unwrap();
+        assert_eq!(status(&v, CODEX, EXE), Status::Installed);
+        assert_eq!(count_ours(&v), installed_events(CODEX).count());
+        assert!(v["hooks"].get("Notification").is_none());
     }
 
     #[test]
     fn install_keeps_existing_hooks_and_key_order() {
         let mut v = existing();
-        install_into(&mut v, EXE).unwrap();
+        install_into(&mut v, CLAUDE, EXE).unwrap();
         assert_eq!(keys(&v), ["permissions", "model", "hooks", "theme"]);
         assert_eq!(v["hooks"]["PreToolUse"], existing()["hooks"]["PreToolUse"]);
         // Their Stop hook stays first; ours is appended as a separate group.
@@ -322,9 +434,9 @@ mod tests {
     #[test]
     fn installing_twice_changes_nothing() {
         let mut once = existing();
-        install_into(&mut once, EXE).unwrap();
+        install_into(&mut once, CLAUDE, EXE).unwrap();
         let mut twice = once.clone();
-        install_into(&mut twice, EXE).unwrap();
+        install_into(&mut twice, CLAUDE, EXE).unwrap();
         assert_eq!(once, twice);
     }
 
@@ -332,17 +444,17 @@ mod tests {
     fn repair_updates_paths_in_place_and_drops_duplicates() {
         let mut v = existing();
         // Entries from before the rename to Klat count as ours and get moved to the new program.
-        install_into(&mut v, r"D:\old\target\debug\claude-cat-hook.exe").unwrap();
-        assert_eq!(status(&v, EXE), Status::NeedsRepair);
+        install_into(&mut v, CLAUDE, r"D:\old\target\debug\claude-cat-hook.exe").unwrap();
+        assert_eq!(status(&v, CLAUDE, EXE), Status::NeedsRepair);
         // A hand-made duplicate and an old shell-form entry under an event we no longer use.
         v["hooks"]["Stop"][1]["hooks"]
             .as_array_mut()
             .unwrap()
             .push(json!({"type":"command","command":"\"D:\\x\\klat-hook.exe\" Stop"}));
         v["hooks"]["SubagentStop"] = json!([{ "hooks": [{"type":"command","command":"\"C:\\a\\Claude-Cat-Hook.EXE\" SubagentStop"}] }]);
-        install_into(&mut v, EXE).unwrap();
-        assert_eq!(status(&v, EXE), Status::Installed);
-        assert_eq!(count_ours(&v), installed_events().count());
+        install_into(&mut v, CLAUDE, EXE).unwrap();
+        assert_eq!(status(&v, CLAUDE, EXE), Status::Installed);
+        assert_eq!(count_ours(&v), installed_events(CLAUDE).count());
         assert_eq!(v["hooks"]["Stop"].as_array().unwrap().len(), 2); // theirs + ours, updated in place
         assert!(v["hooks"].get("SubagentStop").is_none());
     }
@@ -350,7 +462,7 @@ mod tests {
     #[test]
     fn uninstall_removes_only_ours_and_restores_the_original() {
         let mut v = existing();
-        install_into(&mut v, EXE).unwrap();
+        install_into(&mut v, CLAUDE, EXE).unwrap();
         assert!(uninstall_from(&mut v).unwrap());
         assert_eq!(v, existing());
         assert_eq!(keys(&v), keys(&existing()));
@@ -374,7 +486,7 @@ mod tests {
     #[test]
     fn install_then_uninstall_on_an_empty_file_leaves_it_empty() {
         let mut v = json!({});
-        install_into(&mut v, EXE).unwrap();
+        install_into(&mut v, CLAUDE, EXE).unwrap();
         uninstall_from(&mut v).unwrap();
         assert_eq!(v, json!({}));
     }
@@ -390,11 +502,11 @@ mod tests {
     #[test]
     fn non_object_shapes_are_refused() {
         assert!(matches!(
-            install_into(&mut json!([1]), EXE),
+            install_into(&mut json!([1]), CLAUDE, EXE),
             Err(UnexpectedShape(_))
         ));
         assert!(matches!(
-            install_into(&mut json!({"hooks": []}), EXE),
+            install_into(&mut json!({"hooks": []}), CODEX, EXE),
             Err(UnexpectedShape(_))
         ));
         assert!(matches!(
@@ -427,9 +539,9 @@ mod tests {
         #[test]
         fn install_writes_exactly_this() {
             let mut v: Value = serde_json::from_str(BEFORE).unwrap();
-            install_into(&mut v, EXE).unwrap();
+            install_into(&mut v, CLAUDE, EXE).unwrap();
             assert_eq!(text(&v), lf(INSTALLED));
-            assert_eq!(status(&v, EXE), Status::Installed);
+            assert_eq!(status(&v, CLAUDE, EXE), Status::Installed);
         }
 
         #[test]
@@ -437,15 +549,32 @@ mod tests {
             let mut v: Value = serde_json::from_str(INSTALLED).unwrap();
             assert!(uninstall_from(&mut v).unwrap());
             assert_eq!(text(&v), lf(UNINSTALLED));
-            assert_eq!(status(&v, EXE), Status::NotInstalled);
+            assert_eq!(status(&v, CLAUDE, EXE), Status::NotInstalled);
         }
 
         #[test]
         fn uninstall_of_the_old_entries_writes_exactly_this() {
             let mut v: Value = serde_json::from_str(BEFORE).unwrap();
-            assert_eq!(status(&v, EXE), Status::NeedsRepair);
+            assert_eq!(status(&v, CLAUDE, EXE), Status::NeedsRepair);
             assert!(uninstall_from(&mut v).unwrap());
             assert_eq!(text(&v), lf(UNINSTALLED_FROM_BEFORE));
+        }
+
+        /// Codex (crates/klat-core/testdata/codex_hooks): a hooks.json with someone else's hooks (beads, with
+        /// matchers and status messages) under events we use and events we don't. Installing and uninstalling
+        /// must give the file back as it was.
+        const CODEX_BEFORE: &str = include_str!("../testdata/codex_hooks/before.json");
+        const CODEX_INSTALLED: &str = include_str!("../testdata/codex_hooks/installed.json");
+
+        #[test]
+        fn codex_install_writes_exactly_this_and_uninstall_restores_the_file() {
+            let mut v: Value = serde_json::from_str(CODEX_BEFORE).unwrap();
+            assert_eq!(status(&v, CODEX, EXE), Status::NotInstalled);
+            install_into(&mut v, CODEX, EXE).unwrap();
+            assert_eq!(text(&v), lf(CODEX_INSTALLED));
+            assert_eq!(status(&v, CODEX, EXE), Status::Installed);
+            assert!(uninstall_from(&mut v).unwrap());
+            assert_eq!(text(&v), lf(CODEX_BEFORE));
         }
     }
 }

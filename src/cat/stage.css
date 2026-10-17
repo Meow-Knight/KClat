@@ -48,6 +48,20 @@
   display: inline-block;
 }
 
+/* Grandstander has no CJK glyphs: the system's CJK font for the language, Grandstander still for Latin. */
+.cat-bubble-text:lang(zh) {
+  font-family: 'Grandstander', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', sans-serif;
+}
+
+.cat-bubble-text:lang(ja) {
+  font-family: 'Grandstander', 'Yu Gothic UI', 'Meiryo UI', 'Hiragino Sans', 'Noto Sans CJK JP', sans-serif;
+}
+
+.cat-bubble-text:lang(ko) {
+  font-family: 'Grandstander', 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans CJK KR', sans-serif;
+  word-break: keep-all;
+}
+
 .cat-bubble.shake .cat-bubble-text {
   animation: cat-shake 0.45s;
 }

@@ -1,10 +1,12 @@
 // What the Settings window needs from the app, with two implementations: the real one over Tauri, and a mock
 // for `pnpm dev` at /settings.html?mock (design review without the app). Mock options in the URL:
-// `lang=vi`, `hooks=needs-repair|not-installed`, `fail=autostart|hooks`, `drag=missing|granted` (macOS).
+// `lang=vi`, `hooks=needs-repair|not-installed` (Claude Code), `codex=installed|needs-repair|missing` (Codex; not
+// installed by default, `missing` = no ~/.codex), `fail=autostart|hooks`, `drag=missing|granted` (macOS).
 import {
   bridge,
   type DragPermission,
   type HooksAction,
+  type HooksAgent,
   type HooksInfo,
   type HooksStatus,
   type IpcError,
@@ -21,9 +23,10 @@ export interface SettingsApi {
   setStartAtLogin(on: boolean): Promise<boolean>;
   wakeTest(): Promise<void>;
   sleep(): Promise<void>;
-  hooksStatus(): Promise<HooksInfo>;
-  /** Resolves to what was done; rejects with an IpcError saying why nothing was. */
-  hooksApply(action: HooksAction): Promise<Message>;
+  /** Every agent, in the order the window lists them. */
+  hooksStatus(): Promise<HooksInfo[]>;
+  /** Installs or removes one agent's hooks. Resolves to what was done; rejects with an IpcError saying why nothing was. */
+  hooksApply(agent: HooksAgent, action: HooksAction): Promise<Message>;
   dragPermission(): Promise<DragPermission>;
   openDragPermission(): Promise<void>;
   onDragPermission(cb: (p: DragPermission) => void): Promise<unknown>;
@@ -55,13 +58,22 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export function mockApi(params: URLSearchParams): SettingsApi {
   const lang: UiLanguage = params.get('lang') === 'vi' ? 'vi' : 'en';
   let settings: AppSettings = { ...DEFAULT_SETTINGS, uiLanguage: lang };
-  let hooks: HooksStatus = (['installed', 'needs-repair', 'not-installed'] as const).find((s) => s === params.get('hooks')) ?? 'installed';
+  const statusParam = (name: string, fallback: HooksStatus): HooksStatus =>
+    (['installed', 'needs-repair', 'not-installed'] as const).find((s) => s === params.get(name)) ?? fallback;
+  const hooks: Record<HooksAgent, HooksStatus> = {
+    'claude-code': statusParam('hooks', 'installed'),
+    codex: statusParam('codex', 'not-installed'),
+  };
+  const codexFound = params.get('codex') !== 'missing';
   const fail = params.get('fail');
   let drag: DragPermission = (['missing', 'granted'] as const).find((d) => d === params.get('drag')) ?? 'not-needed';
   const dragListeners: ((p: DragPermission) => void)[] = [];
   const listeners: ((s: AppSettings) => void)[] = [];
   const publish = () => listeners.forEach((cb) => cb({ ...settings }));
-  const settingsPath = 'C:\\Users\\you\\.claude\\settings.json';
+  const files: Record<HooksAgent, string> = {
+    'claude-code': 'C:\\Users\\you\\.claude\\settings.json',
+    codex: 'C:\\Users\\you\\.codex\\hooks.json',
+  };
 
   return {
     getSettings: async () => ({ ...settings }),
@@ -86,19 +98,26 @@ export function mockApi(params: URLSearchParams): SettingsApi {
     },
     wakeTest: async () => console.info('[mock] wake test'),
     sleep: async () => console.info('[mock] sleep'),
-    hooksStatus: async () => ({ status: hooks, settingsPath }),
-    hooksApply: async (action) => {
+    hooksStatus: async () =>
+      (['claude-code', 'codex'] as const).map((agent) => ({
+        agent,
+        status: hooks[agent],
+        filePath: files[agent],
+        agentFound: agent === 'claude-code' || codexFound,
+      })),
+    hooksApply: async (agent, action) => {
       await wait(700);
       if (fail === 'hooks') {
         const e: IpcError = {
           code: 'hooks-broken-json',
-          message: { key: 'hooks.error.brokenJson', vars: { detail: 'expected value at line 4 column 3' } },
+          message: { key: 'hooks.error.brokenJson', vars: { detail: 'expected value at line 4 column 3', file: 'settings.json' } },
         };
         throw e;
       }
-      hooks = action === 'install' ? 'installed' : 'not-installed';
-      const key = action === 'install' ? 'hooks.install.written' : 'hooks.uninstall.written';
-      return { key, vars: { path: settingsPath, backup: `${settingsPath}.bak.1760371200` } };
+      hooks[agent] = action === 'install' ? 'installed' : 'not-installed';
+      const install = agent === 'codex' ? 'hooks.codex.install.written' : 'hooks.install.written';
+      const key = action === 'install' ? install : 'hooks.uninstall.written';
+      return { key, vars: { path: files[agent], backup: `${files[agent]}.bak.1760371200` } };
     },
     dragPermission: async () => drag,
     openDragPermission: async () => {

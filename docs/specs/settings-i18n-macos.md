@@ -86,8 +86,8 @@ Giới hạn số (Rust clamp khi load và khi patch; UI dùng cùng giới hạ
 
 Không còn lệnh đưa mèo về góc: người dùng tự kéo mèo bằng Space. Vị trí đã lưu nằm trên màn hình đã rút ra thì
 `overlay::place` vẫn tự đưa mèo về góc như hiện tại.
-| `hooks_status` | — | `{ status, settingsPath, exePath }` | |
-| `hooks_apply` | `action: "install" \| "uninstall"` | `{ ok, message }` | Message đã dịch theo `uiLanguage`. Chạy ngoài main thread như hiện tại. |
+| `hooks_status` | — | `[{ agent, status, filePath, agentFound }]` (Claude Code, Codex) | |
+| `hooks_apply` | `agent: "claude-code" \| "codex"`, `action: "install" \| "uninstall"` | `Message` (key + biến); lỗi là `IpcError` | Cửa sổ dịch theo `uiLanguage`. Chạy ngoài main thread như hiện tại. |
 | `open_settings` | — | — | Mở/đưa lên cửa sổ Settings (tray dùng trực tiếp hàm Rust). |
 
 `cat://settings` vẫn là kênh duy nhất báo settings đổi. Overlay, tray và cửa sổ Settings đều nghe nó, nên đổi ở đâu thì

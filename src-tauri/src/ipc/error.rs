@@ -2,7 +2,7 @@
 //! translate it into the Platform Language (docs/ARCHITECTURE.md §7.3). Errors from klat-core and klat-infra become
 //! an [`IpcError`] here, at the edge.
 
-use klat_infra::claude_settings::InstallError;
+use klat_infra::hook_files::InstallError;
 use serde::Serialize;
 use std::collections::BTreeMap;
 

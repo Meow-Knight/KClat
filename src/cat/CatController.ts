@@ -65,6 +65,8 @@ export interface YellRequest {
 /** Side effects the controller asks for; the stage maps them onto the bubble. */
 export interface CatVoice {
   say(req: YellRequest): void;
+  /** It sees a knockout object coming: "Oh sheeet!" until it slumps over dizzy (then `hush`). */
+  gasp(): void;
   hush(): void;
 }
 
@@ -107,6 +109,8 @@ export class CatController {
   /** Knockout: index into KNOCKOUT_OBJECTS of what is flying, and seconds since the throw (-1 = none). */
   private bonkKind = -1;
   private bonkT = -1;
+  /** The object thrown last time: the next knockout throws something else. */
+  private lastBonkKind = -1;
 
   private seqTimers: ReturnType<typeof setTimeout>[] = [];
   private yellTimer: ReturnType<typeof setTimeout> | undefined;
@@ -237,7 +241,10 @@ export class CatController {
       this.later(KNOCKOUT_STILL_MS, () => this.settleAsleep());
       return;
     }
-    this.bonkKind = Math.min(KNOCKOUT_OBJECTS.length - 1, Math.floor(this.random() * KNOCKOUT_OBJECTS.length));
+    const n = KNOCKOUT_OBJECTS.length;
+    let kind = Math.min(n - 1, Math.floor(this.random() * n));
+    if (kind === this.lastBonkKind) kind = (kind + 1) % n;
+    this.bonkKind = this.lastBonkKind = kind;
     this.bonkT = 0;
     // It sees it coming.
     this.eyeBase = EYE_WIDE;
@@ -246,6 +253,7 @@ export class CatController {
     p.mouth.t = 0.25;
     p.ear.vel += 6;
     this.setLookTarget(-0.35, -0.35);
+    this.voice.gasp();
 
     this.later(KNOCKOUT_IMPACT_MS, () => {
       // BONK: squashed, ears flat, X eyes, stars, a bump.
@@ -265,6 +273,7 @@ export class CatController {
     this.later(KNOCKOUT_COLLAPSE_MS, () => {
       p.sleepy.t = 1; // slumps over
       p.mouth.t = 0.15;
+      this.voice.hush();
     });
     this.later(KNOCKOUT_SETTLED_MS, () => this.settleAsleep());
     this.later(KNOCKOUT_BUMP_MS, () => (p.bump.t = 0));

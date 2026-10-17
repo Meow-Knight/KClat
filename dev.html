@@ -131,8 +131,16 @@
           <button id="pet">Pet</button>
           <label><input type="checkbox" id="sfw" /> SFW</label>
           <label><input type="checkbox" id="reduce" /> Reduce motion</label>
-          <label><input type="checkbox" id="en" checked /> en</label>
-          <label><input type="checkbox" id="vi" checked /> vi</label>
+          <label>Klat language
+            <select id="klatLanguage">
+              <option value="auto" selected>auto</option>
+              <option value="en">en</option>
+              <option value="vi">vi</option>
+              <option value="zh">zh</option>
+              <option value="ja">ja</option>
+              <option value="ko">ko</option>
+            </select>
+          </label>
           <label>Yell every <input type="number" id="interval" min="1000" step="500" value="6500" /> ms</label>
           <label>Max yells <input type="number" id="max" min="1" value="10" /></label>
           <label><input type="checkbox" id="dark" /> Dark desktop</label>

@@ -111,8 +111,13 @@ export class CatStage {
         say: (req) => {
           clearTimeout(this.readyReplyTimer);
           const wasVisible = this.bubble.visible;
-          this.bubble.show(this.picker.pick(req).text, this.subtitle);
+          this.bubble.show(this.picker.pick(req), this.subtitle);
           if (!wasVisible) callbacks.onLayoutChange?.();
+        },
+        gasp: () => {
+          clearTimeout(this.readyReplyTimer);
+          this.bubble.show(this.picker.pickGasp());
+          callbacks.onLayoutChange?.();
         },
         hush: () => {
           this.bubble.hide();
@@ -332,7 +337,7 @@ export class CatStage {
   private replyReady(): void {
     if (this.controller.current !== 'sleep') return;
     const wasVisible = this.bubble.visible;
-    this.bubble.show(this.picker.pickReady().text);
+    this.bubble.show(this.picker.pickReady());
     if (!wasVisible) this.callbacks.onLayoutChange?.();
     clearTimeout(this.readyReplyTimer);
     this.readyReplyTimer = setTimeout(() => {

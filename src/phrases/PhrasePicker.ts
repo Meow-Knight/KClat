@@ -1,5 +1,5 @@
 // Phrase selection rules from spec §7.2.
-import type { Phrase, PhraseLang } from './phrases';
+import type { Phrase, PhraseLang, PhraseTag } from './phrases';
 
 import type { WakeReason } from '../bridge/generated';
 
@@ -22,6 +22,7 @@ export interface PickRequest {
 export const IGNORED_FROM_YELL = 3;
 
 const FALLBACK_WAKE: Phrase = { id: 'wake-fallback', text: 'Wake up, human!!!', lang: 'en', tags: ['wake'], explicit: false };
+const FALLBACK_GASP: Phrase = { id: 'gasp-fallback', text: 'Oh snap!', lang: 'en', tags: ['gasp'], explicit: false };
 
 export class PhrasePicker {
   private bag: Phrase[] = [];
@@ -74,19 +75,29 @@ export class PhrasePicker {
     );
   }
 
+  /** What the cat blurts out when it sees a knockout object coming ("Oh sheeet!"), chosen like the wake phrase. */
+  pickGasp(): Phrase {
+    return this.onePerLanguage('gasp') ?? FALLBACK_GASP;
+  }
+
   /**
    * The first yell: one wake phrase per chosen language (the explicit one unless SFW), picked at random when the
-   * cat speaks both. With no wake phrase in the chosen languages it still yells, in whatever wake phrase is left.
+   * cat speaks several. With no wake phrase in the chosen languages it still yells, in whatever wake phrase is left.
    */
   private wakePhrase(): Phrase {
-    const wakes = this.phrases.filter((p) => p.tags.includes('wake') && this.allowed(p));
+    return this.onePerLanguage('wake') ?? FALLBACK_WAKE;
+  }
+
+  /** One `tag` phrase per chosen language (the explicit one unless SFW), in a random one of them; else any left. */
+  private onePerLanguage(tag: PhraseTag): Phrase | undefined {
+    const tagged = this.phrases.filter((p) => p.tags.includes(tag) && this.allowed(p));
     const preferred = (list: Phrase[]): Phrase | undefined =>
       this.opts.sfwMode ? list[0] : (list.find((p) => p.explicit) ?? list[0]);
     const perLanguage = this.opts.languages
-      .map((lang) => preferred(wakes.filter((p) => p.lang === lang)))
+      .map((lang) => preferred(tagged.filter((p) => p.lang === lang)))
       .filter((p): p is Phrase => p !== undefined);
     if (perLanguage.length > 0) return perLanguage[Math.floor(this.random() * perLanguage.length)];
-    return preferred(wakes) ?? FALLBACK_WAKE;
+    return preferred(tagged);
   }
 
   private allowed(p: Phrase): boolean {

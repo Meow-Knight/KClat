@@ -1,6 +1,8 @@
-//! Which Claude Code sessions need you (spec §8.1–8.2). Pure logic: no Tauri, no I/O, no clock.
+//! Which Claude Code and Codex sessions need you (spec §8.1–8.2). Pure logic: no Tauri, no I/O, no clock.
 //!
-//! Mapping, as verified against the official hooks docs (2026-10):
+//! Mapping, as verified against the official hooks docs of both (2026-10). Codex sends the same names with the
+//! same meaning, but only `Stop`, `PermissionRequest`, `UserPromptSubmit`, `PostToolUse`, `SessionEnd` and
+//! `Interrupt` (so no "waiting for input" fallback):
 //! - `Stop`, `StopFailure` → needs attention (done). StopFailure is a turn that ended on an API error.
 //! - `PermissionRequest` → needs attention (permission), the moment the prompt appears.
 //! - `Notification` is a fallback only, ignored when the session is already pending:
@@ -8,7 +10,8 @@
 //!   `idle_prompt` (~60s after a reply), `agent_needs_input`, `elicitation_dialog`, `elicitation_url_dialog` → input.
 //! - `UserPromptSubmit` → cleared. `PostToolUse` / `PostToolUseFailure` of the tool that asked permission → cleared.
 //! - `PermissionDenied` (auto mode only) → clears a permission wait. `SessionEnd` → session removed.
-//! - Anything else (including `SubagentStop`) is ignored.
+//! - `Interrupt` (Codex: you stopped the turn) → cleared.
+//! - Anything else (including `SubagentStop`, and any event from an agent this version does not know) is ignored.
 
 use crate::time::{DurationMs, UnixMs};
 use klat_protocol::{HookEvent, HookName};
@@ -29,6 +32,7 @@ pub enum ClearCause {
     PromptSubmitted,
     ToolResumed,
     PermissionDenied,
+    Interrupted,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,6 +51,7 @@ pub enum Signal {
 pub fn classify(ev: &HookEvent) -> Option<Signal> {
     use Signal::*;
     let needed = |reason, fallback| Some(AttentionNeeded { reason, fallback });
+    ev.agent()?;
     match ev.hook()? {
         HookName::Stop | HookName::StopFailure => needed(WakeReason::Done, false),
         HookName::PermissionRequest => needed(WakeReason::Permission, false),
@@ -64,6 +69,7 @@ pub fn classify(ev: &HookEvent) -> Option<Signal> {
         }
         HookName::PermissionDenied => Some(AttentionCleared(ClearCause::PermissionDenied)),
         HookName::SessionEnd => Some(SessionEnded),
+        HookName::Interrupt => Some(AttentionCleared(ClearCause::Interrupted)),
         HookName::SubagentStop => None,
     }
 }
@@ -203,7 +209,7 @@ impl SessionStore {
                     return Outcome::Unchanged;
                 }
                 let clears = match cause {
-                    ClearCause::PromptSubmitted => true,
+                    ClearCause::PromptSubmitted | ClearCause::Interrupted => true,
                     // Only the tool that was waiting for approval; no tool name on record (Notification
                     // fallback) means any tool running again shows you answered.
                     ClearCause::ToolResumed => {
@@ -332,12 +338,19 @@ mod tests {
             project_name: Some(format!("proj-{session}")),
             tool_name: None,
             occurred_at: 0,
+            agent: None,
         }
     }
     fn note(kind: &str, session: &str) -> HookEvent {
         HookEvent {
             notification_type: Some(kind.into()),
             ..ev("Notification", session)
+        }
+    }
+    fn codex(name: &str, session: &str) -> HookEvent {
+        HookEvent {
+            agent: Some("codex".into()),
+            ..ev(name, session)
         }
     }
     fn tool(name: &str, session: &str, tool: &str) -> HookEvent {
@@ -414,6 +427,44 @@ mod tests {
         assert_eq!(classify(&ev("SessionEnd", "a")), Some(Signal::SessionEnded));
         assert_eq!(classify(&ev("SubagentStop", "a")), None);
         assert_eq!(classify(&ev("PreToolUse", "a")), None);
+        assert_eq!(
+            classify(&ev("Interrupt", "a")),
+            Some(Signal::AttentionCleared(ClearCause::Interrupted))
+        );
+    }
+
+    #[test]
+    fn codex_events_mean_what_claude_code_events_mean() {
+        for name in [
+            "Stop",
+            "PermissionRequest",
+            "UserPromptSubmit",
+            "PostToolUse",
+            "SessionEnd",
+        ] {
+            assert_eq!(
+                classify(&codex(name, "a")),
+                classify(&ev(name, "a")),
+                "{name}"
+            );
+        }
+        let unknown = HookEvent {
+            agent: Some("cursor".into()),
+            ..ev("Stop", "a")
+        };
+        assert_eq!(classify(&unknown), None);
+    }
+
+    #[test]
+    fn interrupting_a_codex_turn_clears_its_wait() {
+        let mut st = SessionStore::default();
+        st.apply(&codex("PermissionRequest", "a"), t(1_000));
+        assert!(st.awake(READY));
+        assert_eq!(
+            st.apply(&codex("Interrupt", "a"), t(2_000)),
+            Outcome::Changed
+        );
+        assert!(!st.awake(READY));
     }
 
     #[test]

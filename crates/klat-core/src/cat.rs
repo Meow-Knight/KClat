@@ -242,6 +242,7 @@ mod tests {
             project_name: Some(format!("proj-{session}")),
             tool_name: None,
             occurred_at: 0,
+            agent: None,
         }
     }
     fn note(kind: &str, session: &str) -> HookEvent {

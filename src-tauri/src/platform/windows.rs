@@ -13,13 +13,17 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, GetCursorPos, GetMessageW, GetSystemMetrics, SetWindowsHookExW, HC_ACTION,
-    KBDLLHOOKSTRUCT, LLKHF_INJECTED, MSG, SM_SWAPBUTTON, WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP,
-    WM_SYSKEYDOWN, WM_SYSKEYUP,
+    KBDLLHOOKSTRUCT, MSG, SM_SWAPBUTTON, WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN,
+    WM_SYSKEYUP,
 };
 
 /// Where the hook reports grabs. A static (docs/ARCHITECTURE.md §7.2): WH_KEYBOARD_LL calls `hook` with no user
 /// data.
 static TX: OnceLock<Sender<Msg>> = OnceLock::new();
+
+/// Tags our replayed tap ("KLAT"), so the hook lets it through. Filtering on LLKHF_INJECTED instead would also
+/// drop the Space that remote-control apps (TeamViewer, AnyDesk, UltraViewer...) send with SendInput.
+const REPLAY_MARK: usize = 0x4B4C_4154;
 
 fn held(vk: u16) -> bool {
     // SAFETY: plain Win32 call with no pointers.
@@ -48,7 +52,7 @@ pub fn replay_space() {
                 wScan: 0x39,
                 dwFlags: flags,
                 time: 0,
-                dwExtraInfo: 0,
+                dwExtraInfo: REPLAY_MARK,
             },
         },
     };
@@ -82,8 +86,8 @@ unsafe extern "system" fn hook(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRE
     if code == HC_ACTION as i32 {
         // SAFETY: for WH_KEYBOARD_LL with HC_ACTION, lparam points to a KBDLLHOOKSTRUCT.
         let kb = unsafe { &*(lparam as *const KBDLLHOOKSTRUCT) };
-        // Injected presses pass, including our own replayed tap.
-        if kb.vkCode == VK_SPACE as u32 && kb.flags & LLKHF_INJECTED == 0 {
+        // Our own replayed tap passes; injected presses from other apps (remote control) are handled.
+        if kb.vkCode == VK_SPACE as u32 && kb.dwExtraInfo != REPLAY_MARK {
             let msg = wparam as u32;
             let send = |m| {
                 if let Some(tx) = TX.get() {

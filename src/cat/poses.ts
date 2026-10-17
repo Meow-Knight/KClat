@@ -11,7 +11,7 @@ let rest: CatPose | undefined;
 /** The controller's resting pose (asleep) with `p` on top. */
 export function poseWith(p: Partial<CatPose>): CatPose {
   if (!rest) {
-    const c = new CatController({ say() {}, hush() {} }, { yellIntervalMs: 1e9, maxYellsPerWake: 1, reduceMotion: false });
+    const c = new CatController({ say() {}, gasp() {}, hush() {} }, { yellIntervalMs: 1e9, maxYellsPerWake: 1, reduceMotion: false });
     rest = { ...c.pose };
     c.dispose();
   }

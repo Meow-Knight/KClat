@@ -1,4 +1,5 @@
 // Speech bubble: pops in, shakes its text, and dismisses on click.
+import type { Phrase } from '../phrases/phrases';
 
 export class Bubble {
   readonly el: HTMLDivElement;
@@ -31,8 +32,9 @@ export class Bubble {
   }
 
   /** `subtitle`: project name, shown when more than one session is waiting. */
-  show(text: string, subtitle?: string): void {
-    this.text.textContent = text;
+  show(phrase: Pick<Phrase, 'text' | 'lang'>, subtitle?: string): void {
+    this.text.textContent = phrase.text;
+    this.text.lang = phrase.lang; // picks the right CJK font (stage.css)
     this.sub.textContent = subtitle ?? '';
     this.sub.hidden = !subtitle;
     this.shown = true;

@@ -8,6 +8,12 @@ publish = false
 # klat-hook links this: keep it to serde, nothing that grows the hook or slows its start.
 [dependencies]
 serde = { workspace = true }
+ts-rs = { workspace = true, optional = true }
+
+[features]
+# TypeScript declarations of the types that cross IPC (src-tauri's tests write src/bridge/generated.ts). The hook
+# never turns it on.
+ts = ["dep:ts-rs"]
 
 [dev-dependencies]
 serde_json = { workspace = true }

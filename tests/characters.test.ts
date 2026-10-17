@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CatPose } from '../src/kit/pose';
+import { KNOCKOUT_OBJECTS, type CatPose } from '../src/kit/pose';
 import { createRig } from '../src/characters';
 import { PICTURE_T, poseWith, SHEET_POSES } from '../src/cat/poses';
 import { CHARACTERS, DEFAULT_SETTINGS, type CharacterId } from '../src/settings';
@@ -7,7 +7,7 @@ import { CHARACTERS, DEFAULT_SETTINGS, type CharacterId } from '../src/settings'
 /** Every sheet pose, plus each knockout object after the hit and the tapping beat at its peak. */
 const POSES: Partial<CatPose>[] = [
   ...SHEET_POSES,
-  ...[0, 1, 2, 3].map((k) => ({ dizzy: 1, bump: 1, bonkKind: k, bonkT: 0.5 })),
+  ...KNOCKOUT_OBJECTS.flatMap((_, k) => [0.2, 0.5].map((bonkT) => ({ dizzy: 1, bump: 1, bonkKind: k, bonkT }))),
   { sleepy: 0, tapping: true, puff: 1 },
 ];
 

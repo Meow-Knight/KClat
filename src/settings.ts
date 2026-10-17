@@ -2,7 +2,7 @@
 // overlay and the Settings window receive them via the bridge.
 // The types are generated from Rust (bridge/generated.ts, pure types: any layer may import them).
 import type { Character, KlatLanguage, Settings } from './bridge/generated';
-import type { PhraseLang } from './phrases/phrases';
+import { PHRASE_LANGS, type PhraseLang } from './phrases/phrases';
 
 export type { KlatLanguage, UiLanguage } from './bridge/generated';
 /** Who sits in the corner (src/characters). */
@@ -40,7 +40,7 @@ export const DEFAULT_SETTINGS: Readonly<AppSettings> = {
 /** Cat size slider: percent range and step (Rust clamps to the same range). Step 1 so a drag moves smoothly. */
 export const CAT_SCALE = { min: 50, max: 200, step: 1 } as const;
 
-/** The phrase languages the cat may use for a Klat Language. */
+/** The phrase languages the cat may use for a Klat Language: Auto mixes them all. */
 export function phraseLanguages(klat: KlatLanguage): PhraseLang[] {
-  return klat === 'auto' ? ['en', 'vi'] : [klat];
+  return klat === 'auto' ? [...PHRASE_LANGS] : [klat];
 }

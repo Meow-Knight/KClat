@@ -18,13 +18,16 @@ pub enum UiLanguage {
     Vi,
 }
 
-/// Klat Language: what the cat says. Auto mixes both languages.
+/// Klat Language: what the cat says. Auto mixes every language.
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum KlatLanguage {
     En,
     Vi,
+    Zh,
+    Ja,
+    Ko,
     #[default]
     Auto,
 }
@@ -393,6 +396,22 @@ mod tests {
             klat(json!({ "languages": ["vi"], "klatLanguage": "xx" })),
             KlatLanguage::Auto
         );
+    }
+
+    #[test]
+    fn every_klat_language_reads_back() {
+        let klat = |v: Value| Settings::from_object(v.as_object().unwrap()).klat_language;
+        for (name, lang) in [
+            ("en", KlatLanguage::En),
+            ("vi", KlatLanguage::Vi),
+            ("zh", KlatLanguage::Zh),
+            ("ja", KlatLanguage::Ja),
+            ("ko", KlatLanguage::Ko),
+            ("auto", KlatLanguage::Auto),
+        ] {
+            assert_eq!(klat(json!({ "klatLanguage": name })), lang, "{name}");
+            assert_eq!(serde_json::to_value(lang).unwrap(), json!(name));
+        }
     }
 
     #[test]

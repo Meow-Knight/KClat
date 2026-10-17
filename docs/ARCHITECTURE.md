@@ -149,7 +149,7 @@ Thứ tự tầng, trong ra ngoài. Một thư mục chỉ được import từ 
 
 ### 5.1 `klat-protocol`: hợp đồng giữa hai process
 
-**Chứa:** `HookEvent` (body `POST /event`), `enum HookName` + `fn is_installed(self)`, `RuntimeInfo { port, token, pid }`, `fn is_valid_token`, `data_dir()`/`runtime_path()`, hằng số `EVENT_PATH`, `MAX_BODY`.
+**Chứa:** `HookEvent` (body `POST /event`, field `agent` cho Codex), `enum HookName` + `fn is_installed(self, agent)`, `enum Agent` (Claude Code, Codex), `RuntimeInfo { port, token, pid }`, `fn is_valid_token`, `data_dir()`/`runtime_path()`, hằng số `EVENT_PATH`, `MAX_BODY`.
 
 **Không chứa:** logic nghiệp vụ (`classify` thuộc core), I/O mạng.
 
@@ -168,7 +168,7 @@ Thứ tự tầng, trong ra ngoài. Một thư mục chỉ được import từ 
 | `cat` | `CatModel` (reducer), `Command`, `Ctx`, `CatState`, `Attention`, `SleepCause` |
 | `settings` | `Settings` + enum, đọc khoan dung (`from_object`), `SettingsPatch`, clamp, migrate legacy |
 | `geometry` | `Point<U, N>` / `Rect<U, N>` với đơn vị `Css` / `Logical` / `Physical` (§7.5), `WindowPos`, `OverlayFrame`, `to_overlay`, `hit_test`, `clamp_window`, `is_on_screen`, `keep_bottom_right`, `bottom_right`, `LookTracker` |
-| `claude_hooks` | `status` / `install_into` / `uninstall_from` trên `serde_json::Value` (không đọc ghi file), lỗi `UnexpectedShape`; golden test trong `testdata/claude_settings/` |
+| `agent_hooks` | `status` / `install_into` / `uninstall_from` trên `serde_json::Value` (không đọc ghi file) cho từng `Agent` (Claude Code: exec form; Codex: một dòng lệnh shell), lỗi `UnexpectedShape`; golden test trong `testdata/claude_settings/` và `testdata/codex_hooks/` |
 | `i18n` | Catalog + `t(lang, key)`, `tf(...)`; không phụ thuộc `AppHandle` |
 | `ratelimit` | `RejectLog` |
 | `time` | `UnixMs`, `DurationMs` |
@@ -206,7 +206,7 @@ impl CatModel {
 | `settings_repo` | load/save atomic (tmp + rename), đổi tên file hỏng `.corrupt.<ts>`, migrate thư mục cũ |
 | `runtime_file` | ghi `runtime.json` 0600, `create_new`, xoá khi thoát |
 | `event_server` | HTTP loopback: deadline cả request, token so sánh thời gian hằng, allowlist, giới hạn kết nối, giới hạn log từ chối (theo từng server, không `static`). `start(token, clock: impl Fn() -> UnixMs, on_event: impl Fn(HookEvent))`; lỗi là `enum Reject` → `status()`; test 2000 request rác seed cố định |
-| `claude_settings` | đọc/ghi `~/.claude/settings.json` có backup; biến đổi bằng `core::claude_hooks`; `InstallError` (thiserror) |
+| `hook_files` | đọc/ghi `~/.claude/settings.json` và `~/.codex/hooks.json` (`$CODEX_HOME`) có backup; biến đổi bằng `core::agent_hooks`; `InstallError` (thiserror) |
 | `log` | backend của facade `log` (`FileLogger`): file có giới hạn dung lượng, một dòng mỗi bản ghi, không bao giờ ghi nội dung prompt; chỉ nhận target `klat`/`klat_*`, bỏ record của tauri/wry/tao |
 
 **Lý do:** `event_server` là bề mặt tấn công duy nhất; đứng riêng thì test được `handle()` bằng input rác/ngẫu nhiên, test socket thật không cần WebView, review bảo mật cô lập. Tách khỏi core để core không có `std::fs`/`std::net`.
@@ -365,7 +365,7 @@ là entry của OS).
 | Setting mới: mặc định, khoảng hợp lệ, migrate | `klat-core::settings` |
 | Tính toán hình học (hit test, clamp vào màn hình, đổi đơn vị) | `klat-core::geometry` |
 | Đọc/ghi file, socket, sinh token | `klat-infra` |
-| Biến đổi JSON `~/.claude/settings.json` | `klat-core::claude_hooks` (thuần) + `klat-infra::claude_settings` (I/O) |
+| Biến đổi JSON `~/.claude/settings.json`, `~/.codex/hooks.json` | `klat-core::agent_hooks` (thuần) + `klat-infra::hook_files` (I/O) |
 | Gọi API OS, `unsafe`, FFI | `src-tauri/src/platform/<os>.rs` |
 | Hàm frontend gọi được | `src-tauri/src/ipc/commands/<miền>.rs` |
 | Event đẩy sang frontend | `src-tauri/src/ipc/events.rs` |
@@ -383,13 +383,13 @@ là entry của OS).
 
 Luôn theo thứ tự trong → ngoài; mỗi bước có test ở tầng của nó.
 
-### 9.1 Phản ứng với một hook / notification mới của Claude Code
+### 9.1 Phản ứng với một hook / notification mới của Claude Code hoặc Codex
 
-1. `klat-protocol`: thêm biến thể `HookName`; quyết định `is_installed()`.
+1. `klat-protocol`: thêm biến thể `HookName`; quyết định `is_installed(agent)` cho từng agent.
 2. `klat-core::session::classify`: ánh xạ sang `Signal`; test bảng trong `session`.
 3. Nếu cần field mới: `HookEvent` (Option) → `klat-hook::build_event` → test `crates/klat-hook/tests/cli.rs`.
 4. `klat-infra::event_server`: không cần sửa (allowlist lấy từ `HookName`); chạy lại test.
-5. Cài lại hook: installer tự lấy danh sách từ `HookName::is_installed`.
+5. Cài lại hook: installer tự lấy danh sách từ `HookName::installed(agent)`; golden `testdata/` đổi theo.
 6. Cập nhật bảng ánh xạ ở doc comment đầu `session` và `docs/hooks-troubleshooting.md`.
 
 ### 9.2 Thêm một setting
@@ -431,11 +431,19 @@ Luôn theo thứ tự trong → ngoài; mỗi bước có test ở tầng của 
 3. Dependency OS dưới `[target.'cfg(...)'.dependencies]`, pin cùng version Tauri đang kéo.
 4. `docs/<os>-build.md`, `docs/<os>-install.md`, bổ sung `docs/verification.md`.
 
-### 9.7 Thêm một nguồn event khác Claude Code (Cursor, Codex…)
+### 9.7 Thêm một agent khác (Cursor…)
 
-1. `klat-protocol`: thêm `source: Option<Source>` vào `HookEvent` (mặc định Claude Code để tương thích).
-2. Adapter: binary mới hoặc chế độ mới trong `klat-hook` dịch định dạng của nguồn đó sang `HookEvent`.
-3. `classify` nhận theo `(source, name)`. Lõi phía sau (`Signal` trở đi) không đổi.
+Codex đã đi theo công thức này (2026-10): `Agent::Codex`, `klat-hook --agent codex`, `hooks.json`, một card riêng
+trong Settings → Hooks.
+
+1. `klat-protocol`: thêm biến thể `Agent`; `HookEvent.agent` là chuỗi trên wire (thiếu = Claude Code, để tương thích),
+   đọc bằng `HookEvent::agent()`. Quyết định `HookName::is_installed(agent)`.
+2. Adapter: nếu agent gửi cùng field như Claude Code thì chỉ cần `--agent <tên>`; nếu khác thì thêm chế độ trong
+   `klat-hook` dịch định dạng đó sang `HookEvent`.
+3. `classify`: event của agent lạ bị bỏ qua; tên giống nhau mang nghĩa giống nhau. Lõi phía sau (`Signal` trở đi) không
+   đổi.
+4. `agent_hooks::our_entry` (dạng entry agent đó hiểu) + golden; `hook_files::hooks_file_path`.
+5. Settings → Hooks tự có thêm card (`Agent::ALL`); chữ `settings.hooks.agent.<tên>` trong `src/i18n`.
 
 ---
 
@@ -487,7 +495,7 @@ Các file bên trái không còn; bảng giữ lại để đọc commit và bea
 | `state.rs` | `Inner`/`snapshot`/`bump_attention` → `klat-core::cat`; `AppState`/`publish_state`/`update_settings` → `services/` |
 | `settings.rs` | Model + validate → `klat-core::settings`; load/save/migrate → `klat-infra::settings_repo` |
 | `event_server.rs` | `klat-infra::event_server`; `RuntimeInfo` → `klat-protocol`; ghi file → `klat-infra::runtime_file`; `RejectLog` → `klat-core::ratelimit` |
-| `hooks_installer.rs` | Biến đổi JSON → `klat-core::claude_hooks`; I/O → `klat-infra::claude_settings`; `HOOK_EVENTS` → `HookName::is_installed` |
+| `hooks_installer.rs` | Biến đổi JSON → `klat-core::claude_hooks`; I/O → `klat-infra::claude_settings` (từ 2026-10: `agent_hooks` / `hook_files`, thêm Codex); `HOOK_EVENTS` → `HookName::is_installed` |
 | `hooks_ui.rs` | `services/hooks_service.rs` |
 | `i18n.rs` | `klat-core::i18n` (`current(app)` → service settings) |
 | `log.rs` | `klat-infra::log` (backend facade `log`) |

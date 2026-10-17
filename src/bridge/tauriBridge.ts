@@ -7,6 +7,7 @@ import type {
   DragPermission,
   GrabMode,
   HooksAction,
+  HooksAgent,
   HooksInfo,
   Message,
   Point,
@@ -40,8 +41,9 @@ export const bridge = {
   setStartAtLogin: (on: boolean): Promise<boolean> => invoke('set_start_at_login', { on }),
   wakeTest: (): Promise<void> => invoke('wake_test'),
   sleep: (): Promise<void> => invoke('sleep'),
-  hooksStatus: (): Promise<HooksInfo> => invoke('hooks_status'),
-  hooksApply: (action: HooksAction): Promise<Message> => invoke('hooks_apply', { action }),
+  /** Every agent, in the order the window lists them. */
+  hooksStatus: (): Promise<HooksInfo[]> => invoke('hooks_status'),
+  hooksApply: (agent: HooksAgent, action: HooksAction): Promise<Message> => invoke('hooks_apply', { agent, action }),
   dragPermission: (): Promise<DragPermission> => invoke('drag_permission'),
   openDragPermission: (): Promise<void> => invoke('open_drag_permission'),
   onDragPermission: (cb: (p: DragPermission) => void): Promise<UnlistenFn> =>

@@ -2,7 +2,7 @@
 // mark, and the knockout (a thrown object, the impact burst, stars circling the head, a bump).
 // A character only says where they go around its body (FxLayout); their look stays fixed.
 import * as THREE from 'three';
-import { KNOCKOUT_IMPACT_S, type CatPose } from './pose';
+import { KNOCKOUT_IMPACT_S, KNOCKOUT_OBJECTS, type CatPose, type KnockoutObject } from './pose';
 import { SHADOW_OPACITY, type CharacterPalette } from './palette';
 import { angerTexture, burstTexture, glyphTexture, starTexture } from './textures';
 import { OUTLINE, type ToonBuilder, type V3 } from './ToonBuilder';
@@ -156,16 +156,60 @@ const DURIAN_SPIKE = 0x7e9937;
 const PAN = 0x3b3f4c;
 const PAN_INSIDE = 0x596071;
 const PAN_HANDLE = 0x23252e;
-/** How far each object's centre sits above the hit point when it lands, so it rests on the head, not in it
- * (stick, slipper, durian, pan). */
-const REST_LIFT: readonly number[] = [0.12, 0.1, 0.55, 0.12];
-/** Thrown objects come from the left (where the bubble was), the durian drops from above. Offsets from the hit. */
+const FISH = 0x7fa6c4;
+const FISH_BELLY = 0xe9eef0;
+const FISH_FIN = 0x5b84a6;
+const DUCK = 0xffd23f;
+const DUCK_WING = 0xf2b705;
+const DUCK_BEAK = 0xff8c1a;
+const MUG = 0xe8533f;
+const COFFEE = 0x5a3a22;
+const BREAD = 0xe3a24a;
+const BREAD_CUT = 0xf6d68f;
+const HERB = 0x5fb04a;
+const STRAW = 0xe8d39a;
+const STRAW_RIDGE = 0xc9ad6c;
+const IRON = 0x4a4f5c;
+const IRON_TOP = 0x737a8a;
+
+/**
+ * How each object flies. `throw`: an arc from the left, tumbling end over end. `drop`: falls from above onto the
+ * head. `frisbee`: skims in flat from the left, spinning like a frisbee.
+ */
+type Flight = 'throw' | 'drop' | 'frisbee';
+interface FlightSpec {
+  flight: Flight;
+  /** How far the centre sits above the hit point when it lands, so it rests on the head, not in it. */
+  lift: number;
+  /** Velocity (world units/s) as it bounces off. */
+  bounce: V3;
+  /** Tumble per frame after the hit (radians). */
+  spin: number;
+  /** `drop` only: how far it turns about the vertical on the way down (radians). */
+  turn?: number;
+}
+const BOUNCE: V3 = [1.7, 3.2, 0.7];
+const THROWN = (lift: number): FlightSpec => ({ flight: 'throw', lift, bounce: BOUNCE, spin: 0.22 });
+const FLIGHT: Record<KnockoutObject, FlightSpec> = {
+  stick: THROWN(0.12),
+  slipper: THROWN(0.1),
+  durian: { flight: 'drop', lift: 0.55, bounce: [1.1, 3.4, 0.6], spin: 0.05, turn: 2.4 },
+  pan: THROWN(0.12),
+  fish: THROWN(0.2),
+  // Rubber: bounces off higher than anything else.
+  duck: { flight: 'throw', lift: 0.3, bounce: [1.3, 4.6, 0.7], spin: 0.3 },
+  mug: THROWN(0.25),
+  banhmi: THROWN(0.2),
+  nonla: { flight: 'frisbee', lift: 0.2, bounce: [2.4, 2.2, 0.6], spin: 0.35 },
+  // Heavy: a dull thud, then it slides off. Barely turns, so the horn stays in profile.
+  anvil: { flight: 'drop', lift: 0.42, bounce: [0.6, 1.2, 0.3], spin: 0.03, turn: -0.3 },
+};
+/** Thrown objects come from the left (where the bubble was), dropped ones from above. Offsets from the hit. */
 const THROW_FROM: V3 = [-3.8, 2.2, 1.2];
 const DROP_FROM: V3 = [0.15, 4.6, 0];
 const THROW_ARC = 1.0;
-/** After the hit: bounce velocity (world units/s) and gravity. */
-const BOUNCE: V3 = [1.7, 3.2, 0.7];
-const BOUNCE_DURIAN: V3 = [1.1, 3.4, 0.6];
+const FRISBEE_ARC = 0.35;
+/** After the hit: gravity on the bounce. */
 const BOUNCE_GRAVITY = 13;
 const BURST_S = 0.32;
 const STARS = 3;
@@ -297,27 +341,30 @@ export class CharacterFx {
 
     if (flying) {
       const obj = this.projectiles[kind];
-      const durian = kind === 2;
+      const spec = FLIGHT[KNOCKOUT_OBJECTS[kind]];
       const hit = this.layout.hit;
-      this.head.localToWorld(this.bonkTarget.set(hit[0], hit[1] + REST_LIFT[kind], hit[2]));
+      this.head.localToWorld(this.bonkTarget.set(hit[0], hit[1] + spec.lift, hit[2]));
       const bt = pose.bonkT;
       if (bt < KNOCKOUT_IMPACT_S) {
         const u = bt / KNOCKOUT_IMPACT_S;
-        const from = durian ? DROP_FROM : THROW_FROM;
-        if (durian) {
+        if (spec.flight === 'drop') {
           // Dropped: falls faster and faster onto the head.
           const k = 1 - u * u;
+          const from = DROP_FROM;
           obj.position.set(this.bonkTarget.x + from[0] * k, this.bonkTarget.y + from[1] * k, this.bonkTarget.z + from[2] * k);
-          obj.rotation.set(0.3, u * 2.4, 0.2);
+          obj.rotation.set(0.3, u * (spec.turn ?? 0), 0.2);
         } else {
-          // Thrown: an arc from the left, tumbling end over end.
           const k = 1 - u;
+          const from = THROW_FROM;
+          const frisbee = spec.flight === 'frisbee';
           obj.position.set(
             this.bonkTarget.x + from[0] * k,
-            this.bonkTarget.y + from[1] * k + Math.sin(Math.PI * u) * THROW_ARC,
+            this.bonkTarget.y + from[1] * k + Math.sin(Math.PI * u) * (frisbee ? FRISBEE_ARC : THROW_ARC),
             this.bonkTarget.z + from[2] * k,
           );
-          obj.rotation.set(0.25, 0.4, 1.2 - u * Math.PI * 3.5);
+          // A frisbee stays flat (tilted towards the viewer) and spins about its axis; the rest tumble end over end.
+          if (frisbee) obj.rotation.set(0.4, u * Math.PI * 6, -0.15);
+          else obj.rotation.set(0.25, 0.4, 1.2 - u * Math.PI * 3.5);
         }
       } else {
         if (!this.bonkHitSet) {
@@ -325,14 +372,19 @@ export class CharacterFx {
           this.bonkHitSet = true;
         }
         const v = bt - KNOCKOUT_IMPACT_S;
-        const b = durian ? BOUNCE_DURIAN : BOUNCE;
+        const b = spec.bounce;
         obj.position.set(
           this.bonkHit.x + b[0] * v,
           this.bonkHit.y + b[1] * v - 0.5 * BOUNCE_GRAVITY * v * v,
           this.bonkHit.z + b[2] * v,
         );
-        obj.rotation.z -= durian ? 0.05 : 0.22;
-        obj.rotation.x += 0.08;
+        if (spec.flight === 'frisbee') {
+          obj.rotation.y += spec.spin;
+          obj.rotation.z -= 0.03;
+        } else {
+          obj.rotation.z -= spec.spin;
+          obj.rotation.x += 0.08;
+        }
       }
     }
 
@@ -365,63 +417,126 @@ export class CharacterFx {
     if (this.bump.visible) this.bump.scale.set(BUMP_SIZE * bump, BUMP_SIZE * 1.1 * bump, BUMP_SIZE * bump);
   }
 
-  /** In KNOCKOUT_OBJECTS order. */
+  /** One group per KNOCKOUT_OBJECTS entry, in that order. */
   private buildProjectiles(): void {
     const kit = this.kit;
     const SPH = kit.sphere;
-    const add = (g: THREE.Group) => {
+    const builders: Record<KnockoutObject, (g: THREE.Group) => void> = {
+      // Stick: a knotted branch.
+      stick: (g) => {
+        kit.mk(kit.geo(new THREE.CylinderGeometry(0.075, 0.095, 1.7, 10)), WOOD, g, { r: [0, 0, Math.PI / 2] });
+        kit.mk(SPH, WOOD_DARK, g, { p: [0.35, 0.06, 0.02], s: [0.06, 0.05, 0.05], ol: 0 });
+        kit.mk(SPH, WOOD_DARK, g, { p: [-0.45, -0.05, 0.03], s: [0.05, 0.045, 0.05], ol: 0 });
+        kit.mk(kit.geo(new THREE.CylinderGeometry(0.03, 0.04, 0.32, 6)), WOOD, g, { p: [0.25, 0.18, 0], r: [0, 0, -0.6] });
+      },
+
+      // Slipper (dép tổ ong): an oval sole with honeycomb cells and a blue strap over the toes.
+      slipper: (g) => {
+        kit.mk(SPH, SLIPPER_SOLE, g, { s: [0.36, 0.07, 0.86] });
+        for (const [x, z] of [[-0.14, -0.45], [0.14, -0.45], [0, -0.2], [-0.15, 0.05], [0.15, 0.05], [0, 0.3]]) {
+          kit.mk(SPH, SLIPPER_CELL, g, { p: [x, 0.055, z], s: [0.075, 0.02, 0.075], ol: 0 });
+        }
+        kit.mk(kit.geo(new THREE.TorusGeometry(0.3, 0.07, 8, 18, Math.PI)), SLIPPER_STRAP, g, {
+          p: [0, 0.02, 0.4],
+          s: [1.15, 0.85, 1],
+        });
+      },
+
+      // Durian: a spiky green ball with a stem.
+      durian: (g) => {
+        kit.mk(SPH, DURIAN, g, { s: [0.45, 0.5, 0.45] });
+        const spike = kit.geo(new THREE.ConeGeometry(0.07, 0.18, 6));
+        const up = new THREE.Vector3(0, 1, 0);
+        const n = new THREE.Vector3();
+        const SPIKES = 46;
+        for (let i = 0; i < SPIKES; i++) {
+          // Fibonacci sphere: evenly spread directions.
+          const y = 1 - (2 * (i + 0.5)) / SPIKES;
+          const r = Math.sqrt(1 - y * y);
+          const a = i * Math.PI * (3 - Math.sqrt(5));
+          n.set(Math.cos(a) * r, y, Math.sin(a) * r);
+          const m = kit.mk(spike, DURIAN_SPIKE, g, { p: [n.x * 0.45, n.y * 0.5, n.z * 0.45], ol: 0 });
+          m.quaternion.setFromUnitVectors(up, n);
+        }
+        kit.mk(kit.geo(new THREE.CylinderGeometry(0.04, 0.06, 0.22, 6)), WOOD_DARK, g, { p: [0, 0.6, 0] });
+      },
+
+      // Non-stick pan: a dark dish with a lighter inside and a long handle.
+      pan: (g) => {
+        kit.mk(kit.geo(new THREE.CylinderGeometry(0.55, 0.46, 0.13, 28)), PAN, g);
+        kit.mk(kit.geo(new THREE.CylinderGeometry(0.48, 0.48, 0.02, 28)), PAN_INSIDE, g, { p: [0, 0.07, 0], ol: 0 });
+        kit.mk(kit.geo(new THREE.CylinderGeometry(0.05, 0.065, 0.8, 8)), PAN_HANDLE, g, {
+          p: [0.92, 0.03, 0],
+          r: [0, 0, Math.PI / 2],
+        });
+      },
+
+      // Fish: a plump blue-grey fish with a pale belly, a forked tail, a fin on top and one round eye.
+      fish: (g) => {
+        kit.mk(SPH, FISH, g, { s: [0.6, 0.26, 0.17] });
+        kit.mk(SPH, FISH_BELLY, g, { p: [0.05, -0.09, 0], s: [0.5, 0.16, 0.172], ol: 0 });
+        const fin = kit.geo(new THREE.ConeGeometry(0.2, 0.36, 4));
+        for (const tilt of [0.45, -0.45]) {
+          kit.mk(fin, FISH_FIN, g, { p: [-0.68, tilt * 0.3, 0], s: [1, 1, 0.3], r: [0, 0, -Math.PI / 2 + tilt] });
+        }
+        kit.mk(fin, FISH_FIN, g, { p: [-0.05, 0.27, 0], s: [0.8, 0.5, 0.3], r: [0, 0, 0.5] });
+        kit.mk(SPH, 0xffffff, g, { p: [0.38, 0.06, 0.12], s: [0.075, 0.075, 0.05], ol: OUTLINE.eye });
+        kit.mk(SPH, kit.inkMat, g, { p: [0.4, 0.06, 0.16], s: [0.04, 0.04, 0.02] });
+      },
+
+      // Rubber duck (rubber duck debugging): yellow body and head, orange beak, a wing and a dot eye.
+      duck: (g) => {
+        kit.mk(SPH, DUCK, g, { s: [0.42, 0.3, 0.33] });
+        kit.mk(SPH, DUCK, g, { p: [0.24, 0.36, 0], s: [0.22, 0.22, 0.22] });
+        kit.mk(SPH, DUCK, g, { p: [-0.38, 0.14, 0], s: [0.12, 0.09, 0.1], r: [0, 0, 0.6] });
+        kit.mk(SPH, DUCK_WING, g, { p: [-0.04, 0.05, 0.28], s: [0.2, 0.12, 0.07], r: [0, 0, 0.25], ol: 0 });
+        kit.mk(SPH, DUCK_BEAK, g, { p: [0.46, 0.33, 0], s: [0.13, 0.05, 0.1], ol: OUTLINE.nose });
+        for (const z of [0.15, -0.15]) kit.mk(SPH, kit.inkMat, g, { p: [0.33, 0.43, z], s: [0.035, 0.04, 0.03] });
+      },
+
+      // Coffee mug: a red mug with a handle, still full of coffee.
+      mug: (g) => {
+        kit.mk(kit.geo(new THREE.CylinderGeometry(0.28, 0.25, 0.6, 24)), MUG, g);
+        kit.mk(kit.geo(new THREE.CylinderGeometry(0.24, 0.24, 0.02, 24)), COFFEE, g, { p: [0, 0.295, 0], ol: 0 });
+        kit.mk(kit.geo(new THREE.TorusGeometry(0.15, 0.045, 8, 16)), MUG, g, { p: [0.3, 0, 0], s: [0.9, 1.1, 1] });
+      },
+
+      // Bánh mì: a golden baguette with three cuts along the top and herbs sticking out of one end.
+      banhmi: (g) => {
+        kit.mk(SPH, BREAD, g, { s: [0.72, 0.21, 0.24] });
+        for (const x of [-0.34, 0, 0.34]) {
+          kit.mk(SPH, BREAD_CUT, g, { p: [x, 0.17, 0], s: [0.15, 0.04, 0.05], r: [0, 0.7, 0], ol: 0 });
+        }
+        kit.mk(SPH, HERB, g, { p: [0.66, 0.06, 0.04], s: [0.12, 0.07, 0.09], r: [0, 0, 0.5] });
+        kit.mk(SPH, HERB, g, { p: [0.64, 0.02, -0.08], s: [0.1, 0.06, 0.07], r: [0, 0, -0.3] });
+      },
+
+      // Nón lá: a wide straw cone with two ridges round it.
+      nonla: (g) => {
+        const H = 0.42;
+        const R = 0.78;
+        kit.mk(kit.geo(new THREE.ConeGeometry(R, H, 32)), STRAW, g);
+        for (const y of [-0.1, 0.03]) {
+          const r = (R * (H / 2 - y)) / H;
+          kit.mk(kit.geo(new THREE.TorusGeometry(r, 0.014, 6, 40)), STRAW_RIDGE, g, { p: [0, y, 0], r: [Math.PI / 2, 0, 0], ol: 0 });
+        }
+      },
+
+      // Anvil: the cartoon classic, a flat top with a horn, a narrow waist and a wide foot.
+      anvil: (g) => {
+        kit.mk(kit.geo(new THREE.BoxGeometry(0.72, 0.16, 0.44)), IRON, g, { p: [0, -0.33, 0] });
+        kit.mk(kit.geo(new THREE.BoxGeometry(0.34, 0.26, 0.3)), IRON, g, { p: [0, -0.13, 0] });
+        kit.mk(kit.geo(new THREE.BoxGeometry(0.9, 0.2, 0.44)), IRON, g, { p: [-0.05, 0.1, 0] });
+        kit.mk(kit.geo(new THREE.BoxGeometry(0.88, 0.02, 0.42)), IRON_TOP, g, { p: [-0.05, 0.205, 0], ol: 0 });
+        kit.mk(kit.geo(new THREE.ConeGeometry(0.1, 0.42, 12)), IRON, g, { p: [0.6, 0.12, 0], r: [0, 0, -Math.PI / 2] });
+      },
+    };
+    for (const kind of KNOCKOUT_OBJECTS) {
+      const g = new THREE.Group();
+      builders[kind](g);
       g.visible = false;
       this.world.add(g);
       this.projectiles.push(g);
-    };
-
-    // Stick: a knotted branch.
-    const stick = new THREE.Group();
-    kit.mk(kit.geo(new THREE.CylinderGeometry(0.075, 0.095, 1.7, 10)), WOOD, stick, { r: [0, 0, Math.PI / 2] });
-    kit.mk(SPH, WOOD_DARK, stick, { p: [0.35, 0.06, 0.02], s: [0.06, 0.05, 0.05], ol: 0 });
-    kit.mk(SPH, WOOD_DARK, stick, { p: [-0.45, -0.05, 0.03], s: [0.05, 0.045, 0.05], ol: 0 });
-    kit.mk(kit.geo(new THREE.CylinderGeometry(0.03, 0.04, 0.32, 6)), WOOD, stick, { p: [0.25, 0.18, 0], r: [0, 0, -0.6] });
-    add(stick);
-
-    // Slipper (dép tổ ong): an oval sole with honeycomb cells and a blue strap over the toes.
-    const slipper = new THREE.Group();
-    kit.mk(SPH, SLIPPER_SOLE, slipper, { s: [0.36, 0.07, 0.86] });
-    for (const [x, z] of [[-0.14, -0.45], [0.14, -0.45], [0, -0.2], [-0.15, 0.05], [0.15, 0.05], [0, 0.3]]) {
-      kit.mk(SPH, SLIPPER_CELL, slipper, { p: [x, 0.055, z], s: [0.075, 0.02, 0.075], ol: 0 });
     }
-    kit.mk(kit.geo(new THREE.TorusGeometry(0.3, 0.07, 8, 18, Math.PI)), SLIPPER_STRAP, slipper, {
-      p: [0, 0.02, 0.4],
-      s: [1.15, 0.85, 1],
-    });
-    add(slipper);
-
-    // Durian: a spiky green ball with a stem.
-    const durian = new THREE.Group();
-    kit.mk(SPH, DURIAN, durian, { s: [0.45, 0.5, 0.45] });
-    const spike = kit.geo(new THREE.ConeGeometry(0.07, 0.18, 6));
-    const up = new THREE.Vector3(0, 1, 0);
-    const n = new THREE.Vector3();
-    const SPIKES = 46;
-    for (let i = 0; i < SPIKES; i++) {
-      // Fibonacci sphere: evenly spread directions.
-      const y = 1 - (2 * (i + 0.5)) / SPIKES;
-      const r = Math.sqrt(1 - y * y);
-      const a = i * Math.PI * (3 - Math.sqrt(5));
-      n.set(Math.cos(a) * r, y, Math.sin(a) * r);
-      const m = kit.mk(spike, DURIAN_SPIKE, durian, { p: [n.x * 0.45, n.y * 0.5, n.z * 0.45], ol: 0 });
-      m.quaternion.setFromUnitVectors(up, n);
-    }
-    kit.mk(kit.geo(new THREE.CylinderGeometry(0.04, 0.06, 0.22, 6)), WOOD_DARK, durian, { p: [0, 0.6, 0] });
-    add(durian);
-
-    // Non-stick pan: a dark dish with a lighter inside and a long handle.
-    const pan = new THREE.Group();
-    kit.mk(kit.geo(new THREE.CylinderGeometry(0.55, 0.46, 0.13, 28)), PAN, pan);
-    kit.mk(kit.geo(new THREE.CylinderGeometry(0.48, 0.48, 0.02, 28)), PAN_INSIDE, pan, { p: [0, 0.07, 0], ol: 0 });
-    kit.mk(kit.geo(new THREE.CylinderGeometry(0.05, 0.065, 0.8, 8)), PAN_HANDLE, pan, {
-      p: [0.92, 0.03, 0],
-      r: [0, 0, Math.PI / 2],
-    });
-    add(pan);
   }
 }

@@ -10,15 +10,12 @@ const log = $<HTMLDivElement>('log');
 const reason = (): WakeReason => $<HTMLSelectElement>('reason').value as WakeReason;
 
 function readSettings(): CatSettings {
-  const en = $<HTMLInputElement>('en').checked;
-  const vi = $<HTMLInputElement>('vi').checked;
-  const klatLanguage: KlatLanguage = en === vi ? 'auto' : en ? 'en' : 'vi';
   return {
     ...DEFAULT_SETTINGS,
     character: $<HTMLSelectElement>('character').value as CharacterId,
     sfwMode: $<HTMLInputElement>('sfw').checked,
     reduceMotion: $<HTMLInputElement>('reduce').checked,
-    klatLanguage,
+    klatLanguage: $<HTMLSelectElement>('klatLanguage').value as KlatLanguage,
     yellIntervalMs: Math.max(1000, Number($<HTMLInputElement>('interval').value) || DEFAULT_SETTINGS.yellIntervalMs),
     maxYellsPerWake: Math.max(1, Number($<HTMLInputElement>('max').value) || DEFAULT_SETTINGS.maxYellsPerWake),
   };
@@ -64,7 +61,7 @@ $('knockout').addEventListener('click', () => {
 });
 $('next').addEventListener('click', () => stage.yellNow(reason()));
 $('pet').addEventListener('click', () => stage.pet());
-for (const id of ['character', 'sfw', 'reduce', 'en', 'vi', 'interval', 'max']) {
+for (const id of ['character', 'sfw', 'reduce', 'klatLanguage', 'interval', 'max']) {
   $(id).addEventListener('change', () => stage.setSettings(readSettings()));
 }
 $<HTMLInputElement>('dark').addEventListener('change', (e) => {

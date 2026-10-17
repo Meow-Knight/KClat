@@ -1,6 +1,6 @@
 # Hooks troubleshooting
 
-Klat learns about Claude Code through hooks in `%USERPROFILE%\.claude\settings.json`. Each hook runs `klat-hook.exe`, which forwards a few fields to the app over `127.0.0.1` and exits. When something does not work, go through the steps below in order.
+Klat learns about Claude Code through hooks in `%USERPROFILE%\.claude\settings.json`, and about Codex through hooks in `%USERPROFILE%\.codex\hooks.json`. Each hook runs `klat-hook.exe`, which forwards a few fields to the app over `127.0.0.1` and exits. When something does not work, go through the steps below in order. Codex has a few steps of its own: see [8. Codex](#8-codex).
 
 ## 1. Is the app running?
 
@@ -11,7 +11,7 @@ Look for the cat in the tray (it may be under the **^** hidden-icons arrow). The
 
 ## 2. Are the hooks installed?
 
-Tray → **Settings…** → **Hooks** shows the status (the dot next to **Hooks** in the sidebar too):
+Tray → **Settings…** → **Hooks** shows the status of each agent on its own card. The dot next to **Hooks** in the sidebar sums them up: yellow if any agent needs repair, green if at least one is installed.
 
 | Status | Meaning | What to do |
 |---|---|---|
@@ -61,8 +61,28 @@ If `settings.json` is not valid JSON, **Install / Repair / Uninstall refuse to w
 
 Run Settings → **Hooks** → **Uninstall** before removing the app. It removes only Klat's entries and keeps everything else in `settings.json`, including other hooks and the order of keys. If the app is already gone, delete the entries whose `command` contains `klat-hook` by hand. While the app is not running, leftover entries only cost a few milliseconds per hook.
 
+## 8. Codex
+
+1. **Installed?** Settings → **Hooks** → **Codex** must say **Installed**. By hand: `%USERPROFILE%\.codex\hooks.json` (or `%CODEX_HOME%\hooks.json`) has one entry for each of `Stop`, `PermissionRequest`, `UserPromptSubmit`, `PostToolUse`, `SessionEnd` and `Interrupt`, like this:
+
+   ```json
+   { "type": "command", "command": "\"C:\\Users\\you\\AppData\\Local\\Klat\\klat-hook.exe\" --agent codex Stop", "timeout": 2 }
+   ```
+
+2. **Trusted?** Codex skips a hook until you trust it. In Codex, type `/hooks` and trust Klat's entries. Trust is tied to the entry's exact text, so after **Repair** (or reinstalling Klat somewhere else) Codex asks again.
+3. **Hooks turned on?** `~/.codex/config.toml` must not say `hooks = false` under `[features]`.
+4. **New session.** Start a new Codex session after installing or trusting.
+5. **Does the line run?** Codex runs the `command` through `cmd.exe /C` on Windows. To try it by hand:
+
+   ```powershell
+   '{"session_id":"manual","cwd":"C:\\x\\demo","hook_event_name":"Stop"}' | cmd /C '"<path to klat-hook.exe>" --agent codex Stop'
+   $LASTEXITCODE   # 0
+   ```
+
+In the log, Codex events read `hook codex Stop session …`. Codex has no `Notification` event, so it never wakes the cat for "waiting for input"; only a finished turn or a permission prompt does.
+
 ## What the hook never does
 
-- It never prints to stdout and always exits 0, so Claude Code can never read its output as an allow or deny decision.
-- It never sends tool input, commands, prompts, messages or transcript paths. It sends only the event name, session id, project folder name, tool name and notification type.
+- It never prints to stdout and always exits 0, so neither Claude Code nor Codex can read its output as an allow or deny decision.
+- It never sends tool input, commands, prompts, messages or transcript paths. It sends only the event name, session id, project folder name, tool name, notification type and which agent ran it.
 - It never talks to anything except `127.0.0.1`.

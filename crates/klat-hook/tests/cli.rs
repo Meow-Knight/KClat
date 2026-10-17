@@ -17,13 +17,13 @@ struct Run {
 }
 
 fn run_hook(appdata: &Path, stdin: &str, arg: &str) -> Run {
-    run_hook_with(&[("APPDATA", appdata)], stdin, arg)
+    run_hook_with(&[("APPDATA", appdata)], stdin, &[arg])
 }
 
-fn run_hook_with(envs: &[(&str, &Path)], stdin: &str, arg: &str) -> Run {
+fn run_hook_with(envs: &[(&str, &Path)], stdin: &str, args: &[&str]) -> Run {
     let started = Instant::now();
     let mut child = Command::new(env!("CARGO_BIN_EXE_klat-hook"))
-        .arg(arg)
+        .args(args)
         .envs(envs.iter().copied())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -116,12 +116,11 @@ fn garbage_and_empty_stdin_are_fine() {
     }
 }
 
-#[test]
-fn delivers_to_a_listening_app() {
-    let dir = tempfile::tempdir().unwrap();
+/// A fake app on loopback: answers one request with 204 and hands back what it received.
+fn listen(appdata: &Path) -> std::thread::JoinHandle<String> {
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
-    write_runtime(dir.path(), listener.local_addr().unwrap().port());
-    let server = std::thread::spawn(move || {
+    write_runtime(appdata, listener.local_addr().unwrap().port());
+    std::thread::spawn(move || {
         use std::io::Read;
         let (mut s, _) = listener.accept().unwrap();
         s.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
@@ -138,13 +137,36 @@ fn delivers_to_a_listening_app() {
         s.write_all(b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n")
             .unwrap();
         String::from_utf8_lossy(&data).into_owned()
-    });
+    })
+}
+
+/// The command line Codex entries use.
+#[test]
+fn codex_entries_say_which_agent_ran_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = listen(dir.path());
+    let r = run_hook_with(
+        &[("APPDATA", dir.path())],
+        STOP,
+        &["--agent", "codex", "Stop"],
+    );
+    assert_silent_success(&r);
+    let req = server.join().unwrap();
+    assert!(req.contains(r#""hookEventName":"Stop""#));
+    assert!(req.contains(r#""agent":"codex""#));
+}
+
+#[test]
+fn delivers_to_a_listening_app() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = listen(dir.path());
     let r = run_hook(dir.path(), STOP, "Stop");
     assert_silent_success(&r);
     let req = server.join().unwrap();
     assert!(req.contains(&format!("Authorization: Bearer {TOKEN}")));
     assert!(req.contains(r#""hookEventName":"Stop""#));
     assert!(req.contains(r#""projectName":"ClauCat""#));
+    assert!(!req.contains(r#""agent""#)); // Claude Code entries pass no --agent
     assert!(!req.contains("D:\\\\work"));
 }
 
@@ -164,7 +186,7 @@ fn never_takes_the_runtime_file_from_the_temp_folder() {
             ("TEMP", tmp.path()),
         ],
         STOP,
-        "Stop",
+        &["Stop"],
     );
     assert_silent_success(&r);
     assert_eq!(

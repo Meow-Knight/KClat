@@ -1,5 +1,5 @@
 // Language: Platform Language (this UI) and Klat Language (the cat), with a sample of what the cat would say.
-import { PHRASES } from '../../phrases/phrases';
+import { PHRASE_LANGS, PHRASES, type PhraseLang } from '../../phrases/phrases';
 import { PhrasePicker, type WakeReason } from '../../phrases/PhrasePicker';
 import { phraseLanguages, type AppSettings, type KlatLanguage, type UiLanguage } from '../../settings';
 import { card, h, row, segmented, svg } from '../controls';
@@ -7,6 +7,8 @@ import type { Ctx, SectionView } from '../context';
 
 const REFRESH_ICON = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v2.8h-2.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const REASONS: readonly WakeReason[] = ['done', 'permission', 'input'];
+/** Each language in its own name, as language pickers do. */
+const LANGUAGE_NAMES: Record<PhraseLang, string> = { en: 'English', vi: 'Tiếng Việt', zh: '中文', ja: '日本語', ko: '한국어' };
 
 export function languageSection(ctx: Ctx): SectionView {
   const { t, settings: s } = ctx;
@@ -14,8 +16,8 @@ export function languageSection(ctx: Ctx): SectionView {
   const platform = segmented<UiLanguage>(
     'uiLanguage',
     [
-      { value: 'en', label: 'English', lang: 'en' },
-      { value: 'vi', label: 'Tiếng Việt', lang: 'vi' },
+      { value: 'en', label: LANGUAGE_NAMES.en, lang: 'en' },
+      { value: 'vi', label: LANGUAGE_NAMES.vi, lang: 'vi' },
     ],
     s.uiLanguage,
     (v) => ctx.patch({ uiLanguage: v }),
@@ -23,8 +25,7 @@ export function languageSection(ctx: Ctx): SectionView {
   const klat = segmented<KlatLanguage>(
     'klatLanguage',
     [
-      { value: 'en', label: 'English', lang: 'en' },
-      { value: 'vi', label: 'Tiếng Việt', lang: 'vi' },
+      ...PHRASE_LANGS.map((lang) => ({ value: lang, label: LANGUAGE_NAMES[lang], lang })),
       { value: 'auto', label: t('settings.language.auto') },
     ],
     s.klatLanguage,
@@ -66,7 +67,7 @@ export function languageSection(ctx: Ctx): SectionView {
     'div',
     {},
     card(null, row({ title: t('settings.language.platform'), desc: t('settings.language.platform.desc'), control: platform.el })),
-    card(null, row({ title: t('settings.language.klat'), desc: t('settings.language.klat.desc'), control: klat.el, below: preview })),
+    card(null, row({ title: t('settings.language.klat'), desc: t('settings.language.klat.desc'), control: klat.el, below: preview, stacked: true })),
   );
 
   return {
