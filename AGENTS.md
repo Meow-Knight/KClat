@@ -11,7 +11,7 @@ pnpm check              # every quality gate (fmt, clippy, cargo test, eslint, t
 pnpm check --mac        # also type-check for macOS when touching #[cfg(target_os = "macos")] code
 ```
 
-More commands (release builds, dev page, macOS): README.md "Development".
+More commands (release builds, dev page, macOS): [docs/development.md](docs/development.md).
 
 ## Architecture Overview
 

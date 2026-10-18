@@ -7,7 +7,7 @@
 //! - While the cat sleeps, the overlay asks WebView2 for its low memory target, which trims the working sets of
 //!   all its processes (Task Manager's "Memory" goes from ~117 MB to ~50 MB). Back to normal when it wakes.
 //!
-//! Measurements are in README.md (Performance).
+//! Measurements are in docs/development.md (Performance).
 
 use klat_core::cat::CatState;
 #[cfg(windows)]

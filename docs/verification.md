@@ -1,6 +1,6 @@
 # Verification log
 
-What was checked at the end of each phase, how, and on what machine. Newest first. The decisions behind these results are in the README's decisions log.
+What was checked at the end of each phase, how, and on what machine. Newest first. The decisions behind these results are in the decisions log of [development.md](development.md#decisions-log).
 
 ## Architecture refactor: baseline and regression script (2026-10-16, Windows 11 Pro 22621)
 
@@ -125,7 +125,7 @@ Stale expiry (`staleAfterMs`, at least 5 minutes) is too slow for the script; th
 
 ## Security hardening (2026-10-16, release build `pnpm release`, Windows 11 Pro 22621)
 
-Issue: ClauCat-fw3 (decisions in the README's decisions log, "Security hardening").
+Issue: ClauCat-fw3 (decisions in [development.md](development.md#decisions-log), "Security hardening").
 
 | Check | Result | How |
 |---|---|---|
@@ -183,7 +183,7 @@ Not checked yet:
 - **Start at login:** ticking it in the tray creates `HKCU\…\Run\Klat = <install dir>\klat.exe` and sets `startAtLogin: true`. Unticking removes the value and sets `false`.
 - **Installed sidecar:** piping a Stop JSON into the installed `klat-hook.exe` exits 0, and the app logs `hook Stop … -> attention Done`. A UserPromptSubmit carrying a prompt is logged as `-> cleared`, and the prompt text appears nowhere in the log files.
 - Tray → Quit logs `exiting` and deletes `runtime.json`. The silent uninstall exits 0 and removes the install folder and the uninstall entry.
-- **CPU/RAM (release):** asleep ~0.35% of total CPU (WebView2 GPU 3.4% + renderer 3.3% of one core); awake ~0.55%; 185–189 MB private. Asleep there are 20 rAF/s and ~48 draw calls per frame. WebView2 flag experiments are under the README's Performance section.
+- **CPU/RAM (release):** asleep ~0.35% of total CPU (WebView2 GPU 3.4% + renderer 3.3% of one core); awake ~0.55%; 185–189 MB private. Asleep there are 20 rAF/s and ~48 draw calls per frame. WebView2 flag experiments are under [Performance](development.md#performance).
 - Tests: 69 TS, 75 Rust (60 app incl. 3 log tests and 14 installer tests, 9 hook unit, 5 hook binary, plus 1 ignored dry run).
 
 ## Phase 5 verification (2026-10-11)
