@@ -4,7 +4,7 @@
 // points Claude Code.
 //
 //   node scripts/stage-sidecar.mjs                                   # the target being built, else this machine
-//   node scripts/stage-sidecar.mjs --target universal-apple-darwin   # Apple Silicon + Intel, joined with lipo
+//   node scripts/stage-sidecar.mjs --target universal-apple-darwin   # Apple Silicon + Intel, joined with lipo (and each part)
 //   node scripts/stage-sidecar.mjs --target universal-apple-darwin --dry-run   # print the steps only
 //
 // Without --target it uses TAURI_ENV_TARGET_TRIPLE, which `tauri build` sets for its beforeBuildCommand.
@@ -53,6 +53,13 @@ if (target === UNIVERSAL) {
   }
   const parts = UNIVERSAL_PARTS.map(build);
   run('lipo', ['-create', '-output', to, ...parts]);
+  // `tauri build --target universal-apple-darwin` compiles the app once per part, and each compile's build script
+  // checks that its own klat-hook-<part> exists, so stage the parts too.
+  UNIVERSAL_PARTS.forEach((triple, i) => {
+    const partTo = join(root, 'src-tauri', 'binaries', `klat-hook-${triple}`);
+    console.log(`> copy ${show(parts[i])} -> ${show(partTo)}`);
+    if (!dryRun) copyFileSync(parts[i], partTo);
+  });
 } else {
   const from = build(target);
   console.log(`> copy ${show(from)} -> ${show(to)}`);

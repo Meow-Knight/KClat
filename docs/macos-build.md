@@ -95,8 +95,9 @@ pnpm release:mac
 `pnpm release:mac` runs two steps:
 
 1. `node scripts/stage-sidecar.mjs --target universal-apple-darwin` builds `klat-hook` for both chips and joins
-   them with `lipo` into `src-tauri/binaries/klat-hook-universal-apple-darwin` (add `--dry-run` to only print
-   the steps).
+   them with `lipo` into `src-tauri/binaries/klat-hook-universal-apple-darwin`. It also stages the two
+   single-chip builds (`klat-hook-aarch64-apple-darwin`, `klat-hook-x86_64-apple-darwin`): Tauri compiles the app
+   once per chip, and each compile checks for its own copy. Add `--dry-run` to only print the steps.
 2. `tauri build --target universal-apple-darwin --config src-tauri/tauri.release.conf.json` builds the app for
    both chips and bundles it. `src-tauri/tauri.macos.conf.json` adds the macOS settings: `app` and `dmg`
    targets, macOS 11.0 minimum, ad-hoc signing (`signingIdentity: "-"`; Apple Silicon refuses to run unsigned
@@ -126,7 +127,7 @@ the Accessibility permission (the guide explains how to grant it again).
 | `error[E0463]: can't find crate for 'core'` / `target may not be installed` | `rustup target add aarch64-apple-darwin x86_64-apple-darwin` |
 | `lipo: can't open input file` | One of the two `cargo build --target` steps failed; scroll up for its error |
 | `lipo: command not found` or `xcrun: error` | `xcode-select --install` (lipo comes with the Command Line Tools) |
-| `resource path 'binaries/klat-hook-universal-apple-darwin' doesn't exist` | Step 1 did not run; use `pnpm release:mac`, not `pnpm tauri build` |
+| `resource path 'binaries/klat-hook-<target>' doesn't exist` (`universal-`, `aarch64-` or `x86_64-apple-darwin`) | Step 1 did not run; use `pnpm release:mac`, not `pnpm tauri build` |
 | `failed to bundle project` while creating the `.dmg` | Close any Finder window showing a mounted Klat disk image and eject it, then build again |
 
 ## Checks
