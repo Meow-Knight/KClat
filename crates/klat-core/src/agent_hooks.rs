@@ -9,9 +9,11 @@
 //!   its content and order.
 //! - Claude Code: exec form (`command` + `args`). No shell is involved (Git Bash or PowerShell on Windows, zsh on
 //!   macOS), so a path with spaces needs no quoting at all.
-//! - Codex has no exec form: `command` is one line for a shell, `%COMSPEC% /C "<line>"` on Windows and
-//!   `$SHELL -lc '<line>'` elsewhere (codex-rs/hooks command_runner, 2026-10). The program is quoted for that
-//!   shell; the arguments are fixed words that need no quoting.
+//! - Codex has no exec form: `command` is one line for a shell, `%COMSPEC% /C <line>` on Windows and
+//!   `$SHELL -lc '<line>'` elsewhere (codex-rs/hooks command_runner, 2026-10). On Windows the program goes in bare:
+//!   Codex 0.144 hands the line to cmd.exe with its quotes escaped as `\"`, which cmd.exe cannot read, so a quoted
+//!   program fails there (newer versions pass it raw). The app gives a path without spaces (the 8.3 short name,
+//!   platform::cmd_safe_path); only a path that still needs quoting is quoted. The arguments are fixed words.
 
 use klat_protocol::{Agent, HookName};
 use serde::Serialize;
@@ -64,14 +66,20 @@ fn our_entry(agent: Agent, exe: &str, event: &str) -> Value {
     }
 }
 
-/// `exe` quoted for the shell Codex runs it with, then `args` (plain words). A path that starts with `/` is for
-/// `sh` (single quotes, which keep everything literal); any other is a Windows path for `cmd.exe` (double quotes;
-/// a Windows path cannot contain `"`).
+/// `exe` as the shell Codex runs it with needs it, then `args` (plain words). A path that starts with `/` is for
+/// `sh` (single quotes, which keep everything literal). Any other is a Windows path for `cmd.exe`: bare when it can
+/// be (see the module docs), in double quotes when it has spaces or characters cmd.exe treats specially (a Windows
+/// path cannot contain `"`).
 fn shell_line(exe: &str, args: &[&str]) -> String {
     let program = if exe.starts_with('/') {
         format!("'{}'", exe.replace('\'', r"'\''"))
-    } else {
+    } else if exe
+        .chars()
+        .any(|c| c.is_whitespace() || "&|<>^%!()".contains(c))
+    {
         format!("\"{exe}\"")
+    } else {
+        exe.to_owned()
     };
     std::iter::once(program.as_str())
         .chain(args.iter().copied())
@@ -310,13 +318,36 @@ mod tests {
         )));
         assert!(!is_ours(&cmd("'/opt/my-klat-hook' Stop")));
         assert!(!is_ours(&cmd("bd codex-hook Stop")));
+        assert!(is_ours(&cmd(
+            r"C:\Users\me\AppData\Local\Klat\klat-hook.exe --agent codex Stop"
+        )));
+        assert!(is_ours(&cmd(
+            r"C:\PROGRA~1\Klat\klat-hook.exe --agent codex Stop"
+        )));
     }
 
     #[test]
     fn codex_lines_quote_the_program_for_its_shell() {
+        // The usual install path has no spaces: bare, so cmd.exe runs it however Codex passes the line.
+        assert_eq!(
+            shell_line(
+                r"C:\Users\me\AppData\Local\Klat\klat-hook.exe",
+                &["--agent", "codex", "Stop"]
+            ),
+            r"C:\Users\me\AppData\Local\Klat\klat-hook.exe --agent codex Stop"
+        );
+        assert_eq!(
+            shell_line(r"C:\PROGRA~1\Klat\klat-hook.exe", &["Stop"]),
+            r"C:\PROGRA~1\Klat\klat-hook.exe Stop"
+        );
+        // No short name to be had: quoted, which newer Codex versions read.
         assert_eq!(
             shell_line(EXE, &["--agent", "codex", "Stop"]),
             r#""C:\Program Files\Klat\klat-hook.exe" --agent codex Stop"#
+        );
+        assert_eq!(
+            shell_line(r"D:\R&D\klat-hook.exe", &[]),
+            r#""D:\R&D\klat-hook.exe""#
         );
         assert_eq!(
             shell_line(

@@ -29,7 +29,8 @@ mod fallback;
 use fallback as os;
 
 pub use os::{
-    cursor, install_hook, permission, primary_button_down, replay_space, request_permission,
+    cmd_safe_path, cursor, install_hook, permission, primary_button_down, replay_space,
+    request_permission,
 };
 pub use webview_memory::scrub_env;
 
@@ -130,5 +131,24 @@ mod tests {
             permission() == Permission::NotNeeded
         };
         assert!(expected);
+    }
+
+    #[test]
+    fn codex_gets_a_path_it_can_run_without_quotes() {
+        let dir = tempfile::tempdir().unwrap();
+        let folder = dir.path().join("Klat dir with spaces");
+        std::fs::create_dir_all(&folder).unwrap();
+        let exe = folder.join("klat-hook.exe");
+        std::fs::write(&exe, b"").unwrap();
+        let safe = cmd_safe_path(&exe);
+        // Same file, and the name Install recognises its entries by is kept.
+        assert_eq!(safe.file_name().unwrap(), "klat-hook.exe");
+        assert!(safe.is_file());
+        if cfg!(windows) && safe != exe {
+            assert!(!safe.to_string_lossy().contains(' '), "{}", safe.display());
+        }
+        // Nothing to shorten: unchanged.
+        let plain = dir.path().join("klat-hook.exe");
+        assert_eq!(cmd_safe_path(&plain), plain);
     }
 }

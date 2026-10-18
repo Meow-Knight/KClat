@@ -57,6 +57,11 @@ extern "C" {
     fn CGEventTapEnable(tap: *mut c_void, enable: bool);
 }
 
+/// Only Windows needs short names for the Codex hooks; `sh` takes the quoted path.
+pub fn cmd_safe_path(path: &std::path::Path) -> std::path::PathBuf {
+    path.to_path_buf()
+}
+
 /// Cursor in the same physical px as the overlay's position (see tasks::cursor_poller), not CoreGraphics points.
 pub fn cursor() -> Option<Point<Physical, i32>> {
     let p = APP.get()?.cursor_position().ok()?;

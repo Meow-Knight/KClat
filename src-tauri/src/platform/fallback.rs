@@ -2,7 +2,13 @@
 
 use super::{Msg, Permission};
 use klat_core::geometry::{Physical, Point};
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
+
+/// Only Windows needs short names for the Codex hooks; `sh` takes the quoted path.
+pub fn cmd_safe_path(path: &Path) -> PathBuf {
+    path.to_path_buf()
+}
 
 pub fn cursor() -> Option<Point<Physical, i32>> {
     None

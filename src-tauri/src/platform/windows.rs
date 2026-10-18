@@ -2,10 +2,13 @@
 
 use super::{Msg, Permission, GRABBING, ZONE};
 use klat_core::geometry::{Physical, Point};
+use std::os::windows::ffi::{OsStrExt, OsStringExt};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::Sender;
 use std::sync::OnceLock;
 use windows_sys::Win32::Foundation::{LPARAM, LRESULT, POINT, WPARAM};
+use windows_sys::Win32::Storage::FileSystem::GetShortPathNameW;
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
     GetAsyncKeyState, SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP,
@@ -24,6 +27,36 @@ static TX: OnceLock<Sender<Msg>> = OnceLock::new();
 /// Tags our replayed tap ("KLAT"), so the hook lets it through. Filtering on LLKHF_INJECTED instead would also
 /// drop the Space that remote-control apps (TeamViewer, AnyDesk, UltraViewer...) send with SendInput.
 const REPLAY_MARK: usize = 0x4B4C_4154;
+
+/// The path with its folders in 8.3 short names when they have spaces (`C:\PROGRA~1\Klat\klat-hook.exe`), so the
+/// Codex hooks can name it without quotes (klat_core::agent_hooks). The file name stays long: it is how Install
+/// recognises its own entries. The path itself when nothing needs shortening or the volume keeps no short names.
+pub fn cmd_safe_path(path: &Path) -> PathBuf {
+    let has_space = |p: &Path| {
+        p.as_os_str()
+            .to_string_lossy()
+            .contains(char::is_whitespace)
+    };
+    let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else {
+        return path.to_path_buf();
+    };
+    if !has_space(dir) || has_space(Path::new(name)) {
+        return path.to_path_buf();
+    }
+    let wide: Vec<u16> = dir.as_os_str().encode_wide().chain([0]).collect();
+    let mut buf = vec![0u16; 1024];
+    // SAFETY: `wide` is NUL-terminated and `buf` holds `buf.len()` u16s; the call writes at most that many.
+    let len =
+        unsafe { GetShortPathNameW(wide.as_ptr(), buf.as_mut_ptr(), buf.len() as u32) } as usize;
+    if len == 0 || len >= buf.len() {
+        return path.to_path_buf();
+    }
+    let short = PathBuf::from(std::ffi::OsString::from_wide(&buf[..len]));
+    if has_space(&short) {
+        return path.to_path_buf();
+    }
+    short.join(name)
+}
 
 fn held(vk: u16) -> bool {
     // SAFETY: plain Win32 call with no pointers.

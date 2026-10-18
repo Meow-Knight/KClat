@@ -6,12 +6,15 @@
 use klat_infra::hook_files::{self as hooks, Action, Agent, InstallError, Report, Status};
 use std::path::PathBuf;
 
-/// The agent's hooks file and the hook adapter next to the app, if both can be located.
+/// The agent's hooks file and the hook adapter next to the app, if both can be located. For Codex the adapter's
+/// path has no spaces where Windows can give one (see platform::cmd_safe_path).
 pub fn paths(agent: Agent) -> Option<(PathBuf, PathBuf)> {
-    Some((
-        hooks::hooks_file_path(agent)?,
-        hooks::default_exe_path().ok()?,
-    ))
+    let exe = hooks::default_exe_path().ok()?;
+    let exe = match agent {
+        Agent::ClaudeCode => exe,
+        Agent::Codex => crate::platform::cmd_safe_path(&exe),
+    };
+    Some((hooks::hooks_file_path(agent)?, exe))
 }
 
 pub fn current_status(agent: Agent) -> Status {

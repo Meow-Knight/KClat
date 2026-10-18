@@ -66,8 +66,12 @@ Run Settings → **Hooks** → **Uninstall** before removing the app. It removes
 1. **Installed?** Settings → **Hooks** → **Codex** must say **Installed**. By hand: `%USERPROFILE%\.codex\hooks.json` (or `%CODEX_HOME%\hooks.json`) has one entry for each of `Stop`, `PermissionRequest`, `UserPromptSubmit`, `PostToolUse`, `SessionEnd` and `Interrupt`, like this:
 
    ```json
-   { "type": "command", "command": "\"C:\\Users\\you\\AppData\\Local\\Klat\\klat-hook.exe\" --agent codex Stop", "timeout": 2 }
+   { "type": "command", "command": "C:\\Users\\you\\AppData\\Local\\Klat\\klat-hook.exe --agent codex Stop", "timeout": 2 }
    ```
+
+   In Codex's `/hooks` table, `Stop` is near the bottom (after `SubagentStart` and `SubagentStop`), so scroll down if the panel is short. Older Codex versions (0.144 and earlier) have no `SessionEnd` or `Interrupt` events: they leave those two entries out of the table and never run them, which is harmless.
+
+   If Codex prints `hook: Stop Failed` and `klat.log` has no `hook codex` line, the entry is likely an old quoted one (`"\"C:\\...\\klat-hook.exe\" --agent codex Stop"`), which Codex 0.144 cannot run: **Repair** rewrites it without quotes, then trust it again.
 
 2. **Trusted?** Codex skips a hook until you trust it. In Codex, type `/hooks` and trust Klat's entries. Trust is tied to the entry's exact text, so after **Repair** (or reinstalling Klat somewhere else) Codex asks again.
 3. **Hooks turned on?** `~/.codex/config.toml` must not say `hooks = false` under `[features]`.
@@ -75,7 +79,7 @@ Run Settings → **Hooks** → **Uninstall** before removing the app. It removes
 5. **Does the line run?** Codex runs the `command` through `cmd.exe /C` on Windows. To try it by hand:
 
    ```powershell
-   '{"session_id":"manual","cwd":"C:\\x\\demo","hook_event_name":"Stop"}' | cmd /C '"<path to klat-hook.exe>" --agent codex Stop'
+   '{"session_id":"manual","cwd":"C:\\x\\demo","hook_event_name":"Stop"}' | cmd /C '<command from hooks.json>'
    $LASTEXITCODE   # 0
    ```
 
