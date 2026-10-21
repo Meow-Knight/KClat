@@ -373,10 +373,14 @@ interface Phrase { id: string; text: string; lang: 'en' | 'vi'; tags: PhraseTag[
 | `Notification` | `idle_prompt` / loại "cần input" khác | `attention_needed{reason: input}` | Session → pending |
 | `UserPromptSubmit` | — | `attention_cleared{reason: prompt_submitted}` | Session → not pending |
 | `PostToolUse` | session đang pending vì permission và cùng `toolName` | `attention_cleared{reason: tool_resumed}` | User đã duyệt, Claude chạy tiếp |
+| `PostToolBatch` | session đang pending vì permission, không phải từ subagent | `attention_cleared{reason: batch_resolved}` | Mọi tool call của lượt đã được trả lời (kể cả bị từ chối kèm lời nhắn) |
+| (không có `Notification(permission_prompt)` trong 8s sau `PermissionRequest`, chỉ Claude Code) | session đang pending vì permission | `attention_cleared{reason: answered}` | User đã trả lời trong ~6s (xem dưới) |
 | `PermissionDenied` (nếu có) | — | `attention_cleared{reason: permission_denied}` | |
 | `SessionEnd` | — | `session_ended` | Xoá session |
 
 Notification type lạ hoặc event lạ thì bỏ qua và chỉ ghi log ở mức debug.
+
+Không hook nào chạy đúng lúc user trả lời hộp hỏi quyền: Yes chỉ thấy qua `PostToolUse` khi tool chạy xong, No/Esc là interrupt nên không có `Stop` hay hook nào. Claude Code chỉ gửi `Notification(permission_prompt)` khi hộp hỏi quyền đã treo ~6s mà chưa ai trả lời, nên vắng nó sau 8s nghĩa là user đã trả lời. Nếu nó đến muộn hơn thì vẫn đánh thức mèo lại như một fallback.
 
 ### 8.2 Session store (logic thuần, Rust)
 
@@ -403,6 +407,7 @@ interface HookEvent {
   projectName?: string;     // basename(cwd); không gửi đường dẫn đầy đủ
   toolName?: string;        // KHÔNG gửi tool_input / command / transcript
   occurredAt: number;       // unix ms
+  subagent?: true;          // hook chạy trong subagent (có agent_id); không gửi id
 }
 ```
 

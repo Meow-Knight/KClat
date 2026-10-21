@@ -92,6 +92,8 @@ fn build_event(input: &[u8], args: &Args, now: u64, id: &str) -> Option<HookEven
             .agent
             .filter(|a| *a != Agent::ClaudeCode)
             .map(|a| a.as_str().to_owned()),
+        // Whether there is an agent_id, never the id itself.
+        subagent: field("agent_id").is_some_and(|id| !id.is_empty()),
     })
 }
 
@@ -235,6 +237,21 @@ mod tests {
             wire(build_event(note.as_bytes(), &NONE, 1, "i").unwrap())["notificationType"],
             "idle_prompt"
         );
+    }
+
+    #[test]
+    fn says_whether_a_subagent_ran_it_but_never_which() {
+        let main = r#"{"session_id":"s","cwd":"/p","hook_event_name":"PostToolBatch"}"#;
+        assert!(wire(build_event(main.as_bytes(), &NONE, 1, "i").unwrap())
+            .get("subagent")
+            .is_none());
+        let sub = r#"{"session_id":"s","cwd":"/p","hook_event_name":"PostToolBatch","agent_id":"agent-7f3a","agent_type":"Explore"}"#;
+        let ev = wire(build_event(sub.as_bytes(), &NONE, 1, "i").unwrap());
+        assert_eq!(ev["subagent"], true);
+        let text = ev.to_string();
+        for leak in ["agent-7f3a", "Explore"] {
+            assert!(!text.contains(leak), "{leak}");
+        }
     }
 
     #[test]

@@ -236,6 +236,30 @@ await check('PostToolUse of that tool clears the permission wait', async () => {
   expect(!s.awake, summary(s));
   return summary(s);
 });
+await check('PostToolBatch clears a permission wait whatever the tool; a subagent batch does not', async () => {
+  hook('PermissionRequest', 'sf', { tool_name: 'Bash' });
+  hook('Notification', 'sf', { notification_type: 'permission_prompt', message: 'x' });
+  hook('PostToolBatch', 'sf', { agent_id: 'agent-1', agent_type: 'Explore' });
+  const a = await state();
+  expect(a.awake && a.reason === 'permission', `after a subagent batch: ${summary(a)}`);
+  hook('PostToolBatch', 'sf');
+  const b = await state();
+  expect(!b.awake && b.sleepCause === 'user', summary(b));
+  return `${summary(a)} → ${summary(b)}`;
+});
+await check('A prompt not reported unanswered within 8s counts as answered (cause user)', async () => {
+  hook('PermissionRequest', 'sg', { tool_name: 'Bash' });
+  const a = await state();
+  expect(a.awake && a.reason === 'permission', summary(a));
+  const started = Date.now();
+  const b = await until('the answered prompt to clear', async () => {
+    const s = await state();
+    return !s.awake && s;
+  }, 12_000);
+  const ms = Date.now() - started;
+  expect(ms >= 7_000 && b.sleepCause === 'user', `${summary(b)} after ${ms}ms`);
+  return `${summary(a)} → ${summary(b)} after ${(ms / 1000).toFixed(1)}s`;
+});
 await check('Notification idle_prompt wakes (input); SessionEnd clears', async () => {
   hook('Notification', 'sd', { notification_type: 'idle_prompt', message: 'x' });
   const a = await state();

@@ -9,12 +9,19 @@
 //!   `permission_prompt` (prompt unanswered ~6s) → permission;
 //!   `idle_prompt` (~60s after a reply), `agent_needs_input`, `elicitation_dialog`, `elicitation_url_dialog` → input.
 //! - `UserPromptSubmit` → cleared. `PostToolUse` / `PostToolUseFailure` of the tool that asked permission → cleared.
+//! - `PostToolBatch` (Claude Code, not from a subagent) → clears a permission wait: every call of the batch was
+//!   answered, including one you refused with a message for Claude.
 //! - `PermissionDenied` (auto mode only) → clears a permission wait. `SessionEnd` → session removed.
 //! - `Interrupt` (Codex: you stopped the turn) → cleared.
 //! - Anything else (including `SubagentStop`, and any event from an agent this version does not know) is ignored.
+//!
+//! No hook runs when you answer a permission prompt: Yes shows only when the tool finishes, and No or Esc ends the
+//! turn without any hook. But Claude Code sends `Notification(permission_prompt)` only for a prompt left
+//! unanswered for ~6s, so a Claude Code prompt with no such notification by [`PROMPT_ANSWERED_AFTER`] was
+//! answered ([`SessionStore::clear_answered`]). A notification that arrives later still wakes the cat again.
 
 use crate::time::{DurationMs, UnixMs};
-use klat_protocol::{HookEvent, HookName};
+use klat_protocol::{Agent, HookEvent, HookName};
 use serde::Serialize;
 use std::collections::HashMap;
 
@@ -31,6 +38,7 @@ pub enum WakeReason {
 pub enum ClearCause {
     PromptSubmitted,
     ToolResumed,
+    BatchResolved,
     PermissionDenied,
     Interrupted,
 }
@@ -41,6 +49,9 @@ pub enum Signal {
         reason: WakeReason,
         /// From a Notification: only counts when the session is not already waiting.
         fallback: bool,
+        /// A prompt the agent reports within ~6s if it is still unanswered (Claude Code's
+        /// `Notification(permission_prompt)`), so silence means you answered it.
+        silence_means_answered: bool,
     },
     AttentionCleared(ClearCause),
     SessionEnded,
@@ -50,11 +61,22 @@ pub enum Signal {
 /// compile until it is decided here.
 pub fn classify(ev: &HookEvent) -> Option<Signal> {
     use Signal::*;
-    let needed = |reason, fallback| Some(AttentionNeeded { reason, fallback });
-    ev.agent()?;
+    let needed = |reason, fallback| {
+        Some(AttentionNeeded {
+            reason,
+            fallback,
+            silence_means_answered: false,
+        })
+    };
+    let agent = ev.agent()?;
     match ev.hook()? {
         HookName::Stop | HookName::StopFailure => needed(WakeReason::Done, false),
-        HookName::PermissionRequest => needed(WakeReason::Permission, false),
+        HookName::PermissionRequest => Some(AttentionNeeded {
+            reason: WakeReason::Permission,
+            fallback: false,
+            // Codex has no Notification hook.
+            silence_means_answered: agent == Agent::ClaudeCode,
+        }),
         HookName::Notification => match ev.notification_type.as_deref()? {
             "permission_prompt" => needed(WakeReason::Permission, true),
             "idle_prompt"
@@ -67,6 +89,9 @@ pub fn classify(ev: &HookEvent) -> Option<Signal> {
         HookName::PostToolUse | HookName::PostToolUseFailure => {
             Some(AttentionCleared(ClearCause::ToolResumed))
         }
+        // A subagent's batch says nothing about the prompt the main agent (or another subagent) is showing.
+        HookName::PostToolBatch if ev.subagent => None,
+        HookName::PostToolBatch => Some(AttentionCleared(ClearCause::BatchResolved)),
         HookName::PermissionDenied => Some(AttentionCleared(ClearCause::PermissionDenied)),
         HookName::SessionEnd => Some(SessionEnded),
         HookName::Interrupt => Some(AttentionCleared(ClearCause::Interrupted)),
@@ -77,6 +102,11 @@ pub fn classify(ev: &HookEvent) -> Option<Signal> {
 /// Same session + same reason within this window is a duplicate: no re-wake, no yell-counter reset.
 pub const DEDUPE_WINDOW: DurationMs = DurationMs(2_000);
 
+/// A Claude Code permission prompt with no `Notification(permission_prompt)` this long after it appeared was
+/// answered. Claude Code sends that notification once the prompt has waited ~6s; the rest is room for the hook to
+/// start and arrive.
+pub const PROMPT_ANSWERED_AFTER: DurationMs = DurationMs(8_000);
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Session {
     pub pending: bool,
@@ -86,6 +116,9 @@ pub struct Session {
     pub project_name: String,
     pub tool_name: Option<String>,
     pub dismissed: bool,
+    /// When a Claude Code permission prompt appeared that it has not yet reported as left unanswered: once
+    /// [`PROMPT_ANSWERED_AFTER`] has passed, you answered it.
+    prompt_shown: Option<UnixMs>,
     last_attention: Option<(WakeReason, UnixMs)>,
     /// The last event for it, or when its wait expired. Quiet sessions are forgotten by `expire`.
     last_seen: UnixMs,
@@ -139,6 +172,16 @@ impl Gate {
     }
 }
 
+impl Session {
+    /// No longer waiting.
+    fn clear(&mut self) {
+        self.pending = false;
+        self.dismissed = false;
+        self.tool_name = None;
+        self.prompt_shown = None;
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct SessionStore {
     sessions: HashMap<String, Session>,
@@ -151,7 +194,11 @@ impl SessionStore {
         };
         let project = ev.project_name.clone().filter(|p| !p.is_empty());
         match signal {
-            Signal::AttentionNeeded { reason, fallback } => {
+            Signal::AttentionNeeded {
+                reason,
+                fallback,
+                silence_means_answered,
+            } => {
                 if !self.sessions.contains_key(&ev.session_id)
                     && self.sessions.len() >= MAX_SESSIONS
                     && !self.make_room()
@@ -168,11 +215,16 @@ impl SessionStore {
                         project_name: String::new(),
                         tool_name: None,
                         dismissed: false,
+                        prompt_shown: None,
                         last_attention: None,
                         last_seen: now,
                     });
                 s.last_seen = now;
                 if fallback && s.pending {
+                    if reason == WakeReason::Permission && s.reason == WakeReason::Permission {
+                        // The prompt is still on screen: only an answer clears it now.
+                        s.prompt_shown = None;
+                    }
                     return Outcome::Unchanged;
                 }
                 if let Some((r, at)) = s.last_attention {
@@ -192,6 +244,7 @@ impl SessionStore {
                 } else {
                     None
                 };
+                s.prompt_shown = silence_means_answered.then_some(now);
                 if let Some(p) = project {
                     s.project_name = p;
                 }
@@ -220,14 +273,14 @@ impl SessionStore {
                                 (Some(_), None) => false,
                             }
                     }
-                    ClearCause::PermissionDenied => s.reason == WakeReason::Permission,
+                    ClearCause::BatchResolved | ClearCause::PermissionDenied => {
+                        s.reason == WakeReason::Permission
+                    }
                 };
                 if !clears {
                     return Outcome::Unchanged;
                 }
-                s.pending = false;
-                s.dismissed = false;
-                s.tool_name = None;
+                s.clear();
                 Outcome::Changed
             }
             Signal::SessionEnded => match self.sessions.remove(&ev.session_id) {
@@ -272,9 +325,24 @@ impl SessionStore {
         for s in self.sessions.values_mut() {
             if s.pending && now.since(s.since) >= stale_after {
                 s.last_seen = now;
-                s.pending = false;
-                s.dismissed = false;
-                s.tool_name = None;
+                s.clear();
+                changed = true;
+            }
+        }
+        changed
+    }
+
+    /// Clears permission waits whose prompt Claude Code did not report as left unanswered within
+    /// [`PROMPT_ANSWERED_AFTER`]: you answered it (see the module docs). Returns whether anything changed.
+    pub fn clear_answered(&mut self, now: UnixMs) -> bool {
+        let mut changed = false;
+        for s in self.sessions.values_mut() {
+            if s.pending
+                && s.prompt_shown
+                    .is_some_and(|shown| now.since(shown) >= PROMPT_ANSWERED_AFTER)
+            {
+                s.last_seen = now;
+                s.clear();
                 changed = true;
             }
         }
@@ -339,6 +407,7 @@ mod tests {
             tool_name: None,
             occurred_at: 0,
             agent: None,
+            subagent: false,
         }
     }
     fn note(kind: &str, session: &str) -> HookEvent {
@@ -383,13 +452,18 @@ mod tests {
             Some(Signal::AttentionNeeded {
                 reason: r,
                 fallback: f,
+                silence_means_answered: false,
             })
         };
         assert_eq!(classify(&ev("Stop", "a")), need(Done, false));
         assert_eq!(classify(&ev("StopFailure", "a")), need(Done, false));
         assert_eq!(
             classify(&ev("PermissionRequest", "a")),
-            need(Permission, false)
+            Some(Signal::AttentionNeeded {
+                reason: Permission,
+                fallback: false,
+                silence_means_answered: true,
+            })
         );
         assert_eq!(
             classify(&note("permission_prompt", "a")),
@@ -421,6 +495,15 @@ mod tests {
             Some(Signal::AttentionCleared(ClearCause::ToolResumed))
         );
         assert_eq!(
+            classify(&ev("PostToolBatch", "a")),
+            Some(Signal::AttentionCleared(ClearCause::BatchResolved))
+        );
+        let in_subagent = HookEvent {
+            subagent: true,
+            ..ev("PostToolBatch", "a")
+        };
+        assert_eq!(classify(&in_subagent), None);
+        assert_eq!(
             classify(&ev("PermissionDenied", "a")),
             Some(Signal::AttentionCleared(ClearCause::PermissionDenied))
         );
@@ -435,13 +518,7 @@ mod tests {
 
     #[test]
     fn codex_events_mean_what_claude_code_events_mean() {
-        for name in [
-            "Stop",
-            "PermissionRequest",
-            "UserPromptSubmit",
-            "PostToolUse",
-            "SessionEnd",
-        ] {
+        for name in ["Stop", "UserPromptSubmit", "PostToolUse", "SessionEnd"] {
             assert_eq!(
                 classify(&codex(name, "a")),
                 classify(&ev(name, "a")),
@@ -453,6 +530,108 @@ mod tests {
             ..ev("Stop", "a")
         };
         assert_eq!(classify(&unknown), None);
+        // Except that Codex never says a prompt is still unanswered: it has no Notification hook.
+        assert_eq!(
+            classify(&codex("PermissionRequest", "a")),
+            Some(Signal::AttentionNeeded {
+                reason: WakeReason::Permission,
+                fallback: false,
+                silence_means_answered: false,
+            })
+        );
+    }
+
+    #[test]
+    fn a_prompt_not_reported_unanswered_counts_as_answered() {
+        let mut st = SessionStore::default();
+        st.apply(&tool("PermissionRequest", "a", "Bash"), t(1_000));
+        assert!(!st.clear_answered(t(8_999)));
+        assert!(st.awake(READY));
+        // You pressed Yes on a long build (or No): no hook says so, and no permission_prompt came.
+        assert!(st.clear_answered(t(9_000)));
+        assert!(!st.awake(READY));
+        assert!(!st.clear_answered(t(10_000)), "only once");
+        // The build finishing later changes nothing.
+        assert_eq!(
+            st.apply(&tool("PostToolUse", "a", "Bash"), t(120_000)),
+            Outcome::Unchanged
+        );
+    }
+
+    #[test]
+    fn a_prompt_reported_unanswered_waits_for_a_real_answer() {
+        let mut st = SessionStore::default();
+        st.apply(&tool("PermissionRequest", "a", "Bash"), t(0));
+        assert_eq!(
+            st.apply(&note("permission_prompt", "a"), t(6_000)),
+            Outcome::Unchanged
+        );
+        assert!(!st.clear_answered(t(600_000)));
+        assert!(st.awake(READY));
+        assert_eq!(
+            st.apply(&tool("PostToolUse", "a", "Bash"), t(601_000)),
+            Outcome::Changed
+        );
+        // The next prompt gets its own window.
+        st.apply(&tool("PermissionRequest", "a", "Edit"), t(700_000));
+        assert!(st.clear_answered(t(708_000)));
+    }
+
+    #[test]
+    fn a_late_unanswered_report_wakes_the_cat_again() {
+        let mut st = SessionStore::default();
+        st.apply(&tool("PermissionRequest", "a", "Bash"), t(0));
+        assert!(st.clear_answered(t(8_000)));
+        assert_eq!(
+            st.apply(&note("permission_prompt", "a"), t(8_500)),
+            attention("proj-a", WakeReason::Permission)
+        );
+        assert!(!st.clear_answered(t(30_000)), "a fallback has no window");
+        assert!(st.awake(READY));
+    }
+
+    #[test]
+    fn only_claude_code_permission_prompts_count_as_answered() {
+        let mut st = SessionStore::default();
+        st.apply(&codex("PermissionRequest", "cx"), t(0));
+        st.apply(&ev("Stop", "done"), t(0));
+        st.apply(&note("agent_needs_input", "input"), t(0));
+        st.apply(&note("permission_prompt", "fallback"), t(0));
+        // A permission prompt that became a finished turn is not a prompt any more.
+        st.apply(&tool("PermissionRequest", "then-done", "Bash"), t(0));
+        st.apply(&ev("Stop", "then-done"), t(5_000));
+        assert!(!st.clear_answered(t(600_000)));
+        assert_eq!(st.waiting(READY).len(), 5);
+    }
+
+    #[test]
+    fn a_resolved_batch_clears_a_permission_wait_whatever_the_tool() {
+        let mut st = SessionStore::default();
+        // You refused Bash with a message: Claude goes on with other tools, then the batch resolves.
+        st.apply(&tool("PermissionRequest", "a", "Bash"), t(0));
+        st.apply(&note("permission_prompt", "a"), t(6_000));
+        assert_eq!(
+            st.apply(&tool("PostToolUse", "a", "Read"), t(30_000)),
+            Outcome::Unchanged
+        );
+        assert_eq!(
+            st.apply(&ev("PostToolBatch", "a"), t(30_100)),
+            Outcome::Changed
+        );
+        assert!(!st.awake(READY));
+        // It does not clear a finished turn, and a subagent's batch clears nothing.
+        st.apply(&ev("Stop", "b"), t(0));
+        assert_eq!(
+            st.apply(&ev("PostToolBatch", "b"), t(10)),
+            Outcome::Unchanged
+        );
+        st.apply(&tool("PermissionRequest", "c", "Bash"), t(0));
+        let sub = HookEvent {
+            subagent: true,
+            ..ev("PostToolBatch", "c")
+        };
+        assert_eq!(st.apply(&sub, t(10)), Outcome::Unchanged);
+        assert!(st.get("c").unwrap().pending);
     }
 
     #[test]

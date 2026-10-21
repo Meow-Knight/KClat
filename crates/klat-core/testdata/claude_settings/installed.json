@@ -130,6 +130,20 @@
         ]
       }
     ],
+    "PostToolBatch": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Program Files\\Klat\\klat-hook.exe",
+            "args": [
+              "PostToolBatch"
+            ],
+            "timeout": 1
+          }
+        ]
+      }
+    ],
     "PermissionDenied": [
       {
         "hooks": [

@@ -89,6 +89,8 @@ Quit). It checked, all ✅ on the code above:
 | PermissionRequest | always wakes, reason `permission` |
 | Notification `permission_prompt` on a waiting session | ignored (fallback only) |
 | PostToolUse of that tool | clears the wait |
+| PostToolBatch (a subagent's, then the main agent's) | the subagent's leaves the permission wait; the main agent's clears it, `sleepCause` `user` |
+| PermissionRequest with no `permission_prompt` | cleared as answered after ~8 s (not before 7 s), `sleepCause` `user` |
 | Notification `idle_prompt`, then SessionEnd | wakes with `input`, then asleep with no sessions |
 | Pause, PermissionRequest, resume, Dismiss | held asleep; wakes on resume with `sleepCause` `auto`; Dismiss sleeps with `user` |
 | Wake test, Sleep | wakes with `done`, then asleep |

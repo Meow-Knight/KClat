@@ -28,7 +28,7 @@ once), or build from source with [docs/macos-build.md](macos-build.md), which al
 | Claude finishes a turn | Keeps sleeping, unless Ready is on: then it wakes you as above |
 | You click the bell button (Ready) | Peeks, perks one ear and says "Ok, Claude xong tao gọi" (or similar), then sleeps on. The bell turns gold and stays on, for every turn that finishes, until you click it again |
 | More than one session needs you | Yells again for each new one and names the project under the phrase |
-| You send a prompt, approve the permission, or the session ends | Gets knocked out: one of ten objects (a stick, a honeycomb slipper (dép tổ ong), a durian, a frying pan, a fish, a rubber duck, a coffee mug, a bánh mì, a nón lá or an anvil; picked at random, never the same twice in a row) flies in and bonks it on the head; X eyes, stars and a bump, then it slumps asleep. Ready stays on |
+| You send a prompt, answer a permission prompt, or the session ends | Gets knocked out: one of ten objects (a stick, a honeycomb slipper (dép tổ ong), a durian, a frying pan, a fish, a rubber duck, a coffee mug, a bánh mì, a nón lá or an anvil; picked at random, never the same twice in a row) flies in and bonks it on the head; X eyes, stars and a bump, then it slumps asleep. Ready stays on |
 | You click the bubble, or double-click the awake cat | Knocked out the same way ("not now"). This marks those sessions as seen and sends nothing to Claude Code |
 | A waiting session expires, or you turn on Pause | Nobody did anything, so it just yawns and goes back to sleep |
 | You click the cat | Asleep: keeps its eyes shut, frowns, an angry mark pops up on the top-right corner of its head and its tail swishes, then it calms down. Awake: purrs (^ ^) |
@@ -79,7 +79,7 @@ Changes apply at once; there is no Save button.
 
 ## Hooks
 
-**Hooks → Install** adds one entry per event (`Stop`, `StopFailure`, `PermissionRequest`, `Notification`, `UserPromptSubmit`, `PostToolUse`, `PostToolUseFailure`, `PermissionDenied`, `SessionEnd`) to `%USERPROFILE%\.claude\settings.json`. Each entry looks like this:
+**Hooks → Install** adds one entry per event (`Stop`, `StopFailure`, `PermissionRequest`, `Notification`, `UserPromptSubmit`, `PostToolUse`, `PostToolUseFailure`, `PostToolBatch`, `PermissionDenied`, `SessionEnd`) to `%USERPROFILE%\.claude\settings.json`. Each entry looks like this:
 
 ```json
 { "type": "command", "command": "C:\\Users\\you\\AppData\\Local\\Klat\\klat-hook.exe", "args": ["Stop"], "timeout": 1 }
@@ -141,7 +141,7 @@ If you uninstall the app first, the hook entries stay in `settings.json` and `ho
 - Windows only. The cat lives in the bottom-right corner of the **primary** monitor's work area. With the cursor on another monitor, the cat looks at its bubble instead of following.
 - Tested at 100% and 125% display scaling. 150% and multi-monitor setups are covered only by unit tests so far.
 - **Memory:** Task Manager shows ~25–50 MB while the cat sleeps, but the memory WebView2 has committed stays at ~175 MB (6 processes; ~90 MB of it is the GPU process). Getting that under the spec's ~150 MB would mean software rendering, which costs 5× the CPU (see [Performance](development.md#performance)).
-- A `PermissionDenied` hook exists only in auto mode. If you deny a permission by hand, the cat stays awake until your next prompt.
+- No Claude Code hook runs at the moment you answer a permission prompt. Klat counts a prompt as answered when Claude Code has not reported it unanswered within ~6s (the cat falls asleep ~8s after it woke), or when the tool finishes, the batch of tool calls resolves, or you send a prompt. So if you answer **after** those ~6s, Yes on a long command keeps the cat awake until the command finishes, and No/Esc keeps it awake until your next prompt (or click the cat to dismiss it). With Codex (no Notification event), only the tool finishing or your next prompt counts.
 - `claude -p` (print mode) ends its session at once, so the cat wakes and falls asleep again within milliseconds.
 - Right after you use the tray menu, clicking the bubble can give focus to the overlay (Windows hands focus over from the closing tray window). With your terminal focused, it never takes focus.
 - The hitbox is a generous box around the cat rather than its exact outline, so clicks just next to the cat can land on it.

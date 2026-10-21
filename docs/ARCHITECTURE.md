@@ -64,7 +64,7 @@
  │  ipc/        #[tauri::command] mỏng + events (tên + payload có type)                │
  │  services/   CatService (mèo + settings, một lock), settings_service, hooks_service │
  │  ui/         overlay, settings_window, tray: subscribe state, gửi Command          │
- │  tasks/      cursor_poller, drag_loop, stale_ticker                                 │
+ │  tasks/      cursor_poller, drag_loop, wait_ticker                                  │
  │  platform/   windows.rs | macos.rs | fallback.rs, webview_memory: mọi unsafe/FFI   │
  └───────────────┬──────────────────────────────────────┬────────────────────────────┘
                  ▼                                      ▼
@@ -182,6 +182,7 @@ pub enum Command<'a> {
     DismissAll,
     WakeTest,
     ExpireStale { stale_after: DurationMs },
+    ClearAnswered,
     SettingsChanged,
 }
 
@@ -221,7 +222,7 @@ impl CatModel {
 | `ipc/error.rs` | `Message { key, vars }` (key trong `src/i18n` + giá trị placeholder) và `IpcError { code, message }`, serialize được | Chuỗi lỗi tự do, chữ hiển thị soạn sẵn |
 | `services/` | **Chủ duy nhất** của state: `Mutex<Model>` + `watch::Sender<Snapshot>`; `dispatch(Command)` | Gọi `ui`/`tray` trực tiếp |
 | `ui/` | `overlay`, `settings_window`, `tray`: subscribe snapshot, cập nhật hiển thị; hành động người dùng → `service.dispatch(...)` | Giữ state nghiệp vụ, gọi sang `ui` khác |
-| `tasks/` | Vòng lặp nền: `cursor_poller`, `drag_loop`, `stale_ticker` | Như `ui/` |
+| `tasks/` | Vòng lặp nền: `cursor_poller`, `drag_loop`, `wait_ticker` | Như `ui/` |
 | `platform/` | API chung ở `mod.rs`; mỗi OS một file. Toàn bộ `unsafe`, FFI, `#[cfg(target_os)]`, `webview_memory`, `scrub_env` | Logic nghiệp vụ |
 
 **Lý do:** command là public API cho JavaScript; giữ mỏng thì nhìn một chỗ thấy toàn bộ bề mặt webview gọi được (quan trọng với capabilities). `platform/` gom `unsafe` về một chỗ để audit, port OS mới chỉ thêm một file.

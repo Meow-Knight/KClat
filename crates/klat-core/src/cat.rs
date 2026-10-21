@@ -75,6 +75,8 @@ pub enum Command<'a> {
     WakeTest,
     /// Clears sessions that have waited longer than `stale_after` (the `staleAfterMs` setting).
     ExpireStale { stale_after: DurationMs },
+    /// Clears permission prompts that you answered, as far as the hooks can tell (`SessionStore::clear_answered`).
+    ClearAnswered,
     /// The settings changed (Pause among them).
     SettingsChanged,
 }
@@ -174,6 +176,17 @@ impl CatModel {
                     hook: None,
                 }
             }
+            Command::ClearAnswered => {
+                let cleared = self.store.clear_answered(ctx.now);
+                if cleared {
+                    // You answered Claude.
+                    self.sleep_cause = SleepCause::User;
+                }
+                Handled {
+                    publish: cleared,
+                    hook: None,
+                }
+            }
             Command::SettingsChanged => {
                 // A settings change that puts the cat to sleep is Pause: nobody to throw anything.
                 self.sleep_cause = SleepCause::Auto;
@@ -243,6 +256,7 @@ mod tests {
             tool_name: None,
             occurred_at: 0,
             agent: None,
+            subagent: false,
         }
     }
     fn note(kind: &str, session: &str) -> HookEvent {
@@ -388,6 +402,26 @@ mod tests {
         let s = m.snapshot(false);
         assert!(!s.awake);
         assert_eq!(s.sleep_cause, SleepCause::Auto);
+    }
+
+    #[test]
+    fn an_answered_prompt_sleeps_the_cat_by_your_hand() {
+        let mut m = launched();
+        m.handle(Command::SettingsChanged, at(0));
+        m.handle(Command::Hook(&hook("PermissionRequest", "a")), at(1_000));
+        assert_eq!(
+            m.handle(Command::ClearAnswered, at(8_999)),
+            Handled {
+                publish: false,
+                hook: None
+            }
+        );
+        assert!(m.snapshot(false).awake);
+        assert!(m.handle(Command::ClearAnswered, at(9_000)).publish);
+        let s = m.snapshot(false);
+        assert!(!s.awake);
+        assert_eq!(s.sleep_cause, SleepCause::User);
+        assert!(!m.handle(Command::ClearAnswered, at(9_001)).publish);
     }
 
     #[test]

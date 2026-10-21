@@ -4,7 +4,7 @@ use crate::ipc::{commands, events};
 use crate::platform;
 use crate::services::cat_service::{self, CatService};
 use crate::services::settings_service;
-use crate::tasks::{cursor_poller, drag_loop, stale_ticker};
+use crate::tasks::{cursor_poller, drag_loop, wait_ticker};
 use crate::ui::overlay::{self, OverlayState};
 use crate::ui::{settings_window, tray};
 use klat_core::cat::Command;
@@ -94,7 +94,7 @@ pub fn run() {
             cursor_poller::start(app.handle().clone(), cat.subscribe(), overlay_state.clone());
             drag_loop::start(app.handle().clone(), cat.clone(), overlay_state);
             start_event_server(cat.clone())?;
-            stale_ticker::start(cat);
+            wait_ticker::start(cat);
             Ok(())
         })
         .build(tauri::generate_context!())

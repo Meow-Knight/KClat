@@ -2,4 +2,4 @@
 
 pub mod cursor_poller;
 pub mod drag_loop;
-pub mod stale_ticker;
+pub mod wait_ticker;

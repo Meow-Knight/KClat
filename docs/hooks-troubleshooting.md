@@ -25,7 +25,7 @@ To check by hand, open `%USERPROFILE%\.claude\settings.json` and look under `"ho
 { "type": "command", "command": "C:\\Users\\you\\AppData\\Local\\Klat\\klat-hook.exe", "args": ["Stop"], "timeout": 1 }
 ```
 
-There should be one for each of `Stop`, `StopFailure`, `PermissionRequest`, `Notification`, `UserPromptSubmit`, `PostToolUse`, `PostToolUseFailure`, `PermissionDenied` and `SessionEnd`.
+There should be one for each of `Stop`, `StopFailure`, `PermissionRequest`, `Notification`, `UserPromptSubmit`, `PostToolUse`, `PostToolUseFailure`, `PostToolBatch`, `PermissionDenied` and `SessionEnd`.
 
 ## 3. Has Claude Code picked them up?
 

@@ -59,6 +59,9 @@ pub struct HookEvent {
     /// support. A string, like the hook name, so an agent this version does not know is still a valid body.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent: Option<String>,
+    /// The hook ran inside a subagent (Claude Code sends an `agent_id` then). Only the fact, never the id.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub subagent: bool,
 }
 
 impl HookEvent {
@@ -87,6 +90,9 @@ pub enum HookName {
     UserPromptSubmit,
     PostToolUse,
     PostToolUseFailure,
+    /// Claude Code only: every tool call of a batch has resolved (ran, or was refused), before the next model
+    /// call.
+    PostToolBatch,
     PermissionDenied,
     SessionEnd,
     /// Codex only: the user stopped the turn.
@@ -97,7 +103,7 @@ pub enum HookName {
 }
 
 impl HookName {
-    pub const ALL: [HookName; 11] = [
+    pub const ALL: [HookName; 12] = [
         HookName::Stop,
         HookName::StopFailure,
         HookName::PermissionRequest,
@@ -105,6 +111,7 @@ impl HookName {
         HookName::UserPromptSubmit,
         HookName::PostToolUse,
         HookName::PostToolUseFailure,
+        HookName::PostToolBatch,
         HookName::PermissionDenied,
         HookName::SessionEnd,
         HookName::Interrupt,
@@ -120,6 +127,7 @@ impl HookName {
             HookName::UserPromptSubmit => "UserPromptSubmit",
             HookName::PostToolUse => "PostToolUse",
             HookName::PostToolUseFailure => "PostToolUseFailure",
+            HookName::PostToolBatch => "PostToolBatch",
             HookName::PermissionDenied => "PermissionDenied",
             HookName::SessionEnd => "SessionEnd",
             HookName::Interrupt => "Interrupt",
@@ -133,7 +141,8 @@ impl HookName {
     }
 
     /// Whether Install puts an entry for it into that agent's hooks file. Codex has no `Notification`,
-    /// `StopFailure`, `PostToolUseFailure` or `PermissionDenied`; Claude Code has no `Interrupt`.
+    /// `StopFailure`, `PostToolUseFailure`, `PostToolBatch` or `PermissionDenied`; Claude Code has no
+    /// `Interrupt`.
     pub const fn is_installed(self, agent: Agent) -> bool {
         use HookName::*;
         match agent {
@@ -171,6 +180,7 @@ mod tests {
             tool_name: Some("Bash".into()),
             occurred_at: 42,
             agent: None,
+            subagent: false,
         }
     }
 
@@ -221,6 +231,21 @@ mod tests {
     }
 
     #[test]
+    fn subagent_events_say_so_and_others_look_as_they_always_have() {
+        let ev = HookEvent {
+            subagent: true,
+            ..full()
+        };
+        let text = serde_json::to_string(&ev).unwrap();
+        assert!(
+            text.ends_with(r#""occurredAt":42,"subagent":true}"#),
+            "{text}"
+        );
+        assert_eq!(serde_json::from_str::<HookEvent>(&text).unwrap(), ev);
+        assert!(!serde_json::to_string(&full()).unwrap().contains("subagent"));
+    }
+
+    #[test]
     fn an_unknown_agent_is_still_a_valid_body() {
         let newer = r#"{"eventId":"1","hookEventName":"Stop","sessionId":"s","occurredAt":1,"agent":"cursor"}"#;
         let ev: HookEvent = serde_json::from_str(newer).unwrap();
@@ -263,6 +288,7 @@ mod tests {
                 "UserPromptSubmit",
                 "PostToolUse",
                 "PostToolUseFailure",
+                "PostToolBatch",
                 "PermissionDenied",
                 "SessionEnd",
                 "Interrupt",
@@ -285,7 +311,7 @@ mod tests {
     #[test]
     fn claude_code_gets_everything_but_subagent_stop_and_interrupt() {
         let installed: Vec<HookName> = HookName::installed(Agent::ClaudeCode).collect();
-        assert_eq!(installed.len(), 9);
+        assert_eq!(installed.len(), 10);
         assert!(!installed.contains(&HookName::SubagentStop));
         assert!(!installed.contains(&HookName::Interrupt));
     }

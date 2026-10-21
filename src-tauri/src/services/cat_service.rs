@@ -81,6 +81,7 @@ impl CatService {
             Command::SetReady(on) => Some(on),
             _ => None,
         };
+        let answered = matches!(cmd, Command::ClearAnswered);
         let handled = self.run(&mut self.model.lock().unwrap(), cmd);
         if let Some(ev) = hook {
             // Only names and outcomes: the adapter never forwards prompts, commands or tool input.
@@ -108,6 +109,9 @@ impl CatService {
         }
         if let Some(on) = ready {
             log::info!("ready {}", if on { "armed" } else { "off" });
+        }
+        if answered && handled.publish {
+            log::info!("permission prompt answered (not reported unanswered) -> cleared");
         }
         handled
     }
@@ -218,6 +222,7 @@ mod tests {
             tool_name: None,
             occurred_at: 0,
             agent: None,
+            subagent: false,
         }
     }
 
