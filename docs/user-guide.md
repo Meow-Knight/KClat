@@ -53,7 +53,7 @@ The tray tooltip shows how many sessions are waiting.
 
 | Section | What is in it |
 |---|---|
-| General | Start at login (off by default; an entry in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`), Character (cat, snake, dragon or capybara, each with a one-line description of its temper), Pause notifications, Hide the cat while it sleeps, SFW mode (no swearing; the English first line becomes "Wake up, human!!!", the Vietnamese one is already clean), Reduce motion, Cat size (a slider, 50–200%), and how to move the cat |
+| General | Start at login (off by default; an entry in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`), Character (cat, snake, dragon, capybara or slime, each with a one-line description of its temper), Pause notifications, Hide the cat while it sleeps, SFW mode (no swearing; the English first line becomes "Wake up, human!!!", the Vietnamese one is already clean), Reduce motion, Cat size (a slider, 50–200%), and how to move the cat |
 | Language | Platform Language (menus, dialogs, this window) and Klat Language (what the cat says: English, Tiếng Việt, 中文, 日本語, 한국어, or Auto for all of them), with a sample line |
 | Hooks | For Claude Code and for Codex, each on its own: whether it is wired to Klat, the file it uses (`settings.json`, `hooks.json`), and Install / Repair / Uninstall (see [Hooks](#hooks)) |
 | Advanced | Time between yells; Wake test and Sleep buttons to try the cat out |

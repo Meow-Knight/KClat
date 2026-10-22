@@ -50,6 +50,8 @@
   "settings.character.dragon.desc": "Short fuse. Snorts smoke when it yells.",
   "settings.character.capybara": "Capybara",
   "settings.character.capybara.desc": "The unbothered king. Until you're needed.",
+  "settings.character.slime": "Slime",
+  "settings.character.slime.desc": "Jiggles, bounces, melts into a puddle.",
   "settings.general.pause": "Pause notifications",
   "settings.general.pause.desc": "Klat keeps sleeping, whatever Claude does.",
   "settings.general.hide": "Hide Klat while it sleeps",

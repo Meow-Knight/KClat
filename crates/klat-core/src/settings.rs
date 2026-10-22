@@ -42,6 +42,7 @@ pub enum Character {
     Snake,
     Dragon,
     Capybara,
+    Slime,
 }
 
 /// Where the cat sits until you drag it. Only one corner so far.

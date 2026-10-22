@@ -5,6 +5,7 @@ import { CatRig } from './cat/CatRig';
 import type { CharacterRig } from '../kit/CharacterRig';
 import type { CharacterId } from '../settings';
 import { DragonRig } from './dragon/DragonRig';
+import { SlimeRig } from './slime/SlimeRig';
 import { SnakeRig } from './snake/SnakeRig';
 
 const RIGS: Record<CharacterId, () => CharacterRig> = {
@@ -12,6 +13,7 @@ const RIGS: Record<CharacterId, () => CharacterRig> = {
   snake: () => new SnakeRig(),
   dragon: () => new DragonRig(),
   capybara: () => new CapybaraRig(),
+  slime: () => new SlimeRig(),
 };
 
 export function createRig(id: CharacterId): CharacterRig {
