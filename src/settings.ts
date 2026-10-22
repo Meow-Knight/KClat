@@ -8,7 +8,7 @@ export type { KlatLanguage, UiLanguage } from './bridge/generated';
 /** Who sits in the corner (src/characters). */
 export type CharacterId = Character;
 /** Every character once; a character added in Rust and missing here fails to compile. */
-const CHARACTER_SET: Record<CharacterId, true> = { cat: true, snake: true, dragon: true };
+const CHARACTER_SET: Record<CharacterId, true> = { cat: true, snake: true, dragon: true, capybara: true };
 export const CHARACTERS = Object.keys(CHARACTER_SET) as readonly CharacterId[];
 
 /** The settings file, as Rust sends it (`Settings` in crates/klat-core/src/settings.rs). */

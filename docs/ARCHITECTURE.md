@@ -138,7 +138,7 @@ Thứ tự tầng, trong ra ngoài. Một thư mục chỉ được import từ 
 |---|---|---|---|
 | 0 | `settings.ts`, `i18n/`, `phrases/` | Dữ liệu và hàm thuần | Không DOM, không Three.js, không Tauri |
 | 1 | `kit/` | Bộ dựng toon dùng chung: mesh, viền, mặt, fx, chuyển động, kiểu `CharacterRig`; `kit/pose.ts`: `CatPose`, `POSE_PARAMS`, mốc thời gian knockout | Không biết nhân vật cụ thể nào |
-| 2 | `characters/` (`cat/`, `snake/`, `dragon/`) | Mỗi nhân vật một rig + registry `characters/index.ts` | Chỉ import `kit/` + tầng 0 |
+| 2 | `characters/` (`cat/`, `snake/`, `dragon/`, `capybara/`) | Mỗi nhân vật một rig + registry `characters/index.ts` | Chỉ import `kit/` + tầng 0 |
 | 3 | `cat/` (bộ não + stage), `bubble/` | `CatController` (thuần), `CatStage`, `RenderLoop`, bong bóng | Lấy rig qua registry, không import rig cụ thể |
 | 4 | `bridge/` | **Nơi duy nhất** import `@tauri-apps/*`; type sinh từ Rust | `bridge/generated.ts` chỉ có type, không code: mọi tầng được `import type` từ nó (coi như tầng 0) |
 | 5 | `overlay/`, `settings-window/` | Entry point, composition root của từng cửa sổ | Nối bridge với tầng 0–3 |

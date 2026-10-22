@@ -29,7 +29,7 @@ export function generalSection(ctx: Ctx): SectionView {
   const character = pictureChoice<CharacterId>(
     'character',
     t('settings.general.character'),
-    CHARACTERS.map((c) => ({ value: c, label: t(`settings.character.${c}`) })),
+    CHARACTERS.map((c) => ({ value: c, label: t(`settings.character.${c}`), desc: t(`settings.character.${c}.desc`) })),
     s.character,
     (v) => ctx.patch({ character: v }),
   );

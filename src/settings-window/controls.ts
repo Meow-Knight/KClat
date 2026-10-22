@@ -105,6 +105,8 @@ export interface Option<T extends string> {
   label: string;
   /** BCP 47 tag when the label is in another language than the page (screen readers switch voice). */
   lang?: string;
+  /** One line under the label (picture cards only); screen readers read it as the option's description. */
+  desc?: string;
 }
 
 /** A radio group drawn as a segmented control. Arrow keys move and select, as in native radio groups. */
@@ -150,11 +152,22 @@ export function pictureChoice<T extends string>(
     const asleep = h('img', { class: 'pick-asleep', attrs: { alt: '', draggable: 'false' } });
     const awake = h('img', { class: 'pick-awake', attrs: { alt: '', draggable: 'false' } });
     art.set(o.value, [asleep, awake]);
+    const descId = `${focusKey}-${o.value}-desc`;
     return h(
       'button',
-      { class: 'pick', attrs: { type: 'button', role: 'radio', 'data-focus-key': `${focusKey}:${o.value}` } },
+      {
+        class: 'pick',
+        attrs: {
+          type: 'button',
+          role: 'radio',
+          'data-focus-key': `${focusKey}:${o.value}`,
+          ...(o.desc ? { 'aria-describedby': descId } : {}),
+        },
+      },
       h('span', { class: 'pick-art', attrs: { 'aria-hidden': 'true' } }, asleep, awake),
+      // The label alone names the option; the description is linked by aria-describedby.
       h('span', { class: 'pick-label', text: o.label }),
+      ...(o.desc ? [h('span', { class: 'pick-desc', text: o.desc, attrs: { id: descId, 'aria-hidden': 'true' } })] : []),
     );
   });
   el.append(...buttons);

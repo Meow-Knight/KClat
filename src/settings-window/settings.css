@@ -523,6 +523,14 @@ h1:focus {
   font-weight: 600;
 }
 
+.pick-desc {
+  padding: 0 2px;
+  font-size: 11.5px;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--muted);
+}
+
 /* Preview bubble: same look as the cat's bubble on the overlay. */
 
 .preview {
