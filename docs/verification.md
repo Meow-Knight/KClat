@@ -109,7 +109,7 @@ phase touched:
 
 | # | Check | Phases |
 |---|---|---|
-| O1 | Tray: tooltip counts waiting sessions; Ready and Pause ticks follow the bell and Settings; Dismiss all, Settings…, Quit work | 4 |
+| O1 | Tray: tooltip counts waiting sessions; Ready and Pause ticks follow the lamp and Settings; Dismiss all, Settings…, Quit work | 4 |
 | O2 | Space-drag the cat, release: it stays; after a restart it comes back to the same spot | 2, 4 |
 | O3 | Move a dragged cat to a monitor with another scale, or change the display scale: it keeps its corner and stays on screen | 2, 4 |
 | O4 | Settings > size slider: smooth while dragging, the cat lands at the chosen size on release | 2, 4, 5 |
@@ -173,7 +173,7 @@ Not checked yet:
   - Stop without Ready: the cat stays asleep.
   - PermissionRequest: the cat wakes with the aura; PostToolUse puts it back to sleep.
   - Ready button: `ready: true`, the button turns gold, the log says `ready armed`.
-  - Prompt, then Stop: the cat wakes (`long-task:done`). The next prompt puts it to sleep and Ready stays on, so the next Stop wakes it again. Clicking the bell again turns Ready off (`ready off`), and a later Stop is ignored.
+  - Prompt, then Stop: the cat wakes (`long-task:done`). The next prompt puts it to sleep and Ready stays on, so the next Stop wakes it again. Clicking the lamp turns Ready off (`ready off`) and sucks the cat in, and a later Stop is ignored.
 - Screenshots (dev page and real overlay): the button next to the paws, gold when armed with the cat's reply bubble; the gold flame shell around the awake cat on dark and light desktops.
 - The release installer was rebuilt (2.14 MB).
 

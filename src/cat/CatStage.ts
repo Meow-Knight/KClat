@@ -34,6 +34,8 @@ const READY_ANCHOR = new THREE.Vector3(3.2, 0.35, 0.9);
 const pixelRatio = () => Math.min(window.devicePixelRatio, 3);
 /** How long the cat's "fine, I'll wake you" reply stays up. */
 const READY_REPLY_MS = 2200;
+/** How long being sucked into the lamp takes (stage.css .in-lamp); the render loop stops after it. */
+const LAMP_MS = 550;
 
 /** CSS px relative to the stage's top-left corner; what `set_hitboxes` takes. */
 export type StageRect = Rect;
@@ -44,7 +46,7 @@ export interface StageCallbacks {
   onPhase?(phase: CatPhase): void;
   /** hitboxes() changed: the bubble appeared or went away, the pose changed, or the stage resized. */
   onLayoutChange?(): void;
-  /** The Ready button was clicked; `next` is the state asked for. The owner applies it with setReady(). */
+  /** The lamp (Ready button) was clicked; `next` is the state asked for. The owner applies it with setReady(). */
   onReadyToggle?(next: boolean): void;
 }
 
@@ -53,6 +55,7 @@ export class CatStage {
   readonly bubble: Bubble;
   readonly readyButton: ReadyButton;
 
+  private readonly canvas: HTMLCanvasElement;
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
@@ -72,6 +75,13 @@ export class CatStage {
   private phase: CatPhase = 'asleep';
   private hidden = false;
   private readyReplyTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Ready is off and the cat is asleep: it is tucked away in the lamp (see syncLamp). */
+  private inLamp = false;
+  /** In the lamp and the suck-in has finished: nothing of the cat is on screen. */
+  private lampSettled = false;
+  private lampTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The first Ready state has not arrived yet: it is applied without the suck-in. */
+  private firstReady = true;
   private grab: 'idle' | 'armed' | 'dragging' = 'idle';
   /** The mouse went down while Space was held: that press moves the cat, so its click must not pet or dismiss. */
   private pressInGrab = false;
@@ -85,6 +95,7 @@ export class CatStage {
     container.classList.add('cat-stage', 'asleep');
 
     const canvas = document.createElement('canvas');
+    this.canvas = canvas;
     container.append(canvas);
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, premultipliedAlpha: true });
     this.renderer.setPixelRatio(pixelRatio());
@@ -129,6 +140,7 @@ export class CatStage {
         this.phase = phase;
         container.classList.toggle('asleep', phase === 'asleep');
         this.syncReadyButton();
+        this.syncLamp();
         this.loop.setMaxFps(phase === 'asleep' ? ASLEEP_FPS : AWAKE_FPS);
         callbacks.onPhase?.(phase);
         callbacks.onLayoutChange?.();
@@ -196,10 +208,12 @@ export class CatStage {
     this.callbacks.onLayoutChange?.();
   }
 
-  /** Reflects the Ready state (from Rust, or the dev page) on the button and the cat's ears. */
+  /** Reflects the Ready state (from Rust, or the dev page) on the lamp, the cat's ears and whether it is in the lamp. */
   setReady(on: boolean): void {
     this.readyButton.set(on);
     this.controller.setReady(on);
+    this.syncLamp(!this.firstReady);
+    this.firstReady = false;
   }
 
   /** Space held over the cat ('armed'), then the mouse pressed ('dragging'): shows a hand cursor. */
@@ -228,8 +242,7 @@ export class CatStage {
     if (hidden === this.hidden) return;
     this.hidden = hidden;
     this.container.style.visibility = hidden ? 'hidden' : '';
-    if (hidden) this.loop.stop();
-    else this.loop.start();
+    this.syncLoop();
     this.syncReadyButton();
     this.callbacks.onLayoutChange?.();
   }
@@ -238,10 +251,10 @@ export class CatStage {
     return this.hidden;
   }
 
-  /** Clickable regions: the cat (a generous box for the current pose), the bubble and the Ready button. */
+  /** Clickable regions: the cat (a generous box for the current pose, none in the lamp), the bubble and the lamp. */
   hitboxes(): StageRect[] {
     if (this.hidden) return [];
-    const rects = [this.projectBox(this.rig.hitBounds[this.phase === 'awake' ? 'awake' : 'asleep'])];
+    const rects = this.inLamp ? [] : [this.projectBox(this.rig.hitBounds[this.phase === 'awake' ? 'awake' : 'asleep'])];
     // Layout box, not bounding rect: the bubble's pop-in transform starts at scale(0).
     const bubble = this.bubble.el;
     if (this.bubble.visible) rects.push({ x: bubble.offsetLeft, y: bubble.offsetTop, w: bubble.offsetWidth, h: bubble.offsetHeight });
@@ -261,6 +274,7 @@ export class CatStage {
 
   dispose(): void {
     clearTimeout(this.readyReplyTimer);
+    clearTimeout(this.lampTimer);
     this.loop.dispose();
     this.resizeObserver.disconnect();
     this.dprQuery?.removeEventListener('change', this.onPixelRatioChange);
@@ -268,7 +282,7 @@ export class CatStage {
     this.rig.dispose();
     this.renderer.dispose();
     this.container.replaceChildren();
-    this.container.classList.remove('cat-stage', 'asleep', 'reduce-motion', 'grab-armed', 'grab-dragging');
+    this.container.classList.remove('cat-stage', 'asleep', 'in-lamp', 'reduce-motion', 'grab-armed', 'grab-dragging');
   }
 
   /** Another character picked in Settings: same brain and pose, new body. Its hitbox may differ. */
@@ -300,7 +314,12 @@ export class CatStage {
     this.camera.updateProjectionMatrix();
 
     this.probe.copy(READY_ANCHOR).project(this.camera);
-    this.readyButton.placeAt(((this.probe.x + 1) / 2) * this.width, ((1 - this.probe.y) / 2) * this.height);
+    const lampX = ((this.probe.x + 1) / 2) * this.width;
+    const lampY = ((1 - this.probe.y) / 2) * this.height;
+    this.readyButton.placeAt(lampX, lampY);
+    // Where the cat goes when it is sucked into the lamp.
+    this.container.style.setProperty('--lamp-x', `${Math.round(lampX)}px`);
+    this.container.style.setProperty('--lamp-y', `${Math.round(lampY)}px`);
     if (notify) {
       this.redraw();
       this.callbacks.onLayoutChange?.();
@@ -331,6 +350,47 @@ export class CatStage {
   /** The button is only offered while the cat is asleep and shown; Ready is meaningless once it is awake. */
   private syncReadyButton(): void {
     this.readyButton.setVisible(this.phase === 'asleep' && !this.hidden);
+  }
+
+  /**
+   * Ready off while asleep: the cat is sucked into the lamp, so only the lamp takes room and clicks. Ready on, or a
+   * wake (Claude needs you), and it comes out again; after the knockout it goes back in.
+   */
+  private syncLamp(animate = true): void {
+    const inLamp = !this.readyButton.pressed && this.phase === 'asleep';
+    if (inLamp === this.inLamp) return;
+    this.inLamp = inLamp;
+    clearTimeout(this.lampTimer);
+    this.lampSettled = false;
+    const instant = !animate || this.settings.reduceMotion;
+    if (inLamp) {
+      clearTimeout(this.readyReplyTimer);
+      this.bubble.hide();
+      this.lampTimer = setTimeout(
+        () => {
+          this.lampSettled = true;
+          this.syncLoop();
+        },
+        instant ? 0 : LAMP_MS,
+      );
+    }
+    this.syncLoop();
+    if (instant) {
+      // Skip the transition: switch with it off, and let the browser apply the switch before turning it back on.
+      this.canvas.style.transition = 'none';
+      this.container.classList.toggle('in-lamp', inLamp);
+      void this.canvas.offsetWidth;
+      this.canvas.style.transition = '';
+    } else {
+      this.container.classList.toggle('in-lamp', inLamp);
+    }
+    this.callbacks.onLayoutChange?.();
+  }
+
+  /** The render loop runs unless nothing of the cat is on screen: hidden, or tucked away in the lamp. */
+  private syncLoop(): void {
+    if (this.hidden || this.lampSettled) this.loop.stop();
+    else this.loop.start();
   }
 
   /** The cat's short reply when you arm Ready, then the bubble goes away again. */

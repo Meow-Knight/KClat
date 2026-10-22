@@ -29,10 +29,12 @@ const stage = new CatStage(stageEl, readSettings(), {
   onPhase: (phase) => note(`phase: ${phase}`),
   onLayoutChange: () => drawHitboxes(),
   onReadyToggle: (next) => {
-    note(`ready ${next ? 'armed' : 'off'} (in the app, Rust decides when it fires)`);
+    note(`ready ${next ? 'armed, cat out of the lamp' : 'off, cat in the lamp'} (in the app, Rust decides when it fires)`);
     stage.setReady(next);
   },
 });
+// As the app starts: Ready on, so the cat is out of the lamp.
+stage.setReady(true);
 
 // Hitboxes: what the overlay reports to Rust as clickable (everything else is click-through).
 const hitLayer = document.createElement('div');

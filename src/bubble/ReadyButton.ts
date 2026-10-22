@@ -1,16 +1,17 @@
-// The small Ready button next to the sleeping cat: "sleep now, wake me when Claude is done".
-// Icon: a cat's collar bell (pink collar, jingle bell) - ring the bell and the cat will ring you back.
+// The small Ready button next to the sleeping cat: an Aladdin lamp. Ready on: the cat is out, sleeping, and
+// wakes you when Claude is done. Ready off: the cat is sucked into the lamp (CatStage) and only the lamp is left.
+// The spout points left, at the cat: that is where it goes in and comes out.
 import { t } from '../i18n';
 import type { UiLanguage } from '../settings';
 
 const ICON = `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-  <path class="collar" d="M3.5 5.2 Q12 9.4 20.5 5.2" fill="none" stroke-width="2.6" stroke-linecap="round"/>
-  <circle class="ring" cx="12" cy="8.6" r="1.5" fill="none" stroke-width="1.5"/>
-  <circle class="bell" cx="12" cy="15" r="6" stroke-width="1.8"/>
-  <path class="band" d="M6.4 13.6 Q12 15.4 17.6 13.6" fill="none" stroke-width="1.5"/>
-  <circle class="slot" cx="12" cy="17.4" r="1.25"/>
-  <path class="slot-line" d="M12 18.6v2" stroke-width="1.5" stroke-linecap="round"/>
-  <circle class="shine" cx="9.6" cy="12" r="1.1"/>
+  <path class="smoke" d="M2.4 8.2 Q0.8 6.2 3 4.6 Q5 3 3.8 1.2" fill="none" stroke-width="1.5" stroke-linecap="round"/>
+  <path class="handle" d="M18.6 14 Q23 12 21.6 16.2 Q20.8 18 17.8 17.2" fill="none" stroke-width="1.6" stroke-linecap="round"/>
+  <path class="foot" d="M10.4 18.8 L9.6 21 H16.4 L15.6 18.8 Z" stroke-width="1.4" stroke-linejoin="round"/>
+  <path class="lamp" d="M2 9.6 Q3.4 15 7.6 15.2 Q8.8 19.4 12.8 19.2 Q17.4 19 19 13.4 H8.2 Q6.4 11.4 2 9.6 Z" stroke-width="1.6" stroke-linejoin="round"/>
+  <path class="lamp" d="M9.4 13.4 Q12.8 8.6 16.2 13.4 Z" stroke-width="1.5" stroke-linejoin="round"/>
+  <circle class="knob" cx="12.8" cy="10" r="1"/>
+  <circle class="shine" cx="15.8" cy="15.6" r="0.9"/>
 </svg>`;
 
 /**

@@ -33,8 +33,8 @@ golden aura and yells until you come back. Answer the agent and something flies 
 
 ## Features
 
-- **Wakes when it matters.** Permission requests and questions always wake it. Finished turns wake it only when you
-  ring the little bell (**Ready**), so it leaves you alone while you watch.
+- **Wakes when it matters.** Permission requests and questions always wake it. Finished turns wake it too (**Ready**),
+  until you tuck it into the little Aladdin lamp beside it: then only the lamp takes room on your screen.
 - **Claude Code and Codex CLI.** Install the hooks for one or both with a click.
 - **Gets knocked out when you're back.** A frying pan, a durian, a rubber duck, a bánh mì, an anvil, or one of
   five other things.
@@ -72,7 +72,7 @@ Download `Klat_<version>_universal.dmg` (Apple Silicon and Intel). It isn't nota
 | When | The cat |
 |---|---|
 | The agent asks for permission or waits for your input | Wakes up with its aura and yells, again every 30 seconds |
-| The agent finishes a turn | Keeps sleeping, unless you rang the bell (Ready) |
+| The agent finishes a turn | Wakes you, unless you tucked it into the lamp (Ready off) |
 | You reply, approve, or click the bubble | Gets knocked out and falls back asleep |
 | Several sessions need you | Yells for each one and names the project |
 | You click it | Asleep: grumbles. Awake: purrs |
@@ -110,7 +110,7 @@ Details in [SECURITY.md](SECURITY.md) and the [user guide](docs/user-guide.md#pr
 
 | Problem | Try this |
 |---|---|
-| The cat doesn't wake | Settings → **Hooks** must say **Installed** (click **Repair** if it says otherwise), then restart the agent session. For finished turns, the bell must be on |
+| The cat doesn't wake | Settings → **Hooks** must say **Installed** (click **Repair** if it says otherwise), then restart the agent session. For finished turns, the cat must be out of the lamp (Ready on) |
 | The cat doesn't wake for Codex | In Codex, type `/hooks` and trust Klat's entries. Do it again after every **Repair** |
 | A black or white box around the cat | Update the WebView2 runtime and your GPU driver |
 

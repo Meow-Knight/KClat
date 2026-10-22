@@ -9,7 +9,7 @@ Everything about using Klat: what the cat does, the tray and Settings, the hooks
 2. Start **Klat**. A sleeping cat appears in the bottom-right corner, and a cat icon appears in the tray (it may be under the **^** hidden-icons arrow).
 3. Tray → **Settings…** → **Hooks**. There is one card per agent: **Install** under **Claude Code** adds Klat's hooks to `%USERPROFILE%\.claude\settings.json`, **Install** under **Codex** adds them to `%USERPROFILE%\.codex\hooks.json` (or `%CODEX_HOME%\hooks.json`). Install one, the other or both. A backup is saved first, and your other hooks and settings stay as they are.
 4. Codex only: open Codex, type `/hooks` and trust Klat's hooks. Codex skips hooks you have not reviewed, and asks again after **Repair** (the entries change).
-5. Restart any open Claude Code or Codex sessions. From now on the cat wakes when Claude asks for permission or input, and when Claude finishes a turn: Ready, the **bell button** to the right of the cat, is on when Klat starts. Click the bell to turn it off if you only want to be woken for permission and input.
+5. Restart any open Claude Code or Codex sessions. From now on the cat wakes when Claude asks for permission or input, and when Claude finishes a turn: Ready is on when Klat starts. Click the **Aladdin lamp** to the right of the cat to turn it off if you only want to be woken for permission and input: the cat is sucked into the lamp, so only the lamp takes room on your screen.
 
 You need Windows 10/11 with the WebView2 runtime, which comes with Windows 11 and recent Windows 10.
 
@@ -25,8 +25,10 @@ once), or build from source with [docs/macos-build.md](macos-build.md), which al
 | When | The cat |
 |---|---|
 | Claude asks for permission or waits for input | Jumps up with a gold aura and yells, then glares and taps its paw; it yells again every 30s (10 times at most) |
-| Claude finishes a turn | Keeps sleeping, unless Ready is on: then it wakes you as above |
-| You click the bell button (Ready) | Peeks, perks one ear and says "Ok, Claude xong tao gọi" (or similar), then sleeps on. The bell turns gold and stays on, for every turn that finishes, until you click it again |
+| Claude finishes a turn | Wakes you as above while Ready is on (the cat is out of the lamp); keeps sleeping in the lamp while it is off |
+| You click the lamp while the cat is out | Ready turns off: the cat spins into the lamp's spout and is gone. The lamp glows gold with a wisp of smoke, and only the lamp is clickable |
+| You click the lamp while the cat is inside | Ready turns on: the cat pops out, perks one ear and says "Ok, Claude xong tao gọi" (or similar), then sleeps on. Ready stays on, for every turn that finishes, until you click the lamp again |
+| Claude needs you while the cat is in the lamp | It bursts out of the lamp and yells as above. Once it is knocked out, it is sucked back in |
 | More than one session needs you | Yells again for each new one and names the project under the phrase |
 | You send a prompt, answer a permission prompt, or the session ends | Gets knocked out: one of ten objects (a stick, a honeycomb slipper (dép tổ ong), a durian, a frying pan, a fish, a rubber duck, a coffee mug, a bánh mì, a nón lá or an anvil; picked at random, never the same twice in a row) flies in and bonks it on the head; X eyes, stars and a bump, then it slumps asleep. Ready stays on |
 | You click the bubble, or double-click the awake cat | Knocked out the same way ("not now"). This marks those sessions as seen and sends nothing to Claude Code |
@@ -41,7 +43,7 @@ The overlay never takes focus, and clicks on its empty area go through to the wi
 
 | Item | What it does |
 |---|---|
-| Ready: wake me when Claude is done | Same as the bell button; the two stay in sync |
+| Ready: wake me when Claude is done | Same as the lamp (ticked = the cat is out); the two stay in sync |
 | Pause notifications | The cat stays asleep. Sessions are still tracked, and unpausing wakes it if something is still waiting |
 | Dismiss all | Puts the cat to sleep and marks waiting sessions as seen |
 | Settings… | Opens the Settings window (on Windows, double-clicking the tray icon does too) |
@@ -127,7 +129,7 @@ If you uninstall the app first, the hook entries stay in `settings.json` and `ho
 
 | Problem | Try |
 |---|---|
-| The cat doesn't wake when Claude finishes | Check that the bell button (Ready) is on; clicking it toggles it. If it still doesn't wake, open Settings → **Hooks**: does it say **Installed**? If not, click Install or Repair. Then restart the Claude Code session. See [docs/hooks-troubleshooting.md](hooks-troubleshooting.md) for step-by-step checks and how to read the log |
+| The cat doesn't wake when Claude finishes | Check that Ready is on: the cat must be out of the lamp (click the lamp to let it out). If it still doesn't wake, open Settings → **Hooks**: does it say **Installed**? If not, click Install or Repair. Then restart the Claude Code session. See [docs/hooks-troubleshooting.md](hooks-troubleshooting.md) for step-by-step checks and how to read the log |
 | The cat doesn't wake for Codex | Settings → **Hooks** → **Codex** must say **Installed**. Then in Codex type `/hooks`: Klat's entries must be trusted (after Repair, trust them again). Check that `[features] hooks = false` is not in `~/.codex/config.toml`. Start a new Codex session |
 | "Hooks (needs repair)" | The entries point at another copy of `klat-hook.exe` (moved or reinstalled app, dev vs installed): run **Repair** |
 | Install says settings.json (or hooks.json) is invalid | Fix the JSON, or restore a `.bak.*` backup; nothing was changed |

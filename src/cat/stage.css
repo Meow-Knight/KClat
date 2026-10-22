@@ -109,22 +109,27 @@
   outline-offset: 2px;
 }
 
-/* Bell parts. Off: an outlined bell on a white button. Ready: a gold bell with a glow. */
+/*
+ * Lamp parts. Ready (cat out): a plain brass lamp on a white button. Cat in the lamp (Ready off): a gold lamp with
+ * a glow and a wisp of smoke from the spout.
+ */
 .cat-ready svg {
   stroke: #2b2d42;
 }
 
-.cat-ready .collar {
-  stroke: #f29bb0;
+.cat-ready .lamp,
+.cat-ready .foot {
+  fill: #e8d6ad;
 }
 
-.cat-ready .bell {
-  fill: #eef0f5;
-}
-
-.cat-ready .slot {
+.cat-ready .knob {
   fill: #2b2d42;
   stroke: none;
+}
+
+.cat-ready .smoke {
+  stroke: #b9a3e3;
+  opacity: 0;
 }
 
 .cat-ready .shine {
@@ -133,19 +138,45 @@
   opacity: 0;
 }
 
-.cat-ready[aria-pressed='true'] {
+.cat-ready[aria-pressed='false'] {
   background: #fff6dd;
   box-shadow:
     0 0 0 3px rgb(245 184 61 / 0.4),
     0 0 14px rgb(245 184 61 / 0.9);
 }
 
-.cat-ready[aria-pressed='true'] .bell {
+.cat-ready[aria-pressed='false'] .lamp,
+.cat-ready[aria-pressed='false'] .foot {
   fill: #f5b83d;
 }
 
-.cat-ready[aria-pressed='true'] .shine {
+.cat-ready[aria-pressed='false'] .smoke,
+.cat-ready[aria-pressed='false'] .shine {
   opacity: 0.9;
+}
+
+/*
+ * In the lamp: the cat shrinks and spins into the spout (--lamp-x/--lamp-y, set by CatStage), speeding up as it
+ * goes; out of the lamp it pops back with an overshoot. One-shot transitions, nothing that repaints on its own.
+ */
+.cat-stage canvas {
+  transform-origin: var(--lamp-x, 100%) var(--lamp-y, 100%);
+  transition:
+    transform 0.5s cubic-bezier(0.3, 1.5, 0.5, 1),
+    opacity 0.25s;
+}
+
+.cat-stage.in-lamp canvas {
+  transform: scale(0.04) rotate(-30deg);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 0.5s cubic-bezier(0.6, 0, 0.9, 0.4),
+    opacity 0.2s 0.3s;
+}
+
+.cat-stage.reduce-motion canvas {
+  transition: none;
 }
 
 .cat-ready[hidden] {
