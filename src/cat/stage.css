@@ -78,26 +78,25 @@
   display: none;
 }
 
-/* Ready button: static styles only (an endless CSS animation would repaint the window at the display rate). */
+/*
+ * Ready button: the lamp itself, standing on the ground with no frame around it. Static styles and one-shot
+ * animations only (an endless CSS animation would repaint the window at the display rate).
+ */
 .cat-ready {
   position: absolute;
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   padding: 0;
-  border: 2px solid #2b2d42;
-  border-radius: 50%;
-  background: #fff;
+  border: none;
+  border-radius: 8px;
+  background: none;
   color: #2b2d42;
-  box-shadow: 0 2px 0 rgb(43 45 66 / 0.25);
   cursor: pointer;
   /* --ready-shrink (ReadyButton.setZoom) keeps the button from growing with a big cat. */
   transform: scale(var(--ready-shrink, 1));
-  transition:
-    transform 0.15s,
-    background 0.2s,
-    box-shadow 0.2s;
+  transition: transform 0.15s;
 }
 
 .cat-ready:hover {
@@ -110,8 +109,44 @@
 }
 
 /*
- * Lamp parts. Ready (cat out): a plain brass lamp on a white button. Cat in the lamp (Ready off): a gold lamp with
- * a glow and a wisp of smoke from the spout.
+ * Clicked: a short wobble about the lamp's foot (ReadyButton.wobble). A soft white halo keeps the dark outline from
+ * sinking into a dark desktop; the gold glow below replaces it while the cat is inside.
+ */
+.cat-ready svg {
+  transform-origin: 54% 88%;
+  filter: drop-shadow(0 0 1.5px rgb(255 255 255 / 0.95)) drop-shadow(0 0 5px rgb(255 255 255 / 0.55));
+}
+
+.cat-ready.wobble svg {
+  animation: lamp-wobble 0.45s ease-out;
+}
+
+.reduce-motion .cat-ready.wobble svg {
+  animation: none;
+}
+
+@keyframes lamp-wobble {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  20% {
+    transform: rotate(-12deg);
+  }
+  40% {
+    transform: rotate(9deg);
+  }
+  60% {
+    transform: rotate(-5deg);
+  }
+  80% {
+    transform: rotate(2deg);
+  }
+}
+
+/*
+ * Lamp parts. Ready (cat out): a plain brass lamp. Cat in the lamp (Ready off): a gold lamp with a glow and a wisp of
+ * smoke from the spout.
  */
 .cat-ready svg {
   stroke: #2b2d42;
@@ -120,6 +155,11 @@
 .cat-ready .lamp,
 .cat-ready .foot {
   fill: #e8d6ad;
+}
+
+.cat-ready .ground {
+  fill: rgb(43 45 66 / 0.18);
+  stroke: none;
 }
 
 .cat-ready .knob {
@@ -138,11 +178,8 @@
   opacity: 0;
 }
 
-.cat-ready[aria-pressed='false'] {
-  background: #fff6dd;
-  box-shadow:
-    0 0 0 3px rgb(245 184 61 / 0.4),
-    0 0 14px rgb(245 184 61 / 0.9);
+.cat-ready[aria-pressed='false'] svg {
+  filter: drop-shadow(0 0 3px rgb(245 184 61 / 0.95)) drop-shadow(0 0 8px rgb(245 184 61 / 0.6));
 }
 
 .cat-ready[aria-pressed='false'] .lamp,

@@ -1,10 +1,11 @@
-// The small Ready button next to the sleeping cat: an Aladdin lamp. Ready on: the cat is out, sleeping, and
-// wakes you when Claude is done. Ready off: the cat is sucked into the lamp (CatStage) and only the lamp is left.
-// The spout points left, at the cat: that is where it goes in and comes out.
+// The Ready button next to the sleeping cat: an Aladdin lamp standing on the ground, no button frame. Ready on: the
+// cat is out, sleeping, and wakes you when Claude is done. Ready off: the cat is sucked into the lamp (CatStage) and
+// only the lamp is left. The spout points left, at the cat: that is where it goes in and comes out. A click wobbles it.
 import { t } from '../i18n';
 import type { UiLanguage } from '../settings';
 
-const ICON = `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+const ICON = `<svg viewBox="0 0 24 24" width="36" height="36" aria-hidden="true">
+  <ellipse class="ground" cx="13" cy="21.6" rx="6" ry="1.2"/>
   <path class="smoke" d="M2.4 8.2 Q0.8 6.2 3 4.6 Q5 3 3.8 1.2" fill="none" stroke-width="1.5" stroke-linecap="round"/>
   <path class="handle" d="M18.6 14 Q23 12 21.6 16.2 Q20.8 18 17.8 17.2" fill="none" stroke-width="1.6" stroke-linecap="round"/>
   <path class="foot" d="M10.4 18.8 L9.6 21 H16.4 L15.6 18.8 Z" stroke-width="1.4" stroke-linejoin="round"/>
@@ -38,8 +39,10 @@ export class ReadyButton {
     this.render();
     this.el.addEventListener('click', (e) => {
       e.stopPropagation();
+      this.wobble();
       this.onToggle(!this.on);
     });
+    this.el.addEventListener('animationend', () => this.el.classList.remove('wobble'));
     parent.append(this.el);
   }
 
@@ -90,6 +93,13 @@ export class ReadyButton {
   placeAt(x: number, y: number): void {
     this.el.style.left = `${Math.round(x - this.el.offsetWidth / 2)}px`;
     this.el.style.top = `${Math.round(y - this.el.offsetHeight / 2)}px`;
+  }
+
+  /** A short one-shot shake (stage.css .wobble); a click during one starts it over. */
+  private wobble(): void {
+    this.el.classList.remove('wobble');
+    void this.el.offsetWidth;
+    this.el.classList.add('wobble');
   }
 
   private render(): void {

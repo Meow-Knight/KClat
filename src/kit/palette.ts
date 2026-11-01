@@ -23,6 +23,8 @@ export interface CharacterPalette {
   /** Nose, inner ears, tongue. */
   accent: number;
   iris: number;
+  /** Iris of the eye on the viewer's left, for an odd-eyed character. Default: iris. */
+  irisLeft?: number;
   /** Cheek blush (drawn without an outline). */
   blush: number;
 }

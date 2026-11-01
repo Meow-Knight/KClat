@@ -81,7 +81,7 @@ export class Face {
 
       const iris = new THREE.Group();
       eg.add(iris);
-      kit.mk(SPH, palette.iris, iris, { s: [0.24, 0.27, 0.12], ol: OUTLINE.eye });
+      kit.mk(SPH, s < 0 ? (palette.irisLeft ?? palette.iris) : palette.iris, iris, { s: [0.24, 0.27, 0.12], ol: OUTLINE.eye });
       const pupil = new THREE.Group();
       iris.add(pupil);
       kit.mk(SPH, pupilMat, pupil, { p: [0, 0, 0.06], s: [0.17, 0.21, 0.08] });

@@ -43,6 +43,8 @@ pub enum Character {
     Dragon,
     Capybara,
     Slime,
+    British,
+    Tabby,
 }
 
 /// Where the cat sits until you drag it. Only one corner so far.

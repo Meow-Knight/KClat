@@ -80,6 +80,23 @@ export class ToonTube {
     this.outline.geometry.dispose();
   }
 
+  /**
+   * Point and unit tangent at curve parameter `u` (0..1, uniform like the rings) of the last update(), for parts
+   * that ride the tube (tail rings, a tip). Allocation-free.
+   */
+  sample(u: number, point: THREE.Vector3, tangent: THREE.Vector3): void {
+    const p = Math.min(1, Math.max(0, u)) * SEGMENTS;
+    const seg = Math.min(SEGMENTS - 1, Math.floor(p));
+    const w = p - seg;
+    const cf = this.coef;
+    for (let a = 0; a < 3; a++) {
+      const k = (seg * 3 + a) * 4;
+      point.setComponent(a, cf[k] + w * (cf[k + 1] + w * (cf[k + 2] + w * cf[k + 3])));
+      tangent.setComponent(a, cf[k + 1] + w * (2 * cf[k + 2] + w * 3 * cf[k + 3]));
+    }
+    tangent.normalize();
+  }
+
   /** Centripetal Catmull-Rom, matching THREE.CatmullRomCurve3 (open curve, ends extrapolated). */
   private fitSpline(): void {
     const c = this.ctrl;
