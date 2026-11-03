@@ -45,6 +45,7 @@ pub enum Character {
     Slime,
     British,
     Tabby,
+    Puppy,
 }
 
 /// Where the cat sits until you drag it. Only one corner so far.

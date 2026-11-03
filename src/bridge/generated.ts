@@ -55,7 +55,7 @@ export type SettingsPatch = { character?: Character, notificationsEnabled?: bool
 /**
  * Who sits in the corner (src/characters in the frontend). The overlay draws it; Rust only stores the choice.
  */
-export type Character = "cat" | "snake" | "dragon" | "capybara" | "slime" | "british" | "tabby";
+export type Character = "cat" | "snake" | "dragon" | "capybara" | "slime" | "british" | "tabby" | "puppy";
 
 /**
  * Platform Language: the tray, the Settings window and dialogs.
